@@ -15,6 +15,8 @@ library(maSigPro)
 library(mdgsa)
 library(limma) 
 library(edgeR)
+library(DESeq)
+
 
 #expression matrix: transcripts per sample with the transcript count in each cell
 count_files<-list.files("GDCdata/TCGA-BRCA/harmonized/Transcriptome_Profiling/Ge
@@ -65,7 +67,7 @@ files1=as.data.frame(as.matrix(files1))
 noiseqData = readData(data = count_matrix, gc = myannot[,1:2], biotype = myannot[,c(1,3)],
 	factor=files1, length=mylength)
 
-#CHECK BIASES
+##################CHECK BIASES########################################################
 #1)check expression bias per sample
 mycountsbio = dat(noiseqData, type = "countsbio", factor = NULL)
 pdf("noiseqPlot_count_distribution_global.pdf", width = 15, height = 7)
@@ -97,6 +99,8 @@ myGCcontent <- dat(noiseqData, k = 0, type = "GCbias", factor = "tissue.definiti
 pdf("GCbias.pdf")
   explo.plot(myGCcontent, samples = NULL)
  dev.off()
+#The GC-content of each gene does not change from sample to sample, so it can be expected to
+#have little effect on differential expression analyses to a first approximation
 mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", factor = "tissue.definition")
 pdf("lengthbias.pdf")
   explo.plot(mylenBias, samples =NULL)
@@ -111,7 +115,7 @@ explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "tissue.defini
 explo.plot(myPCA, samples = c(1,3), plottype = "scores", factor = "tissue.definition")
 dev.off()
 
-###SOLVE BIASES
+#################SOLVE BIASES######################################################
 #1) filter low count genes with the threshold found in 2
 countMatrixFiltered = filtered.data(count_matrix, factor = "tissue.definition", 
                        norm = FALSE, method = 3, cpm = 1)
@@ -133,23 +137,37 @@ abline(v=0, lty=3)
 dev.off()
 
 #2)normaliza RNA composition and then GC content coz the 1st needs raw counts
-#and gives you scaling factors that can be exported to cqn 
-mycdNorm = dat(noiseqData, type = "cd", norm = T)
+#and gives you scaling factors that can be exported to the 2nd
+myTMM=tmm(countMatrixFiltered,lc=0)
+noiseqData = readData(data = myTMM, factors=files1, gc = myannot[,c(1,2)])
+mycdTMM = dat(noiseqData, type = "cd", norm = T)
+#"Diagnostic test: FAILED. Normalization is required to correct this bias."
+temp=dat2save(mycdTMM)
+table(temp$DiagnosticTest[,3])
+#FAILED PASSED 
+#    36    153 
+myUQUA=uqua(countMatrixFiltered,lc=0)
+noiseqData = readData(data = myUQUA, factors=files1, gc = myannot[,c(1,2)])
+mycdUQUA = dat(noiseqData, type = "cd", norm = T)
+#"Diagnostic test: FAILED. Normalization is required to correct this bias."
+temp=dat2save(mycdUQUA)
+table(temp$DiagnosticTest[,3])
+#FAILED PASSED 
+#   185      4 
+deseqFactors=estimateSizeFactors(newCountDataSet(countMatrixFiltered,
+	conditions=files1[files1[,2]%in%colnames(countMatrixFiltered),]))
+myDESEQ=counts(deseqFactors,normalized=T)
+noiseqData = readData(data = myDESEQ, factors=files1[files1[,2]%in%colnames(countMatrixFiltered),], 
+	gc = myannot[,c(1,2)])
+mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
+#"Diagnostic test: FAILED. Normalization is required to correct this bias."
+#FAILED PASSED 
+#   120     69 
 
-#3) normalize GC content & gene length
-#cqn fits log2(RPM) = s(x) + s(log2(length))
-#it needs that all variables have the same ordering
-myGC=myannot[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered),1:2]
-countMatrixFiltered=countMatrixFiltered[order(match(
-	rownames(countMatrixFiltered),names(mylength))),]
-mycqn <- cqn(countMatrixFiltered,x = myGC$percentage_gc_content,lengths=1000,
-	lengthMethod="fixed",sizeFactors = apply(countMatrixFiltered, 2, sum), verbose = TRUE)
-rnaseqCQN = mycqn$y + mycqn$offset   # Note that CQN returns log2-transformed values
-rnaseqCQN = rnaseqCQN - min(rnaseqCQN) + 1
-noiseqData = readData(data = rnaseqCQN, factors =file, gc = myannot[,c(1,2)],mylength1)
-myGCcontentNorm <- dat(noiseqData, k = 0, type = "GCbias", factor = "tissue.definition")
-#"Primary solid Tumor":Multiple R-squared:  0.119,  p-value: 0.5099
-#"Solid Tissue Normal":Multiple R-squared:  0.1235,  p-value: 0.4754
+
+
+
+
 
 #check biotype bias per tissue
 #mybiodetection <- dat(noiseqData, k = 0, type = "biodetection", factor = "tissue.definition")
@@ -162,3 +180,18 @@ myGCcontentNorm <- dat(noiseqData, k = 0, type = "GCbias", factor = "tissue.defi
 #[1] "Confidence interval at 95% for the difference of percentages: Primary solid Tumor - Solid Tissue Normal"
 #[1] -0.6746  0.4421
 #[1] "The percentage of this biotype is NOT significantly different for these two samples (p-value = 0.6868 )."
+
+#3) normalize GC content & gene length
+#cqn fits log2(RPM) = s(x) + s(log2(length))
+#it needs that all variables have the same ordering
+#myGC=myannot[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered),1:2]
+#countMatrixFiltered=countMatrixFiltered[order(match(
+#	rownames(countMatrixFiltered),names(mylength))),]
+#mycqn <- cqn(countMatrixFiltered,x = myGC$percentage_gc_content,lengths=1000,
+#	lengthMethod="fixed",sizeFactors = apply(countMatrixFiltered, 2, sum), verbose = TRUE)
+#rnaseqCQN = mycqn$y + mycqn$offset   # Note that CQN returns log2-transformed values
+#rnaseqCQN = rnaseqCQN - min(rnaseqCQN) + 1
+#noiseqData = readData(data = rnaseqCQN, factors =file, gc = myannot[,c(1,2)],mylength1)
+#myGCcontentNorm <- dat(noiseqData, k = 0, type = "GCbias", factor = "tissue.definition")
+#"Primary solid Tumor":Multiple R-squared:  0.119,  p-value: 0.5099
+#"Solid Tissue Normal":Multiple R-squared:  0.1235,  p-value: 0.4754
