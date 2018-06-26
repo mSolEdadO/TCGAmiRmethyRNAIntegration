@@ -21,8 +21,8 @@ library(DESeq2)
 
 
 #expression matrix: transcripts per sample with the transcript count in each cell
-count_files<-list.files("GDCdata/TCGA-BRCA/harmonized/Transcriptome_Profiling/Ge
-ne_Expression_Quantification",recursive=T,full.names=T)
+count_files<-list.files("GDCdata/TCGA-BRCA/harmonized/Transcriptome_Profiling/Gene_Expression_Quantification",
+  recursive=T,full.names=T)
 count_files <- setNames(count_files, gsub("([:alnum:]+)?.txt", "\\1", 
   basename(count_files)))
 # Initialize outcome variable
@@ -162,7 +162,7 @@ countMatrixFiltered = filtered.data(proteCounts, factor = "tissue.definition",
 
 #2)normaliza RNA composition and then GC content coz the 1st needs raw counts
 #and gives you scaling factors that can be exported to the 2nd
-factorsTMM=calcNormFactors(countMatrixFiltered1)
+factorsTMM=calcNormFactors(countMatrixFiltered)
 normTMM=cqn(countMatrixFiltered,lengths=myannot$lenght[
   myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
   x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
@@ -222,7 +222,7 @@ mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
 
 designCombat = model.matrix(~1,data=designExp)
 rnaseqCombat = ComBat(normalisedTMMatrix, batch = designExp$tissue.definition,mod=designCombat,
-  par.prior=F) 
+  par.prior=T) 
 noiseqData = readData(data = rnaseqCombat, factors=designExp, gc = myannot[,c(1,2)],length=myannot[,c(1,8)])
 myPCAnoBatch = dat(noiseqData, type = "PCA", norm = T)
 pdf("noiseqPlot_PCA_after_combat.pdf", width = 5*2, height = 5)
@@ -234,9 +234,14 @@ mycdComBat=dat(noiseqData,type="cd",norm=T)
 table(mycdComBat@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #   351    537
+write.table(rnaseqCombat[,colnames(rnaseqCombat)%in%rownames(designExp)[designExp$tissue.definition=="Primary solid Tumor"]],
+  "GDCdata/TCGA-BRCA/harmonized/Transcriptome_Profiling/Gene_Expression_Quantification/mproteTumor.mtrx",sep='\t',quote=F)
+write.table(rnaseqCombat[,colnames(rnaseqCombat)%in%rownames(designExp)[designExp$tissue.definition=="Solid Tissue Normal"]],
+  "GDCdata/TCGA-BRCA/harmonized/Transcriptome_Profiling/Gene_Expression_Quantification/mproteNormal.mtrx",sep='\t',quote=F)
+
 
 y_DESeq<-DESeqDataSetFromMatrix(countData=rnaseqCombat,colData=designExp, design=~tissue.definition)
-cqnOffset <- normTMM$cqn$glm.offset
+cqnOffset <- normTMM$glm.offset
 cqnNormFactors <- exp(cqnOffset)
 cqnNormFactors <- cqnNormFactors / exp(rowMeans(log(cqnNormFactors)))
 normalizationFactors(y_DESeq) <- cqnNormFactors
