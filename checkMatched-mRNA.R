@@ -8,55 +8,34 @@
 ##      -Quality Control & bias removal
 ## By Cristobal Fresno - cristobalfresno@gmail.com
 
+library(SummarizedExperiment)
+library(TCGAbiolinks)
 library(biomaRt)  
 library(NOISeq)
-library(cqn)
-library(sva)
-library(limma)
-library(maSigPro)
-library(mdgsa)
-library(limma) 
 library(edgeR)
+library(cqn)
 library(DESeq2)
+library(pbmc)
+library("BiocParallel")
+library(sva)
 
 
+#GDCdownload(xprssn)
+expr=GDCprepare(xprssn)
+normal=GDCprepare(xprssN)
+duplicados=colData(expr)$patient[duplicated(colData(expr)$patient)]
+
+#table to check for batch effects
+designExp=colData(expr)
+designExp=rbind(designExp,colData(normal))
 #expression matrix: transcripts per sample with the transcript count in each cell
-count_files<-list.files("GDCdata/TCGA-BRCA/harmonized/Transcriptome_Profiling/Gene_Expression_Quantification",
-  recursive=T,full.names=T)
-count_files <- setNames(count_files, gsub("([:alnum:]+)?.txt", "\\1", 
-  basename(count_files)))
-# Initialize outcome variable
-count_matrix <- NULL
-# Merge all files
-for (htseq_file in names(count_files)) {
-  file_contents <- read.delim(count_files[htseq_file], "\t",header = FALSE, comment.char = "_")
-  colnames(file_contents)[2] <- htseq_file
-  # Append the new data to the final matrix
-  # Use merge in case there are certain non-shared genes between samples
-  count_matrix <- if (is.null(count_matrix)) file_contents else merge(count_matrix, 
-                                                                      file_contents,
-                                                                      all = TRUE,
-																	  by = 1)
-}
-rownames(count_matrix)=unlist(strsplit(as.character(count_matrix[,1]),'.',fixed=T))[seq(1,2*nrow(count_matrix),2)]
-count_matrix[, 1] <- NULL
-expresion=getResults(expresion)[,c(3,7,27)]#expresion es el output de GDCquery
-expresion=expresion[order(match(expresion$file_name,colnames(count_matrix))),]
-colnames(count_matrix)=expresion$cases
+expr=assay(expr)
+expr=cbind(expr,assay(normal))
 
-#pimp the table to check for batch effects
-designExp=expresion[,2:3]
-designExp$patients=substr(designExp[,1],1,12)
-designExp$sample=substr(designExp[,1],14,15)
-designExp$vial=substr(designExp[,1],16,16)
-designExp$portion=substr(designExp[,1],18,19)
-designExp$analyte=substr(designExp[,1],19,19)
-designExp$plate=substr(designExp[,1],22,25)
-designExp$center=substr(designExp[,1],27,28)
 
 #check the intersection between normal & tumor samples
-venn.diagram(x = list(A=designExp$patients[designExp$tissue.definition=="Primary solid Tumor"],
-  B=designExp$patients[designExp$tissue.definition=="Solid Tissue Normal"]), filename = "Venn.tiff",
+venn.diagram(x = list(A=designExp$patient[designExp$definition=="Primary solid Tumor"],
+  B=designExp$patient[designExp$definition=="Solid Tissue Normal"]), filename = "Venn.tiff",
 col = "transparent", fill = c("cornflowerblue","green"), 
 alpha = 0.50,cex = 1.5, fontface = "bold", label.col="black", 
 cat.cex = 1.5,margin = 0.1,category.names=c("tumor","normal"))
@@ -65,32 +44,32 @@ cat.cex = 1.5,margin = 0.1,category.names=c("tumor","normal"))
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
 myannot=getBM(attributes = c("ensembl_gene_id", "percentage_gene_gc_content", "gene_biotype",
   "start_position","end_position","hgnc_id","hgnc_symbol"),filters = "ensembl_gene_id", 
-  values=rownames(count_matrix), mart=mart)
+  values=rownames(expr), mart=mart)
 myannot$lenght=abs(myannot$end_position-myannot$start_position)
 
 #filter transcripts withouth annotation
-myannot=myannot[myannot$hgnc_symbol!="",]
-myannot=myannot[!duplicated(myannot$ensembl_gene_id),]#los duplicados tenian el mismo largo, %gc, inicio y fin, pero distintos hgnc_symbol y/o id 
-count_matrix=count_matrix[rownames(count_matrix)%in%myannot$ensembl_gene_id,]
+myannot=myannot[myannot$gene_biotype=="protein_coding"&myannot$hgnc_symbol!="",]
+myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
+exprots_hgnc=expr[rownames(expr)%in%myannot$ensembl_gene_id,]
+#19236 transcripts
 
 #format data for noiseq
-noiseqData = readData(data = count_matrix, gc = myannot[,1:2], biotype = myannot[,c(1,3)],
+noiseqData = readData(data = exprots_hgnc, gc = myannot[,1:2], biotype = myannot[,c(1,3)],
 	factor=designExp, length=myannot[,c(1,8)])
-
 ##################CHECK BIASES########################################################
 #1)check expression bias per sample
 mycountsbio = dat(noiseqData, type = "countsbio", factor = NULL)
 pdf("noiseqPlot_count_distribution_global.pdf", width = 15, height = 7)
-explo.plot(mycountsbio, plottype = "boxplot", samples = sample(1:889,200),Colv=NA)
+explo.plot(mycountsbio, plottype = "boxplot", samples = sample(1:ncol(expr),200),Colv=NA)
 dev.off()
- pdf("noiseqPlot_count_distribution_protein_coding.pdf", width = 15, height = 7)
-explo.plot(mycountsbio, plottype = "boxplot", samples = sample(1:889,200),toplot="protein_coding")
-dev.off()
+#pdf("noiseqPlot_count_distribution_protein_coding.pdf", width = 15, height = 7)
+#explo.plot(mycountsbio, plottype = "boxplot", samples = sample(1:889,200),toplot="protein_coding")
+#dev.off()
 ## Biodetection plot
-mybiodetection <- dat(noiseqData, type="biodetection", factor=NULL)
-pdf("mybiodetection.pdf", width = 15, height = 7)
-explo.plot(mybiodetection)
-dev.off()
+#mybiodetection <- dat(noiseqData, type="biodetection", factor=NULL)
+#pdf("mybiodetection.pdf", width = 15, height = 7)
+#explo.plot(mybiodetection)
+#dev.off()
 #saturation plot
 mysaturation <- dat(noiseqData, k = 0, ndepth = 7, type = "saturation")
 pdf("mysaturation", width = 15, height = 7)
@@ -99,18 +78,12 @@ explo.plot(mysaturation, toplot="protein_coding",
 dev.off()
 
 #2)check for low count genes
-#filter non protein-coding
-proteCounts=count_matrix[rownames(count_matrix)%in%
-                         myannot$ensembl_gene_id[myannot$gene_biotype=="protein_coding"],]
-noiseqData = readData(data = proteCounts, factors=designExp, gc = myannot[,c(1,2)],
-  biotype = myannot[,c(1,3)], length=myannot[,c(1,8)])
-
-myCounts = dat(noiseqData, type = "countsbio", factor = "center")
+myCounts = dat(noiseqData, type = "countsbio", factor = NULL)
 pdf("noiseqPlot_distribution_lowcounts.pdf", width = 7, height = 7)
-explo.plot(myCounts, plottype = "barplot", samples = 1:100)
+explo.plot(myCounts, plottype = "barplot", samples = sample(1:ncol(expr),200))
 dev.off()
 pdf("lowCountThres.pdf")
-hist(rowMeans(cpm(count_matrix,log=T)),ylab="genes",xlab="mean of log CPM",col="gray")
+hist(rowMeans(cpm(exprots_hgnc,log=T)),ylab="genes",xlab="mean of log CPM",col="gray")
 abline(v=0,col="red")
 dev.off()
 
@@ -125,19 +98,19 @@ mycd = dat(noiseqData, type = "cd", norm = FALSE) #slooooow
 #[1] "Diagnostic test: FAILED. Normalization is required to correct this bias."
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#   739    149 
+#  1081    133 
 
 #4)check for length & GC bias
 #A cubic spline regression model is fitted. Both the model p-value and the coefficient
 # of determination (R2) are shown. If the model p-value is significant and R2 value is
 # high (more than 70%), the expression depends on the feature
-myGCcontent <- dat(noiseqData, k = 0, type = "GCbias", factor = "tissue.definition")
+myGCcontent <- dat(noiseqData, k = 0, type = "GCbias", factor = "definition")
 pdf("GCbias.pdf")
   explo.plot(myGCcontent, samples = NULL)
  dev.off()
 #The GC-content of each gene does not change from sample to sample, so it can be expected to
 #have little effect on differential expression analyses to a first approximation
-mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", factor = "tissue.definition")
+mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", factor = "definition")
 pdf("lengthbias.pdf")
   explo.plot(mylenBias, samples =NULL)
 dev.off()
@@ -147,8 +120,8 @@ dev.off()
 myPCA = dat(noiseqData, type = "PCA", norm = FALSE, logtransf = FALSE)
 pdf("noiseqPlot_PCA_before_normalization.pdf", width = 5*2, height = 5)
 par(mfrow = c(1,2))
-explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "tissue.definition")
-explo.plot(myPCA, samples = c(1,3), plottype = "scores", factor = "tissue.definition")
+explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "definition")
+explo.plot(myPCA, samples = c(1,3), plottype = "scores", factor = "definition")
 dev.off()
 
 #################SOLVE BIASES######################################################
@@ -156,9 +129,9 @@ dev.off()
 #of the library per sample affects the power of the experiment. CPM=(counts/fragments
 # sequenced)*one million. Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
-countMatrixFiltered = filtered.data(proteCounts, factor = "tissue.definition", 
-                       norm = FALSE, method = 3, cpm = 1)
-#13937 features are to be kept for differential expression analysis with filtering method 3
+countMatrixFiltered = filtered.data(exprots_hgnc, factor = "definition", 
+norm = FALSE, method = 3, cpm = 1)
+#13904 features are to be kept for differential expression analysis with filtering method 3
 
 #2)normaliza RNA composition and then GC content coz the 1st needs raw counts
 #and gives you scaling factors that can be exported to the 2nd
@@ -172,14 +145,17 @@ noiseqData = readData(data = normalisedTMMatrix, factors=designExp, gc = myannot
 mycdTMM = dat(noiseqData, type = "cd", norm = T)
 #"Diagnostic test: FAILED. Normalization is required to correct this bias."
 table(mycdTMM@dat$DiagnosticTest[,  "Diagnostic Test"])
+#cpm=1, transcripts=13904 
 #FAILED PASSED 
-#   368    520
-#cpm=5, transcripts=12041 
+#   430    784 
+#cpm=2, transcripts=13164 
 #FAILED PASSED 
-#   377    511 
-
+#   470    744
+#cpm=5, transcripts=11908
+#FAILED PASSED 
+#   476    738
 factorsUQUA=calcNormFactors(countMatrixFiltered, method="upperquartile")
-normUQUA=cqn(countMatrixFiltered1,lengths=myannot$lenght[
+normUQUA=cqn(countMatrixFiltered,lengths=myannot$lenght[
   myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
   x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
   sizeFactors=factorsUQUA,verbose=T)
@@ -188,47 +164,95 @@ noiseqData = readData(data = myUQUA, factors=designExp, gc = myannot[,c(1,2)])
 mycdUQUA = dat(noiseqData, type = "cd", norm = T)
 table(mycdUQUA@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#   765    123
-#cpm=5
-#FAILED PASSED 
-#   774    114 
+#   474    740 
+
 rownames(designExp)=designExp$cases
-#sobreescribiste en cpm=1 con cpm=5, myDESEQ tiene lo de cpm=5
-myDESEQ=DESeqDataSetFromMatrix(countData=countMatrixFiltered1,colData=designExp,design=~tissue.definition)
+myDESEQ=DESeqDataSetFromMatrix(countData=countMatrixFiltered,colData=designExp,design=~definition)
 deseqFactors=estimateSizeFactors(myDESEQ)
-normDESEQ=cqn(countMatrixFiltered1,lengths=myannot$lenght[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered1)],
-  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered1)],
+normDESEQ=cqn(countMatrixFiltered,lengths=myannot$lenght[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
+  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
   sizeFactors=sizeFactors(deseqFactors),verbose=T)
 myDESEQ=normDESEQ$y+normDESEQ$offset
 noiseqData = readData(data = myDESEQ, factors=designExp,gc = myannot[,c(1,2)])
 mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
-#"Diagnostic test: FAILED. Normalization is required to correct this bias."
+table(mycdDESEQ@dat$DiagnosticTest[,  "Diagnostic Test"])
+#cpm=1, transcripts=13904 
 #FAILED PASSED 
-#   360    528 
-#cpm=5
-#FAILED PASSED 
-#   373    515 
+#   434    780 
 
 #summary(as.numeric(normalizedDESEQmatrix))
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#  18.87   29.14   30.70   30.42   31.94   39.00 
+#  17.33   28.56   30.14   29.84   31.39   38.04 
 # summary(as.numeric(normalisedTMMatrix))
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#  18.89   29.17   30.73   30.45   31.97   39.03 
+#  17.21   28.62   30.18   29.89   31.44   38.46 
 # summary(as.numeric(normalisedTMMatrix1))
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#  18.60   29.89   31.08   31.00   32.18   39.62 
-#como las diferencias son mínimas, tomo TMM cpm=1
+#  17.23   28.62   30.18   29.89   31.44   38.44 
+
+TMM.TP=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="TP"]]
+TMM.NT=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="NT"]])
+#######################SUBTYPES########################################################
+subannot=getBM(attributes = c("ensembl_gene_id","external_gene_name","entrezgene"),values=rownames(TMM.TP), mart=mart)
+colnames(subannot)=c("probe","NCBI.gene.symbol","EntrezGene.ID")#this colnames are needed
+subannot=subannot[subannot$probe%in%rownames(TMM.TP),]
+subannot=subannot[!duplicated(subannot$probe),]
+
+#49/50 probes are used for clustering
+subtypes=molecular.subtyping(sbt.model="pam50",data=t(log2(TMM.TP)),annot=subannot,do.mapping=T)
+subtipos=TCGA_MolecularSubtype(colnames(TMM.TP))
+subtipos=subtipos$subtypes[,c(4,2)]
+temp=cbind(colnames(TMM.TP)[!colnames(TMM.TP)%in%subtipos$barcodes],NA)
+colnames(temp)=colnames(subtipos)
+subtipos=rbind(subtipos,temp)
+subtipos=cbind(subtipos,subtypes$subtype[order(match(names(subtypes$subtype),subtipos$barcode))])
+table(subtipos[,2:3],useNA="ifany") 
+#                  X
+#subtype_PAM50.mRNA Basal Her2 LumB LumA Normal
+#     Basal-like       97    0    2    2      0    0
+#     HER2-enriched     1   52    5    0      0    0
+#     Luminal A         2    6   42  180      2    0
+#     Luminal B         1    8  112    4      0    0
+#     Normal-like       4    0    2    0      2    0
+#     <NA>            100   55  152  251     20    0
+
+#no me gustan las inconsistencias, pero pbcmc no me da suficientes Her2
+#rownames(subannot)=subannot$probe
+#obje<-PAM50(exprs=log2(TMM.TP),annotation=subannot)
+obje=filtrate(obje,verbose=T)
+obje=classify(obje,verbose=T,std="scale")
+obje=permutate(obje,verbose=T,keep=T,nPerm=10000, pCutoff=0.01, where="fdr",corCutoff=0.1,seed=1234567890,
+  BPPARAM=MulticoreParam(progressbar=TRUE))
+temp=permutation(obje)$subtype
+subtipos=cbind(subtipos,temp$Subtype[order(match(rownames(temp),subtipos$barcode))])
+#table(subtipos[,c(2,4)],useNA="always")
+#subtype_PAM50.mRNA Ambiguous Basal Her2 LumA LumB Normal Not Assigned
+#     Basal-like            0    96    0    1    0      0    4
+#     HER2-enriched         6     0   47    0    0      0    5
+#     Luminal A            18     2    1  135    1      3   72
+#     Luminal B            12     0    4    4   49      0   56
+#     Normal-like           0     3    0    0    0      2    3
+#     <NA>                 60   100   37  163   56     13  149
+#podría sólo tomar las muestras con prob del subtipo>x
+table(subtipos[subtipos$barcode%in%names(subtypes$subtype)[rowMax(subtypes$subtype.proba)>0.5],c(2,4)],useNA="always")
+#                  subtypes$subtype[order(match(names(subtypes$subtype), subtipos$barcode))]
+#subtype_PAM50.mRNA Basal Her2 LumB LumA Normal <NA>
+#     Basal-like       97    0    2    2      0    0
+#     HER2-enriched     1   48    4    0      0    0
+#     Luminal A         2    5   38  172      2    0
+#     Luminal B         0    7  107    4      0    0
+#     Normal-like       4    0    2    0      2    0
+#     <NA>             99   46  141  247     19    0
 
 designCombat = model.matrix(~1,data=designExp)
-rnaseqCombat = ComBat(normalisedTMMatrix, batch = designExp$tissue.definition,mod=designCombat,
+rnaseqCombat = ComBat(normalisedTMMatrix, batch = designExp$definition,mod=designCombat,
   par.prior=T) 
 noiseqData = readData(data = rnaseqCombat, factors=designExp, gc = myannot[,c(1,2)],length=myannot[,c(1,8)])
 myPCAnoBatch = dat(noiseqData, type = "PCA", norm = T)
 pdf("noiseqPlot_PCA_after_combat.pdf", width = 5*2, height = 5)
 par(mfrow=c(1,2))
-explo.plot(myPCAnoBatch, samples = c(1,2), plottype = "scores", factor = "tissue.definition")
-explo.plot(myPCAnoBatch, samples = c(1,3), plottype = "scores", factor = "tissue.definition")
+explo.plot(myPCAnoBatch, samples = c(1,2), plottype = "scores", factor = "definition")
+explo.plot(myPCAnoBatch, samples = c(1,3), plottype = "scores", factor = "definition")
 dev.off()
 mycdComBat=dat(noiseqData,type="cd",norm=T)
 table(mycdComBat@dat$DiagnosticTest[,  "Diagnostic Test"])
@@ -260,3 +284,9 @@ DESeqDEResults<-results(et_DESeq, alpha=0.001)
 #[1] "Confidence interval at 95% for the difference of percentages: Primary solid Tumor - Solid Tissue Normal"
 #[1] -0.6746  0.4421
 #[1] "The percentage of this biotype is NOT significantly different for these two samples (p-value = 0.6868 )."
+
+
+venn.diagram(x = list(A=unique(substr(subtipos$barcode[subtipos[,3]=="Basal"],1,12)),B=miC,C=mtC), filename = "Basal0.tiff",col = "transparent", fill = c("cornflowerblue","green","red"), alpha = 0.50,cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,category.names=c("expression","miRNAs","methylation"))
+venn.diagram(x = list(A=unique(substr(subtipos$barcode[subtipos[,3]=="LumB"],1,12)),B=miC,C=mtC), filename = "LumB0.tiff",col = "transparent", fill = c("cornflowerblue","green","red"), alpha = 0.50,cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,category.names=c("expression","miRNAs","methylation"))
+venn.diagram(x = list(A=unique(substr(subtipos$barcode[subtipos[,3]=="LumA"],1,12)),B=miC,C=mtC), filename = "LumA0.tiff",col = "transparent", fill = c("cornflowerblue","green","red"), alpha = 0.50,cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,category.names=c("expression","miRNAs","methylation"))
+venn.diagram(x = list(A=unique(substr(subtipos$barcode[subtipos[,3]=="Her2"],1,12)),B=miC,C=unique(patients(mthyltn))), filename = "Her20.tiff",col = "transparent", fill = c("cornflowerblue","green","red"), alpha = 0.50,cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,category.names=c("expression","miRNAs","methylation"))
