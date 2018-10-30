@@ -19,9 +19,20 @@ library(pbmc)
 library("BiocParallel")
 library(sva)
 
-
-#GDCdownload(xprssn)
+#get the data
+xprssn <- GDCquery(project = "TCGA-BRCA",
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  sample.type = "Primary solid Tumor",
+  workflow.type = "HTSeq - Counts")
+GDCdownload(xprssn)
 expr=GDCprepare(xprssn)
+xprssN <- GDCquery(project = "TCGA-BRCA",
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  sample.type = c("Solid Tissue Normal"),
+  workflow.type = "HTSeq - Counts")
+GDCdownload(xprssN)
 normal=GDCprepare(xprssN)
 duplicados=colData(expr)$patient[duplicated(colData(expr)$patient)]
 
@@ -53,10 +64,24 @@ myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 exprots_hgnc=expr[rownames(expr)%in%myannot$ensembl_gene_id,]
 #19236 transcripts
 
+#sum duplicated probes = 2 probes mapping to the same hgnc_id
+myannot$hgnc_id[duplicated(myannot$hgnc_id)]
+[1] "HGNC:30046"
+myannot[myannot$hgnc_id=="HGNC:30046",]
+#      ensembl_gene_id percentage_gene_gc_content   gene_biotype start_position
+#41743 ENSG00000254093                      43.17 protein_coding       10764963
+#44594 ENSG00000258724                      43.86 protein_coding       10725399
+#      end_position    hgnc_id hgnc_symbol lenght
+#41743     10839884 HGNC:30046       PINX1  74921
+#44594     10839847 HGNC:30046       PINX1 114448
+exprots_hgnc[rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"],][1,]=
+colSums(exprots_hgnc[rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"],])
+exprots_hgnc=exprots_hgnc[c(1:(which(rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"])[2]-1),(which(rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"])[2]+1):nrow(exprots_hgnc)),]
+
+##################CHECK BIASES########################################################
 #format data for noiseq
 noiseqData = readData(data = exprots_hgnc, gc = myannot[,1:2], biotype = myannot[,c(1,3)],
 	factor=designExp, length=myannot[,c(1,8)])
-##################CHECK BIASES########################################################
 #1)check expression bias per sample
 mycountsbio = dat(noiseqData, type = "countsbio", factor = NULL)
 pdf("noiseqPlot_count_distribution_global.pdf", width = 15, height = 7)
@@ -130,7 +155,7 @@ dev.off()
 # sequenced)*one million. Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
 countMatrixFiltered = filtered.data(exprots_hgnc, factor = "definition", 
-norm = FALSE, method = 3, cpm = 1)
+norm = FALSE, method = 3, cpm = 1)#<-----------------
 #13904 features are to be kept for differential expression analysis with filtering method 3
 
 #2)normaliza RNA composition and then GC content coz the 1st needs raw counts
@@ -145,6 +170,9 @@ noiseqData = readData(data = normalisedTMMatrix, factors=designExp, gc = myannot
 mycdTMM = dat(noiseqData, type = "cd", norm = T)
 #"Diagnostic test: FAILED. Normalization is required to correct this bias."
 table(mycdTMM@dat$DiagnosticTest[,  "Diagnostic Test"])
+#cpm=0.1, transcripts=15668 desde aqui me falta MIA (gen de PAM50)
+#FAILED PASSED 
+#   560    654 
 #cpm=1, transcripts=13904 
 #FAILED PASSED 
 #   430    784 
@@ -160,11 +188,11 @@ normUQUA=cqn(countMatrixFiltered,lengths=myannot$lenght[
   x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
   sizeFactors=factorsUQUA,verbose=T)
 normalisedUQUAatrix=normUQUA$y+normUQUA$offset
-noiseqData = readData(data = myUQUA, factors=designExp, gc = myannot[,c(1,2)])
+noiseqData = readData(data = normalisedUQUAatrix, factors=designExp, gc = myannot[,c(1,2)])
 mycdUQUA = dat(noiseqData, type = "cd", norm = T)
 table(mycdUQUA@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#   474    740 
+#   465    749 
 
 rownames(designExp)=designExp$cases
 myDESEQ=DESeqDataSetFromMatrix(countData=countMatrixFiltered,colData=designExp,design=~definition)
@@ -178,7 +206,7 @@ mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
 table(mycdDESEQ@dat$DiagnosticTest[,  "Diagnostic Test"])
 #cpm=1, transcripts=13904 
 #FAILED PASSED 
-#   434    780 
+#   450    764 
 
 #summary(as.numeric(normalizedDESEQmatrix))
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
@@ -191,8 +219,9 @@ table(mycdDESEQ@dat$DiagnosticTest[,  "Diagnostic Test"])
 #  17.23   28.62   30.18   29.89   31.44   38.44 
 
 TMM.TP=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="TP"]]
-TMM.NT=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="NT"]])
-#######################SUBTYPES########################################################
+TMM.NT=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="NT"]]
+
+#######################starting classification########################################################
 subannot=getBM(attributes = c("ensembl_gene_id","external_gene_name","entrezgene"),values=rownames(TMM.TP), mart=mart)
 colnames(subannot)=c("probe","NCBI.gene.symbol","EntrezGene.ID")#this colnames are needed
 subannot=subannot[subannot$probe%in%rownames(TMM.TP),]
@@ -216,45 +245,47 @@ table(subtipos[,2:3],useNA="ifany")
 #     Normal-like       4    0    2    0      2    0
 #     <NA>            100   55  152  251     20    0
 
-#no me gustan las inconsistencias, pero pbcmc no me da suficientes Her2
-#rownames(subannot)=subannot$probe
-#obje<-PAM50(exprs=log2(TMM.TP),annotation=subannot)
+#############################solve batch effect#######################################################
+temp=cbind(designExp$barcode[!designExp$barcode%in%subtipos[,1]],"normal","normal","normal","normal")
+subtipos=rbind(subtipos,temp)
+
+noiseqData = readData(data = normalisedTMMatrix, factors=subtipos, gc = myannot[,c(1,2)])
+myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = FALSE)
+TMMARSyn=ARSyNseq(noiseqData, factor = "genefu", batch = F, norm = "n",  logtransf = FALSE)
+myPCA1 = dat(TMM.ARSyn, type = "PCA", norm = T)
+pdf("pre-postArsynPCA.pdf")
+par(mfrow=c(2,2))
+explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "genefu")
+explo.plot(myPCA, samples = c(1,3), plottype = "scores", factor = "genefu")
+explo.plot(myPCA1, samples = c(1,2), plottype = "scores", factor = "genefu")
+explo.plot(myPCA1, samples = c(1,3), plottype = "scores", factor = "genefu")
+dev.off()
+
+TMMArsyn.NT=exprs(TP.TMM.ARSyn)[,colnames(exprs(TP.TMM.ARSyn))%in%subtipos[subtipos[,3]=="normal",1]]
+TMMArsyn.TP=exprs(TP.TMM.ARSyn)[,colnames(exprs(TP.TMM.ARSyn))%in%subtipos[subtipos[,3]!="normal",1]]
+
+##############final classification based on genefu's alredy classified samples##########################
+rownames(subannot)=subannot$probe
+obje<-PAM50(exprs=log2(TMMArsyn.TP),annotation=subannot)
 obje=filtrate(obje,verbose=T)
 obje=classify(obje,verbose=T,std="scale")
 obje=permutate(obje,verbose=T,keep=T,nPerm=10000, pCutoff=0.01, where="fdr",corCutoff=0.1,seed=1234567890,
   BPPARAM=MulticoreParam(progressbar=TRUE))
+#49/50 probes are used for clustering
 temp=permutation(obje)$subtype
-subtipos=cbind(subtipos,temp$Subtype[order(match(rownames(temp),subtipos$barcode))])
-#table(subtipos[,c(2,4)],useNA="always")
-#subtype_PAM50.mRNA Ambiguous Basal Her2 LumA LumB Normal Not Assigned
-#     Basal-like            0    96    0    1    0      0    4
-#     HER2-enriched         6     0   47    0    0      0    5
-#     Luminal A            18     2    1  135    1      3   72
-#     Luminal B            12     0    4    4   49      0   56
-#     Normal-like           0     3    0    0    0      2    3
-#     <NA>                 60   100   37  163   56     13  149
-#podría sólo tomar las muestras con prob del subtipo>x
-table(subtipos[subtipos$barcode%in%names(subtypes$subtype)[rowMax(subtypes$subtype.proba)>0.5],c(2,4)],useNA="always")
-#                  subtypes$subtype[order(match(names(subtypes$subtype), subtipos$barcode))]
-#subtype_PAM50.mRNA Basal Her2 LumB LumA Normal <NA>
-#     Basal-like       97    0    2    2      0    0
-#     HER2-enriched     1   48    4    0      0    0
-#     Luminal A         2    5   38  172      2    0
-#     Luminal B         0    7  107    4      0    0
-#     Normal-like       4    0    2    0      2    0
-#     <NA>             99   46  141  247     19    0
+subtipos[subtipos[,3]!="normal",5]=temp$Subtype[order(match(rownames(temp),subtipos[,1]))]
+#table(subtipos[,c(2,5)],useNA="always")
+#               pbcmc2
+#tcga            Ambiguous Basal Her2 LumA LumB Normal <NA>
+#  Basal-like            0    97    0    2    1      0    1
+#  HER2-enriched         0     1   52    0    5      0    0
+#  Luminal A             1     2    6  180   37      2    4
+#  Luminal B             2     1    8    4   93      0   17
+#  Normal-like           0     4    0    0    2      2    0
+#  <NA>                  6   100   54  250  131     19   18
 
-designCombat = model.matrix(~1,data=designExp)
-rnaseqCombat = ComBat(normalisedTMMatrix, batch = designExp$definition,mod=designCombat,
-  par.prior=T) 
-noiseqData = readData(data = rnaseqCombat, factors=designExp, gc = myannot[,c(1,2)],length=myannot[,c(1,8)])
-myPCAnoBatch = dat(noiseqData, type = "PCA", norm = T)
-pdf("noiseqPlot_PCA_after_combat.pdf", width = 5*2, height = 5)
-par(mfrow=c(1,2))
-explo.plot(myPCAnoBatch, samples = c(1,2), plottype = "scores", factor = "definition")
-explo.plot(myPCAnoBatch, samples = c(1,3), plottype = "scores", factor = "definition")
-dev.off()
-mycdComBat=dat(noiseqData,type="cd",norm=T)
+--------------noiseqData = readData(data = exprs(TP.TMM.ARSyn), factors=subtipos, gc = myannot[,c(1,2)])
+mycdnoBatch=dat(noiseqData,type="cd",norm=T)
 table(mycdComBat@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #   351    537
@@ -262,6 +293,8 @@ write.table(rnaseqCombat[,colnames(rnaseqCombat)%in%rownames(designExp)[designEx
   "GDCdata/TCGA-BRCA/harmonized/Transcriptome_Profiling/Gene_Expression_Quantification/mproteTumor.mtrx",sep='\t',quote=F)
 write.table(rnaseqCombat[,colnames(rnaseqCombat)%in%rownames(designExp)[designExp$tissue.definition=="Solid Tissue Normal"]],
   "GDCdata/TCGA-BRCA/harmonized/Transcriptome_Profiling/Gene_Expression_Quantification/mproteNormal.mtrx",sep='\t',quote=F)
+
+
 
 
 y_DESeq<-DESeqDataSetFromMatrix(countData=rnaseqCombat,colData=designExp, design=~tissue.definition)
@@ -286,7 +319,3 @@ DESeqDEResults<-results(et_DESeq, alpha=0.001)
 #[1] "The percentage of this biotype is NOT significantly different for these two samples (p-value = 0.6868 )."
 
 
-venn.diagram(x = list(A=unique(substr(subtipos$barcode[subtipos[,3]=="Basal"],1,12)),B=miC,C=mtC), filename = "Basal0.tiff",col = "transparent", fill = c("cornflowerblue","green","red"), alpha = 0.50,cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,category.names=c("expression","miRNAs","methylation"))
-venn.diagram(x = list(A=unique(substr(subtipos$barcode[subtipos[,3]=="LumB"],1,12)),B=miC,C=mtC), filename = "LumB0.tiff",col = "transparent", fill = c("cornflowerblue","green","red"), alpha = 0.50,cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,category.names=c("expression","miRNAs","methylation"))
-venn.diagram(x = list(A=unique(substr(subtipos$barcode[subtipos[,3]=="LumA"],1,12)),B=miC,C=mtC), filename = "LumA0.tiff",col = "transparent", fill = c("cornflowerblue","green","red"), alpha = 0.50,cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,category.names=c("expression","miRNAs","methylation"))
-venn.diagram(x = list(A=unique(substr(subtipos$barcode[subtipos[,3]=="Her2"],1,12)),B=miC,C=unique(patients(mthyltn))), filename = "Her20.tiff",col = "transparent", fill = c("cornflowerblue","green","red"), alpha = 0.50,cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,category.names=c("expression","miRNAs","methylation"))
