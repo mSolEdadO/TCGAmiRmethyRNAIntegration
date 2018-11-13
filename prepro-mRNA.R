@@ -295,12 +295,11 @@ table(mycdnoBatch@dat$DiagnosticTest[,  "Diagnostic Test"])
 #final expression dataset
 subtipos=subtipos[order(match(subtipos[,1],designExp$barcode)),]
 subtipos=cbind(designExp,subtipos[,2:5])
-write.table(subtipos,"subtipos.tsv",sep='\t',quote=F,row.names=F)
 #sólo me quedo con una columna por paciente, como están normalizados, según yo no me importa cual agarre
 TMMArsyn=cbind(TMMArsyn.TP[,!duplicated(substr(colnames(TMMArsyn.TP),1,12))],TMMArsyn.NT)
 TMMArsyn=lapply(c("Basal","Her2","LumA","LumB","normal"),function(x) TMMArsyn[,colnames(TMMArsyn)%in%subtipos$barcode[subtipos$pbcmc2==x]])
 names(TMMArsyn)=c("Basal","Her2","LumA","LumB","normal")
-save(TMMArsyn,file="subtiTMMArsyn.RData")
+save(TMMArsyn,subtipos,file="subtiTMMArsyn.RData")
 
 ############################--------------------FIN--------------##########################
 
