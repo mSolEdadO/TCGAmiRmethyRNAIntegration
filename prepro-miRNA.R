@@ -6,6 +6,7 @@ library(DESeq)
 
 #expression matrix: transcripts per sample with the transcript count in each cell
 mirna=GDCprepare(mirna)
+miRs=mirna[,1]
 mirna=mirna[,grep("read_count",colnames(mirna))]
 colnames(mirna)=gsub("read_count_","",colnames(mirna))
 mirnasN=GDCprepare(mirnasN)
@@ -20,6 +21,7 @@ mirDesign=rbind(mirDesign,cbind(colnames(mirnasN),substr(colnames(mirnasN),1,12)
 colnames(mirDesign)=c("barcode","patient","subtype")
 mirDesign=as.data.frame(mirDesign)
 mirna=cbind(mirna,mirnasN)
+rownames(mirna)=miRs
 
 noiseqData = readData(data = mirna, factor=mirDesign)
 mycountsbio = dat(noiseqData, type = "countsbio", factor = NULL)
