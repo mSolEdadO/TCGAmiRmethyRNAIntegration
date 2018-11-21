@@ -19,5 +19,33 @@ concatenadas=lapply(concatenadas,function(x) sapply(x,function(y) y[,order(subst
 normal=list(mirSubti$normal,methySubti$normal,methy27$normal,TMMArsyn$normal)
 save(concatenadas,normal,file="conca/porSubti.RData")
 #########################################
+library(pbapply)
+library(mixOmics)
+
 concatenadas=lapply(concatenadas,function(x) do.call(rbind,x))
-probes=cbind(rownames(concatenadas$LumA),c(rep("miRNA",1588),rep("methy",395808),rep("mRNA",13904)))
+probes=as.data.frame(cbind(rownames(concatenadas$LumA),c(rep("miRNA",1588),rep("methy",395808),rep("mRNA",13904))))
+colnames(probes)=c("name","type")
+
+concate.pcas=lapply(concatenadas,function(x) pca(t(x),ncomp=10,center=T,scale=T))
+png("subti10compo.png")
+> par(mfrow=c(2,2))
+> sapply(1:4,function(x) plot(concate.pcas[[x]],main=names(concatenadas)[x]))
+> dev.off()
+
+png("Her2dataCorr.png")
+plotVar(concate.pcas[[4]],comp=c(1,2),var.names=F,title="Her2",legend=T,
+	col=list(rep(c("cornflowerblue","darkmagenta","brown1"),table(probes$type[probes$name%in%rownames(concatenadas1[[4]])]))))
+#legend("top",legend=c("methy","miRNA","mRNA"),fill=c("cornflowerblue","green","brown1"))
+dev.off()
+png("LumAdataCorr.png")
+plotVar(concate.pcas[[1]],comp=c(1,2),var.names=F,title="LumA",legend=T,
+	col=list(rep(c("cornflowerblue","darkmagenta","brown1"),table(probes$type))))
+dev.off()
+png("LumBdataCorr.png")
+plotVar(concate.pcas[[2]],comp=c(1,2),var.names=F,title="LumB",legend=T,
+	col=list(rep(c("cornflowerblue","darkmagenta","brown1"),table(probes$type))))
+dev.off()
+png("BasaldataCorr.png")
+plotVar(concate.pcas[[3]],comp=c(1,2),var.names=F,title="Basal",legend=T,
+	col=list(rep(c("cornflowerblue","darkmagenta","brown1"),table(probes$type))))
+dev.off()
