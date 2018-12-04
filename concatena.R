@@ -1,36 +1,66 @@
 load("ini/subtiTMMArsyn.RData")
-load("ini/methyImputNoBatch450.RData")
-load("ini/methyImputNoBatch27.RData")
 load("ini/mirTMMARSyn.RData")
+load("ini/imptMethy.RData")
 
-shared=lapply(c("LumA","Basal","LumB"),function(x) sapply(list(mirSubti,methySubti,TMMArsyn),function(y) 
+shared=lapply(c("LumA","Basal","LumB","Her2","normal"),function(x) sapply(list(mirSubti,Msubti,TMMArsyn),function(y) 
 	substr(colnames(y[[which(names(y)==x)]]),1,12)))
-shared=sapply(1:3,function(x) intersect(intersect(shared[[x]][[1]],shared[[x]][[2]]),shared[[x]][[3]]))
-names(shared)=c("LumA","Basal","LumB")
-concatenadas=lapply(1:3,function(x) sapply(list(mirSubti,methySubti,TMMArsyn),function(y) 
+shared=sapply(1:5,function(x) intersect(intersect(shared[[x]][[1]],shared[[x]][[2]]),shared[[x]][[3]]))
+names(shared)=c("LumA","Basal","LumB","Her2","normal")
+concatenadas=lapply(1:5,function(x) sapply(list(mirSubti,Msubti,TMMArsyn),function(y) 
 	y[[which(names(y)==names(shared)[x])]][,substr(colnames(y[[which(names(y)==names(shared)[x])]]),1,12)%in%shared[[x]]]))
-sharedHer2=sapply(list(mirSubti,methy27,TMMArsyn),function(y) 
-	substr(colnames(y[[which(names(y)=="Her2")]]),1,12))
-sharedHer2=intersect(intersect(sharedHer2[[1]],sharedHer2[[2]]),sharedHer2[[3]])
 names(concatenadas)=names(shared)
-concatenadas$Her2=sapply(list(mirSubti,methy27,TMMArsyn),function(y) 
-	y[[which(names(y)=="Her2")]][,substr(colnames(y[[which(names(y)=="Her2")]]),1,12)%in%sharedHer2])
 concatenadas=lapply(concatenadas,function(x) sapply(x,function(y) y[,order(substr(colnames(y),1,12))]))
-normal=list(mirSubti$normal,methySubti$normal,methy27$normal,TMMArsyn$normal)
 save(concatenadas,normal,file="conca/porSubti.RData")
 #########################################
 library(pbapply)
 library(mixOmics)
 
-concatenadas=lapply(concatenadas,function(x) do.call(rbind,x))
-probes=as.data.frame(cbind(rownames(concatenadas$LumA),c(rep("miRNA",1588),rep("methy",395808),rep("mRNA",13904))))
-colnames(probes)=c("name","type")
+escaladas=pblapply(concatenadas,function(x) lapply(x,function(y) scale(y,center=T,scale=T)))
+vari=pblapply(escaladas,function(x) sapply(x,var))
+pdf("varConcate.pdf")
+par(mfrow=c(4,3))
+lapply(vari,function(x) apply(x,2,function(y) plot(density(y))))
+dev.off()
+indi.pca=lapply(concatenadas,function(x) pca(t(x),ncomp=100,center=T,scale=T))
+png("pcaIndi.png",width=800,height=800)
+par(mfrow=c(4,3))
+sapply(indi.pca,function(x) sapply(1:3,function(y)
+ plot(x[[y]],ylim=c(0,0.1),main=names(concatenadas[[1]])[y])))
+dev.off()
+#lapply(indi.pca,function(x) apply(x,2,function(y) tail(y$cum.var,3)))
+#$LumA
+#        miRNA      methy      mRNA
+#PC98  0.6358782 0.5697302 0.5798319
+#PC99  0.6390467 0.5728921 0.5832214
+#PC100 0.6421894 0.5760480 0.5865936
+#$Basal
+#           [,1]      [,2]      [,3]
+#PC98  0.8962268 0.8873851 0.8678912
+#PC99  0.9001018 0.8915093 0.8725604
+#PC100 0.9038882 0.8956038 0.8771721
+#$LumB
+#           [,1]      [,2]      [,3]
+#PC98  0.7988851 0.7451324 0.7511437
+#PC99  0.8027174 0.7495495 0.7555117
+#PC100 0.8065252 0.7539502 0.7598363
+#$Her2
+#           [,1]      [,2]      [,3]
+#PC98  0.9336252 0.9537041 0.9153974
+#PC99  0.9375400 0.9565811 0.9203258
+#PC100 0.9414300 0.9593893 0.9252081
 
-concate.pcas=lapply(concatenadas,function(x) pca(t(x),ncomp=10,center=T,scale=T))
-png("subti10compo.png")
-> par(mfrow=c(2,2))
-> sapply(1:4,function(x) plot(concate.pcas[[x]],main=names(concatenadas)[x]))
-> dev.off()
+concatenadas1=lapply(concatenadas,function(x) do.call(rbind,x))
+probes=as.data.frame(cbind(rownames(concatenadas1$LumA),c(rep("miRNA",1588),rep("methy",395808),rep("mRNA",13904))))
+colnames(probes)=c("name","type")
+concate.pcas=lapply(concatenadas1,function(x) pca(t(x),ncomp=50,center=T,scale=T))
+sapply(1:4,function(x) which(concate.pcas[[x]][[15]]>0.5)[1])
+#<NA> PC37 <NA> PC29 
+#  NA   37   NA   29 
+png("subti10compo.png",width=200,height=800)
+par(mfrow=c(4,1))
+sapply(1:4,function(x) plot(concate.pcas[[x]],ylim=c(0,0.1),main=names(concate.pcas)[x]))
+dev.off()
+#convert +append pcaIndi.png subti10compo.png lala.png
 
 png("Her2dataCorr.png")
 plotVar(concate.pcas[[4]],comp=c(1,2),var.names=F,title="Her2",legend=T,

@@ -2,8 +2,7 @@ library(TCGAbiolinks)
 library(SummarizedExperiment)
 library(NOISeq)
 library(Venn.Diagram)
-library(BEclear)
-library(data.table)
+library(doParallel)
 
 #####################################prepare the data########################################
 #reference data
@@ -36,7 +35,7 @@ save(annotMethy,methy450,file="GDCdata/TCGA-BRCA/harmonized/DNA_Methylation/meth
 load("GDCdata/TCGA-BRCA/harmonized/DNA_Methylation/methy450.RData")
 load("GDCdata/TCGA-BRCA/harmonized/DNA_Methylation/methyN_ori.RData")
 #load("GDCdata/TCGA-BRCA/harmonized/DNA_Methylation/methy27.RData")
-methySubti=sapply(c("Basal","LumA","LumB","Her2"),function(x) 
+methySubti=lapply(c("Basal","LumA","LumB","Her2"),function(x) 
 	methy450[,colnames(methy450)%in%methyDesign[methyDesign[,4]==x,1]])
 methySubti$normal=mthyltN
 #methySubti$Her2=methy27
@@ -51,8 +50,15 @@ sapply(methySubti,dim)
 #[1,] 395820 395818 395817 395814 395815
 #[2,]    137    337    178     96    75
 #impute missing values
-methySubti=lapply(methySubti,function(x) impute.knn(x,k=15)$data)
+no_cores=detectCores()-1
+registerDoParallel(cores=no_cores)
+cl=makeCluster(no_cores,type="FORK")
+methySubti=parLapply(cl,methySubti,function(x) impute.knn(x,k=15,maxp=nrow(x))$data)
+names(methySubti)=c("Basal","LumA","LumB","Her2","normal")
 #Buuren and Groothuis suggested that 15 variables are generally sufficient for imputation
+#maxp forces to impute always with knn, even when there's too much NA in columns/rows
+stopCluster(cl)
+save(methySubti,methyDesign,file="imptMethy.RData")
 
 #check the intersection between normal & tumor samples
 venn.diagram(x = list(A=methyDesign$patient[methyDesign$shortLetterCode!="NT"],
@@ -65,95 +71,29 @@ colnames(methyDesign)=c("barcode","platform","patient","subtype")
 methyDesign=as.data.frame(methyDesign)
 
 probes=intersect(intersect(intersect(intersect(rownames(methySubti$Basal),rownames(methySubti$LumA)),rownames(methySubti$LumB)),rownames(methySubti$Her2)),rownames(methySubti$normal))
-shared=do.call(cbind,sapply(methySubti,function(x) x[rownames(x)%in%probes,]))
-#mycountsbio = dat(noiseqData, type = "countsbio", factor = NULL)
-#pdf("methy_ori.pdf", width = 15, height = 7)
-#explo.plot(mycountsbio, plottype = "boxplot", samples = sample(which(methyDesign$shortLetterCode!='NT'),200),Colv=NA)
-#explo.plot(mycountsbio, plottype = "boxplot", samples = which(methyDesign$shortLetterCode=='NT'),Colv=NA)
-#dev.off()
-samples=data.table(methyDesign[,c(1,4)])
-bedata=data.table(feature=rownames(shared),shared)
-bedata=melt(data=bedata,id.vars="feature",variable.name="sample",value.name="beta.value")
-setkey(bedata,"feature","sample")
-pvals=calcPvalues(bedata,samples,adjust=T,method=T)# ks test for every gene in every batch
-#every gene with a p-value below 0.01 is assumed as batch affected
-mdifs <- calcMedians(data, samples)#median difference (mdif) values for every gene and  every  batch
-#consider  all  genes  with  mdif  values beyond or equal to 0.05 as batch affected since values beyond
-# this threshold would  already  make  a  biological  difference  in  the  methylation  level
-summary <- calcSummary(medians=mdifs, pvalues=pvals)
-score <- calcScore(ex.data, ex.samples, summary, dir=getwd())#for every batch if it is batch effected
-#boxplot para algunas muestras
-cleared.data <- clearBEgenes(ex.data, ex.samples, summary)#set affected beta values to NA
-corrected.data <- BEclear(cleared.data, rowBlockSize=60, colBlockSize=60,
-	epochs=50, outputFormat="RData", dir=getwd())#matrix completion using Latent Factor Models based on
-#matrix factorization
-#replaceWrongValues() #during  the  prediction, values  beyond  the boundaries of beta values can be returned
-
-
-
-
-
-
-
-
-myPCA2 = dat(sharedARSyn, type = "PCA", norm = T)
-pdf("batchMethy450.pdf")
-par(mfrow=c(2,2))
-explo.plot(pcaMth, samples = c(1,2), plottype = "scores", factor = "subtype")
-explo.plot(pcaMth, samples = c(1,3), plottype = "scores", factor = "subtype")
-explo.plot(myPCA2, samples = c(1,2), plottype = "scores", factor = "subtype")
-explo.plot(myPCA2, samples = c(1,3), plottype = "scores", factor = "subtype")
+methySubti=lapply(methySubti,function(x) x[rownames(x)%in%probes,])
+#Beta values have severe heteroscedasticity for highly methylated or unmethylated CpG sites.
+#M-value method provides much better performance in terms of detection rate and true positive rate
+#for both highly methylated and unmethylated CpG sites
+Msubti=lapply(methySubti,function(x) log2(x/(1-x)))
+noiseqData=lapply(Msubti,function(x) readData(data = x, factors = methyDesign[methyDesign$barcode%in%colnames(x),]))
+myPCAsubti = lapply(noiseqData,function(x) dat(x, type = "PCA", norm = T,logtransf=T))
+shared=do.call(cbind,Msubti)
+noiseqData1=readData(data = shared, factors = methyDesign[methyDesign$barcode%in%colnames(shared),])
+myPCAshared=dat(noiseqData1, type = "PCA", norm = T,logtransf=T)
+pdf("mPCA.pdf")
+par(mfrow=c(3,2) )
+explo.plot(myPCAsubti$Basal, samples = c(1,2), plottype = "scores", factor = "subtype")
+explo.plot(myPCAsubti$LumA, samples = c(1,2), plottype = "scores", factor = "subtype")
+explo.plot(myPCAsubti$LumB, samples = c(1,2), plottype = "scores", factor = "subtype")
+explo.plot(myPCAsubti$Her2, samples = c(1,2), plottype = "scores", factor = "subtype")
+explo.plot(myPCAsubti$normal, samples = c(1,2), plottype = "scores", factor = "subtype")
+explo.plot(myPCAshared, samples = c(1,2), plottype = "scores", factor = "subtype")
 dev.off()
 
-#normal=methySubti$normal
-#Her2=methySubti$Her2
-
-#drop probe annotation not present anymore
-annotMethy450=annotMethy[annotMethy[,1]%in%rownames(shared),]
-#extract subtype matrix
-methySubti=lapply(unique(methyDesign$subtype),function(x) 
-	sharedARSyn[,colnames(sharedARSyn)%in%methyDesign$barcode[methyDesign$subtype==x]])
-#methySubti$Her2=NULL
 methySubti=lapply(methySubti,function(x) x[,!duplicated(substr(colnames(x),1,12))])#keep only one sample per patient
 #sapply(methySubti,dim)
 #       LumA  Basal   LumB normal
 #[1,] 395808 395808 395808 395808
 #[2,]    331    135    177     96
-save(annotMethy450,methySubti,file="ini/methyImputNoBatch450.RData")
-
-#due to batch correction, data is alredy outside of the [0,1] beta range, and so the next step is unnecesary 
-#Beta values have severe heteroscedasticity for highly methylated or unmethylated CpG sites.
-#M-value method provides much better performance in terms of detection rate and true positive rate
-#for both highly methylated and unmethylated CpG sites
-#M=log2((methySubti$Her2+min(methySubti$Her2))/(1-(methySubti$Her2+min(methySubti$Her2))))
-
-#batches on 27K platform data
-#Her2=Her2[rownames(Her2)%in%rownames(normal),]
-#normal=normal[rownames(normal)%in%rownames(Her2),]
-#normal=normal[order(match(rownames(normal),rownames(Her2))),]
-#shared=cbind(Her2,normal)#Her2 needs its own reference coz the dataset is different
-#temp=as.data.frame(as.matrix(methyDesign[methyDesign$barcode%in%colnames(shared),]))
-#temp=cbind(temp,paste(temp$subtype,temp$platform,sep=':'))
-#colnames(temp)[5]="subtype:platform"
-
-#noiseqData=readData(data=shared,factor=temp)
-#pcaHer2 = dat(noiseqData, type = "PCA", norm = T, logtransf = T)
-#designCombat=model.matrix(~temp$subtype)#so I don't lose the subtype signal while correcting for the platform batch
-#nobatch=ComBat(shared,batch=temp$platform,mod=designCombat,par.prior=T)
-#noiseqData=readData(data=nobatch,factor=temp)
-#pcaNobatch = dat(noiseqData, type = "PCA", norm = T, logtransf = T)
-#pdf("batchMethyher2.pdf")
-#par(mfrow=c(2,2))
-#explo.plot(pcaHer2, samples = c(1,2), plottype = "scores", factor = "subtype:platform")
-#explo.plot(pcaHer2, samples = c(1,3), plottype = "scores", factor = "subtype:platform")
-#explo.plot(pcaNobatch, samples = c(1,2), plottype = "scores", factor = "subtype:platform")
-#explo.plot(pcaNobatch, samples = c(1,3), plottype = "scores", factor = "subtype:platform")
-#dev.off()
-
-#annotMethy27=annotMethy[annotMethy$Composite.Element.REF%in%rownames(nobatch),]
-#methy27=sapply(unique(temp$subtype),function(x) nobatch[,colnames(nobatch)%in%temp$barcode[temp$subtype==x]])
-#save(annotMethy27,methy27,methyDesign,file="ini/methyImputNoBatch27.RData")
-#sapply(methy27,function(x) sum(duplicated(substr(colnames(x),1,12))))
-#  Her2 normal no duplicated patient samples
-#     0      0 
-
+save(methySubti,methyDesign,Msubti,file="imptMethy.RData")
