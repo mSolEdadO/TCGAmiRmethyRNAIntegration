@@ -1,3 +1,8 @@
+#checa que deveras estes quedandote con los de mayor lfc-------------------------
+#añade alguna variable cĺinica---------------------------------------------------
+
+
+
 library(parallel)
 library(FactoMineR)
 load("conca/subsetmasdiff.Rda")
@@ -19,7 +24,15 @@ sapply(1:4,function(x) plot(MFAresus[[x]],
 	title=names(subti)[x],
 	axes=c(1,2))) #sobre los componentes 1 y 2 del pca conjunto
 dev.off()
+       
+       
+       
+       
+######mejor usa axes, para exponer lo de pCA de pCAs-----------------------------       
 
+       
+       
+       
 rna=do.call(cbind,rna)
 mirna=do.call(cbind,mirna)
 methy=do.call(cbind,methy)
