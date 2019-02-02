@@ -47,6 +47,9 @@ sapply(1:3,function(x) plot(MFAomics[[x]],choix="var",title=names(omics)[x],lab.
 dev.off()
 
 #conde example
+       
+####CHECA SI LOS cg ASOCIADOS ESTÁN CERCA, CORRESPONDEN A UN SHORE...?       
+       
 cg00428457=condes(t(subti$Her2),num.var=1)$quanti
 cg00428457=cbind(cg00428457,p.adjust(cg00428457[,2],"fdr"))
 colnames(cg00428457)[3]="fdr.adj"
