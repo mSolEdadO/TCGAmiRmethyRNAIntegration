@@ -1,4 +1,6 @@
 library(limma)
+load("conca/porSubti.RData")
+
 
 rna=do.call(cbind,sapply(concatenadas,function(x) x[[3]]))
 design=as.data.frame(do.call(rbind,sapply(1:5,function(x) cbind(colnames(concatenadas[[x]][[1]]),names(concatenadas)[x]))))
@@ -59,9 +61,10 @@ save(fitSubtype,fitSubtype.miR,fitSubtype.M,file="diff/contrsFiteBay.RData")
 
 
 #saco los 100 elementos más diferentes entre tej normal y cancer
-g=rownames(topTable(fitSubtype,number=100))#mayor adj.p.val 1.577154e-07
-mi=rownames(topTable(fitSubtype.miR,number=100))#mayor adj.p.val 2.615420e-186
-M=rownames(topTable(fitSubtype.M,number=100))#mayor adj.p.val 0 
+g=rownames(topTable(fitSubtype,number=100,adjust="fdr",sort.by="F"))#mayor adj.p.val 1.577154e-07
+#F-statistic tests whether any of the contrasts are non-zero. With many contrasts, it may be desirable to select genes firstly on the basis of their moderated F-statistics
+mi=rownames(topTable(fitSubtype.miR,number=100,adjust="fdr",sort.by="F"))#mayor adj.p.val 2.615420e-186
+M=rownames(topTable(fitSubtype.M,number=100,adjust="fdr",sort.by="F"))#mayor adj.p.val 0 
 rna=rna[rownames(rna)%in%g,]
 mirna=mirna[rownames(mirna)%in%mi,]
 methy=methy[rownames(methy)%in%M,]
