@@ -1,32 +1,37 @@
-#checa que deveras estes quedandote con los de mayor lfc-------------------------
-#añade alguna variable cĺinica---------------------------------------------------
-
-
 
 library(parallel)
 library(FactoMineR)
+library(TCGAbiolinks)
 load("conca/subsetmasdiff.Rda")
 
 subti=sapply(1:5,function(x) rbind(methy[[x]],rna[[x]],mirna[[x]]))
 names(subti)=names(methy)
 
+#add clinical info to matrixes
+dataClin <- GDCquery_clinic(project = "TCGA-BRCA","clinical") 
+dataClin=dataClin[dataClin$bcr_patient_barcode%in%substr(desi[,2],1,12),]
+desi=do.call(rbind,sapply(1:5,function(x) cbind(names(rna)[x],colnames(rna[[x]]))))
+temp=t(sapply(substr(desi[,2],1,12),function(x) dataClin[dataClin$bcr_patient_barcode==x,]))
+desi=cbind(desi,temp)
+subti$LumA=rbind(subti$LumA,t(desi[desi[,1]=="LumA",c(3:6)]))
+subti$Basal=rbind(subti$Basal,t(desi[desi[,1]=="Basal",c(3:6)]))
+subti$LumB=rbind(subti$LumB,t(desi[desi[,1]=="LumB",c(3:6)]))
+subti$Her2=rbind(subti$Her2,t(desi[desi[,1]=="Her2",c(3:6)]))
+
 no_cores <- detectCores() - 1
 cl <- makeCluster(no_cores)
 clusterEvalQ(cl,{library(FactoMineR)})
 #MFA per subtype using 3 omics 
-MFAresus=parLapply(cl, subti,function(x) 
-	MFA(t(x),group=rep(100,3),name.group=c("methy","mRNA","miR"),ncp=10,graph=F))
+MFAsubti=parLapply(cl, subti,function(x) 
+	MFA(t(unlist(x)),group=c(rep(100,3),4),name.group=c("methy","mRNA","miR","clinical"),ncp=10,graph=F,num.group.sup=301:304,type=c(rep("s",3),rep("n",4))))
 pdf("MAFomics.pdf",height=6,width=22,pointsize=26)
 par(mfrow=c(1,5))
-sapply(1:4,function(x) plot(MFAresus[[x]],
-	choix="var",#axes me pone los componentes de c/omica, var me pone todos los vectores
+sapply(1:4,function(x) plot(MFAsubti[[x]],
+	choix="axes",#axes me pone los componentes de c/omica, var me pone todos los vectores
 	lab.var=F,
 	title=names(subti)[x],
 	axes=c(1,2))) #sobre los componentes 1 y 2 del pca conjunto
 dev.off()
-       
-       
-       
        
 ######mejor usa axes, para exponer lo de pCA de pCAs-----------------------------       
 
@@ -61,7 +66,7 @@ hsalet7c=cbind(hsalet7c,p.adjust(hsalet7c[,2],"fdr"))
 colnames(hsalet7c)[3]="fdr.adj"
 
 #dimdesc example
-temp=dimdesc(MFAresus$LumA,axes=1:2)
+temp=dimdesc(MFAsubti$LumA,axes=1:2)
 temp[[1]]$quanti=cbind(temp[[1]]$quanti,p.adjust(temp[[1]]$quanti[,2],"fdr"))
 temp[[2]]$quanti=cbind(temp[[2]]$quanti,p.adjust(temp[[2]]$quanti[,2],"fdr"))
 temp[[1]]$quanti[abs(temp[[1]]$quanti[,1])>0.5&temp[[1]]$quanti[,3]<0.05,]
