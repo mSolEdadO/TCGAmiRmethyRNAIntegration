@@ -33,7 +33,8 @@ MFAsubti=parLapply(cl, subti,function(x)
 #fviz_mfa_axes(MFAsubti[[5]],geom="arrow",legend="bottom",title=names(MFAsubti)[5])
 #dev.off()
 
-MFAtotal=MFA(do.call(rbind,subti),group=c(rep(100,3),3),name.group=c("methy","mRNA","miR","clinical"),ncp=5,graph=F,num.group.sup=4,type=c(rep("s",3),"n"))       
+temp=cbind(scale(do.call(rbind,subti)[,1:235]),do.call(rbind,subti)[,236:238])
+MFAtotal=MFA(temp,group=c(rep(100,3),3),name.group=c("methy","mRNA","miR","clinical"),ncp=5,graph=F,num.group.sup=4,type=c(rep("s",3),"n"))       
       
 rna=do.call(cbind,rna)
 mirna=do.call(cbind,mirna)
@@ -49,12 +50,13 @@ fviz_mfa_var(MFAomics[[2]],geom="point",palette="lancet",legend="bottom",title=n
 fviz_mfa_var(MFAomics[[3]],geom="point",palette="lancet",legend="bottom",title=names(MFAomics)[3])
 dev.off()
 stopCluster(cl)
-MFAmultiomics=MFA(do.call(rbind,omics),group=c(331,135,177,75,75),name.group=c("LumA","Basal","LumB","Her2","normal"),ncp=5,graph=F)
+MFAmultiomics=MFA(scale(do.call(rbind,omics)),group=c(331,135,177,75,75),name.group=c("LumA","Basal","LumB","Her2","normal"),ncp=5,graph=F)
 #fviz_mfa_var(MFAmultiomics,geom="point",palette="lancet")#se ve igual que el de miR
        
 #la omicas coinciden? 
 pdf("FactoMineR.pdf")      
 fviz_mfa_var(MFAsubti$Her2,palette="hue",legend="bottom",title="Her2","group")
+fviz_screeplot(MFAsubti$Her2,title="Her2")
 fviz_mfa_var(MFAsubti$normal,palette="hue",legend="bottom",title="normal","group")
 fviz_mfa_axes(MFAsubti$Her2,geom="arrow",legend="bottom",title="Her2")
 fviz_contrib(MFAsubti$Her2, choice = "quanti.var", axes = 1, top = 30,palette=scales::hue_pal()(4)[2:4])
