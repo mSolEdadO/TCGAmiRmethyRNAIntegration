@@ -41,7 +41,7 @@ fitSubtype.miR = eBayes(fitSubtype.miR)
 methy=do.call(cbind,sapply(concatenadas,function(x) x[[2]]))
 fit=lmFit(methy,DE.design)
 fitSubtype.M = contrasts.fit(fit, contr.mtrx)
-fitSubtype.M = eBayes(fitSubtype.M)
+fitSubtype.M = eBayes(fitSubtype.M)#coefficientes has the log fold changes
 #DEM=decideTests(fitSubtype.M,method="separate",p.value=3.158632e-08,adjust.method="fdr")
 #summary(DEM)
 #       basal_normal her2_normal luma_normal lumb_normal
@@ -59,28 +59,21 @@ lines(tempmiR$voom.line,col="red")#se espera un curva suave y concava y eso es c
 dev.off()
 
 
-#saco los 100 elementos más diferentes entre tej normal y cancer
+#saco los elementos más diferentes (y signif) entre tej normal y cancer
 fitSubtype$fdr=apply(fitSubtype$"p.value",2,p.adjust,"fdr")
-g=names(sort(rowMeans(abs(fitSubtype$coefficients))[rowSums(fitSubtype$fdr<0.05)==4],decreasing=T)[1:100])
-#mayor adj.p.val 1.626591e-75, AveExpr  [27.35,34.48]
+g=names(which(rowSums(abs(fitSubtype$coefficients)>2)>0
+	&rowSums(abs(fitSubtype$fdr)<0.05)>0))
 #F-statistic tests whether any of the contrasts are non-zero. With many contrasts, it may be desirable to select genes firstly on the basis of their moderated F-statistics
 fitSubtype.miR$fdr=apply(fitSubtype.miR$"p.value",2,p.adjust,"fdr")
-mi=names(sort(rowMeans(abs(fitSubtype.miR$coefficients))[rowSums(fitSubtype.miR$fdr<0.05)==4],decreasing=T)[1:100])# solo hay 35 en los 4
-#temp=topTable(fitSubtype.miR,number=nrow(fitSubtype.miR$coefficients))
-#summary(temp[rownames(temp)%in%mi,])
-#mayor adj.p.val 1.956e-02, AveExpr  [0.1,382158.9]
+mi=names(which(rowSums(abs(fitSubtype.miR$coefficients)>2)>0
+	&rowSums(abs(fitSubtype.miR$fdr)<0.05)>0))
 fitSubtype.M$fdr=apply(fitSubtype.M$"p.value",2,p.adjust,"fdr")
-M=names(sort(rowMeans(abs(fitSubtype.M$coefficients))[rowSums(fitSubtype.M$fdr<0.05)==4],decreasing=T)[1:100])
-#mayor adj.p.val 1.778e-41, AveExpr  [-2.0914,1.5434]
+M=names(which(rowSums(abs(fitSubtype.M$coefficients)>2)>0
+	&rowSums(abs(fitSubtype.M$fdr)<0.05)>0))
 save(fitSubtype,fitSubtype.miR,fitSubtype.M,file="diff/contrsFiteBay.RData")
+
 rna=rna[rownames(rna)%in%g,]
 mirna=mirna[rownames(mirna)%in%mi,]
 methy=methy[rownames(methy)%in%M,]
 
-rna=lapply(unique(design$subtype),function(x) rna[,design$subtype==x])
-names(rna)=unique(design$subtype)
-mirna=lapply(unique(design$subtype),function(x) mirna[,design$subtype==x])
-names(mirna)=unique(design$subtype)
-methy=lapply(unique(design$subtype),function(x) methy[,design$subtype==x])
-names(methy)=unique(design$subtype)
-#save(rna,mirna,methy,file="conca/subsetmasdiff.Rda")#lo borre porque ya tengo los subsets en useR/MFA.Rda:subti
+#save(rna,mirna,methy,design,file="conca/subsetmasdiff.Rda")#lo borre porque ya tengo los subsets en useR/MFA.Rda:subti
