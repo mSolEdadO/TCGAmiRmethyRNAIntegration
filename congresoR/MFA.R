@@ -1,30 +1,37 @@
-
 library(parallel)
 library(FactoMineR)
-library(TCGAbiolinks)
-load("conca/subsetmasdiff.Rda")
+#library(TCGAbiolinks)
+library(factoextra)
+load("subset/subset.Rda")
 
-subti=sapply(1:5,function(x) rbind(methy[[x]],rna[[x]],mirna[[x]]))
-names(subti)=names(methy)
+#subti=sapply(1:5,function(x) rbind(methy[[x]],rna[[x]],mirna[[x]]))
+#names(subti)=names(methy)
 
 #add clinical info to matrixes
-dataClin <- GDCquery_clinic(project = "TCGA-BRCA","clinical") 
-dataClin=dataClin[dataClin$bcr_patient_barcode%in%substr(desi[,2],1,12),c(5,6,33,41)]
-desi=do.call(rbind,sapply(1:5,function(x) cbind(names(rna)[x],colnames(rna[[x]]))))
-temp=t(sapply(substr(desi[,2],1,12),function(x) dataClin[dataClin$bcr_patient_barcode==x,]))
-desi=cbind(desi,temp[,1:3])
-subti$LumA=cbind(t(subti$LumA),as.data.frame(apply(desi[desi[,1]=="LumA",c(3:5)],2,function(x) unlist(x))))
-subti$Basal=cbind(t(subti$Basal),as.data.frame(apply(desi[desi[,1]=="Basal",c(3:5)],2,function(x) unlist(x))))
-subti$LumB=cbind(t(subti$LumB),as.data.frame(apply(desi[desi[,1]=="LumB",c(3:5)],2,function(x) unlist(x))))
-subti$Her2=cbind(t(subti$Her2),as.data.frame(apply(desi[desi[,1]=="Her2",c(3:5)],2,function(x) unlist(x))))
-subti$normal=cbind(t(subti$normal),as.data.frame(apply(desi[desi[,1]=="normal",c(3:5)],2,function(x) unlist(x))))
+#dataClin <- GDCquery_clinic(project = "TCGA-BRCA","clinical") 
+#desi=do.call(rbind,sapply(1:5,function(x) cbind(names(subti)[x],colnames(subti[[x]]))))
+#dataClin=dataClin[dataClin$bcr_patient_barcode%in%substr(design[,1],1,12),c(5,6,33,41)]
+#temp=t(sapply(substr(design[,2],1,12),function(x) dataClin[dataClin$bcr_patient_barcode==x,]))
+#design=cbind(desi,temp[,1:3])
 
-no_cores <- detectCores() - 1
-cl <- makeCluster(no_cores)
+omics=list(t(methy),t(rna),t(mirna))
+names(omics)=c("methy","rna","mirna")
+cl <- makeCluster(7)
 clusterEvalQ(cl,{library(FactoMineR)})
 #MFA per subtype using 3 omics 
-MFAsubti=parLapply(cl, subti,function(x) 
-	MFA(x,group=c(100,100,35,3),name.group=c("methy","mRNA","miR","clinical"),ncp=5,graph=F,num.group.sup=4,type=c(rep("s",3),"n")))
+PCAomics=parLapply(cl, omics,function(x) PCA(x,ncp=5,graph=F))
+save(PCAomics,"exploratorio.Rda")
+MFAsubti=MFA(scale(do.call(rbind,omics)),group=table(design$subtype),name.group=c("Basal","Her2","LumA","LumB","normal"),ncp=5,graph=F)       
+save(PCAomics,MFAsubti,file="exploratorio.Rda")
+
+multio=cbind(as.data.frame(t(scale(do.call(rbind,omics)))),as.factor(unlist(design$subtype)))
+MFAmultio=MFA(multio,group=c(39201,1669,210,1),name.group=c("methy","rna","mirna","subtypes"),ncp=5,graph=F,num.group.sup=4,type=c(rep("s",3),"n"))
+save(PCAomics,MFAsubti,MFAmultio,file="exploratorio.Rda")
+
+library(r.jive)
+JIVEomics=jive(omics)
+save(PCAomics,MFAsubti,MFAmultio,JIVEomics,file="exploratorio.Rda")
+
 #pdf("MAFomics.pdf")
 #fviz_mfa_axes(MFAsubti[[1]],geom="arrow",legend="bottom",title=names(MFAsubti)[1])#no sirve con sapply
 #fviz_mfa_axes(MFAsubti[[2]],geom="arrow",legend="bottom",title=names(MFAsubti)[2])
@@ -33,17 +40,20 @@ MFAsubti=parLapply(cl, subti,function(x)
 #fviz_mfa_axes(MFAsubti[[5]],geom="arrow",legend="bottom",title=names(MFAsubti)[5])
 #dev.off()
 
-temp=cbind(scale(do.call(rbind,subti)[,1:235]),do.call(rbind,subti)[,236:238])
-MFAtotal=MFA(temp,group=c(rep(100,3),3),name.group=c("methy","mRNA","miR","clinical"),ncp=5,graph=F,num.group.sup=4,type=c(rep("s",3),"n"))       
+temp=cbind(scale(do.call(rbind,subti)[,1:411298]),do.call(rbind,subti)[,411299:411301])
       
-rna=do.call(cbind,rna)
-mirna=do.call(cbind,mirna)
-methy=do.call(cbind,methy)
+methy=t(do.call(rbind,lapply(subti,function(x) x[,1:1588])))
+rna=t(do.call(rbind,lapply(subti,function(x) x[,1589:397394])))
+mirna=t(do.call(rbind,lapply(subti,function(x) x[,397395:411298])))
 omics=list(methy,rna,mirna)
 names(omics)=c("methy","rna","mirna")
 #MFA per omic, considering BRCA subtypes
 MFAomics=parLapply(cl, omics,function(x) 
 	MFA(x,group=c(331,135,177,75,75),name.group=c("LumA","Basal","LumB","Her2","normal"),ncp=5,graph=F))
+
+
+
+
 pdf("MAFsubti.pdf")
 fviz_mfa_var(MFAomics[[1]],geom="point",palette="lancet",legend="bottom",title=names(MFAomics)[1])
 fviz_mfa_var(MFAomics[[2]],geom="point",palette="lancet",legend="bottom",title=names(MFAomics)[2])
@@ -52,13 +62,25 @@ dev.off()
 stopCluster(cl)
 MFAmultiomics=MFA(scale(do.call(rbind,omics)),group=c(331,135,177,75,75),name.group=c("LumA","Basal","LumB","Her2","normal"),ncp=5,graph=F)
 #fviz_mfa_var(MFAmultiomics,geom="point",palette="lancet")#se ve igual que el de miR
+
+save(MFAsubti,MFAtotal,MFAomics,MFAmultiomics,subti,file="MFA.Rda")
        
 #la omicas coinciden? 
 pdf("FactoMineR.pdf")      
 fviz_mfa_var(MFAsubti$Her2,palette="hue",legend="bottom",title="Her2","group")
 fviz_screeplot(MFAsubti$Her2,title="Her2")
 fviz_mfa_var(MFAsubti$normal,palette="hue",legend="bottom",title="normal","group")
-fviz_mfa_axes(MFAsubti$Her2,geom="arrow",legend="bottom",title="Her2")
+fviz_mfa_axes(MFAsubti$Her2,legend="bottom",title="Her2",repel=T)
 fviz_contrib(MFAsubti$Her2, choice = "quanti.var", axes = 1, top = 30,palette=scales::hue_pal()(4)[2:4])
 fviz_mfa_ind(MFAsubti$Her2,geom="point",partial=rownames(subti$Her2)[sample(1:75,3)],title="Individuals Her2")
+dev.off()
+
+data=do.call(cbind,sgccda.res$X)
+MFA(data,group=c(100,37,100),name.group=c("mRNA","miRNA","methylation"),ncp=5,graph=F)
+
+pdf("FactoMineR237.pdf")
+fviz_mfa_var(MFAomics,palette="lancet",legend="bottom","group",repel=T)
+fviz_mfa_axes(MFAomics,repel=T,legend="bottom")
+fviz_mfa_ind(MFAomics,habillage=temp1$"sgccda.res$Y",geom="point",palette=ggsci::pal_lancet("lanonc")(5))
+fviz_contrib(MFAomics,choice="quanti.var",top=30,axes=1,palette=scales::hue_pal()(4)[4:1])
 dev.off()
