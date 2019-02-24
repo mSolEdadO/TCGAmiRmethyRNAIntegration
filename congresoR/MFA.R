@@ -21,27 +21,30 @@ clusterEvalQ(cl,{library(FactoMineR)})
 #MFA per subtype using 3 omics 
 PCAomics=parLapply(cl, omics,function(x) PCA(x,ncp=5,graph=F))
 save(PCAomics,"exploratorio.Rda")
+pdf("PCAomics.pdf")
+fviz_pca_var(PCAomics$methy,geom="point",col.var=subtipos,palette=ggsci::pal_lancet("lanonc")(5),pch=19,title="Methy")
+fviz_eig(PCAomics$methy, addlabels = TRUE,title="Methy")
+fviz_pca_var(PCAomics$mirna,geom="point",col.var=subtipos,palette=ggsci::pal_lancet("lanonc")(5),pch=19,title="miRNA")
+fviz_eig(PCAomics$mirna, addlabels = TRUE,title="miRNA")
+fviz_pca_var(PCAomics$rna,geom="point",col.var=subtipos,palette=ggsci::pal_lancet("lanonc")(5),pch=19,title="mRNA")
+fviz_eig(PCAomics$rna, addlabels = TRUE,title="mRNA")
+dev.off()		   
 MFAsubti=MFA(scale(do.call(rbind,omics)),group=table(design$subtype),name.group=c("Basal","Her2","LumA","LumB","normal"),ncp=5,graph=F)       
+#se lo come la falta de señal de mirna
 save(PCAomics,MFAsubti,file="exploratorio.Rda")
 
 multio=cbind(as.data.frame(t(scale(do.call(rbind,omics)))),as.factor(unlist(design$subtype)))
 MFAmultio=MFA(multio,group=c(39201,1669,210,1),name.group=c("methy","rna","mirna","subtypes"),ncp=5,graph=F,num.group.sup=4,type=c(rep("s",3),"n"))
 save(PCAomics,MFAsubti,MFAmultio,file="exploratorio.Rda")
+pdf("MFAmultio.pdf")
+fviz_mfa_axes(MFAmultio,repel=T)
 
 library(r.jive)
 JIVEomics=jive(omics)
 save(PCAomics,MFAsubti,MFAmultio,JIVEomics,file="exploratorio.Rda")
 
-#pdf("MAFomics.pdf")
-#fviz_mfa_axes(MFAsubti[[1]],geom="arrow",legend="bottom",title=names(MFAsubti)[1])#no sirve con sapply
-#fviz_mfa_axes(MFAsubti[[2]],geom="arrow",legend="bottom",title=names(MFAsubti)[2])
-#fviz_mfa_axes(MFAsubti[[3]],geom="arrow",legend="bottom",title=names(MFAsubti)[3])
-#fviz_mfa_axes(MFAsubti[[4]],geom="arrow",legend="bottom",title=names(MFAsubti)[4])
-#fviz_mfa_axes(MFAsubti[[5]],geom="arrow",legend="bottom",title=names(MFAsubti)[5])
-#dev.off()
-
-temp=cbind(scale(do.call(rbind,subti)[,1:411298]),do.call(rbind,subti)[,411299:411301])
-      
+		   
+		   
 methy=t(do.call(rbind,lapply(subti,function(x) x[,1:1588])))
 rna=t(do.call(rbind,lapply(subti,function(x) x[,1589:397394])))
 mirna=t(do.call(rbind,lapply(subti,function(x) x[,397395:411298])))
@@ -50,9 +53,6 @@ names(omics)=c("methy","rna","mirna")
 #MFA per omic, considering BRCA subtypes
 MFAomics=parLapply(cl, omics,function(x) 
 	MFA(x,group=c(331,135,177,75,75),name.group=c("LumA","Basal","LumB","Her2","normal"),ncp=5,graph=F))
-
-
-
 
 pdf("MAFsubti.pdf")
 fviz_mfa_var(MFAomics[[1]],geom="point",palette="lancet",legend="bottom",title=names(MFAomics)[1])
@@ -82,5 +82,6 @@ pdf("FactoMineR237.pdf")
 fviz_mfa_var(MFAomics,palette="lancet",legend="bottom","group",repel=T)
 fviz_mfa_axes(MFAomics,repel=T,legend="bottom")
 fviz_mfa_ind(MFAomics,habillage=temp1$"sgccda.res$Y",geom="point",palette=ggsci::pal_lancet("lanonc")(5))
+		   
 fviz_contrib(MFAomics,choice="quanti.var",top=30,axes=1,palette=scales::hue_pal()(4)[4:1])
 dev.off()
