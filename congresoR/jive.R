@@ -1,14 +1,10 @@
 library(r.jive)
 library(ggsci)#pa repetir la paleta de colores de MFA.R
-load("useR/MFA.Rda")
+load("subset/subset.Rda")
 
 #jive necesita una lista con las distintas omicas
-methy=t(do.call(cbind,lapply(subti,function(x) x[,1:100])))
-rna=t(do.call(rbind,lapply(subti,function(x) x[,101:200])))
-mirna=t(do.call(rbind,lapply(subti,function(x) x[,201:235])))
-omics=list(methy,rna,mirna)
+omics=list(t(methy),t(rna),t(mirna))
 names(omics)=c("methy","rna","mirna")
-subtipos=gsub(".TCGA.+","",colnames(omics$methy))
 
 #hay que ordenar las samples para que los colores por subtipo correspondan con el de MFA.R
 omics$methy=omics$methy[,order(match(subtipos,names(table(subtipos))))]
