@@ -29,6 +29,11 @@ save(sgccda.res,perf.diablo,file="splsda.Rda")
 test.keepX = list (mRNA = c(seq(10,100,10), 300, 500),
                     miRNA =  seq(10,140,10),
                     methylation = c(seq(10,100,10), seq(300, 1000, 200)))
+#modify tune.block.splsda so parallel gets exported to every node in cl
+#tmpfun <- get("tune.block.splsda", envir = asNamespace("mixOmics"))
+#environment(tune.block.splsda) <- environment(tmpfun)
+#attributes(tune.block.splsda) <- attributes(tmpfun)  # don't know if this is really needed
+#assignInNamespace("tune.block.splsda", tune.block.splsda, ns="mixOmics")
 start_time <- Sys.time()
 seleccionadas = tune.block.splsda(X = sgccda.res$X, Y=sgccda.res$Y, ncomp = ncomp,test.keepX = test.keepX, 
                 design = sgccda.res$design,validation = 'Mfold', folds = 10, nrepeat = 1,cpus = 4,
