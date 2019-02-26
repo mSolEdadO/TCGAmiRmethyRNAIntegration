@@ -50,11 +50,12 @@ sgccda.res1 = block.splsda(X = data, Y = Y, ncomp =55,
 	design=sgccda.res$design,max.iter=1000)
 
 pdf("mixOmics.pdf")
-barplot(t(do.call(cbind,sgccda.res1$explained_variance[1:3])[1:10,]*100),beside=T,las=2,col=scales::hue_pal()(4)[4:2],border=NA,ylab="% of omics variance explained",ylim=c(0,8))
-plotLoadings(sgccda.res1,comp=2,contrib="max",method="median",block=1,title="mRNA in comp2")
-plotLoadings(sgccda.res1,comp=2,contrib="max",method="median",block=2,title="miRNA in comp2")
-plotLoadings(sgccda.res1,comp=2,contrib="max",method="median",block=3,title="methylation in comp2") 
-circosPlot(sgccda.res1, cutoff = 0.7, line =F,color.blocks=scales::hue_pal()(4)[4:2],comp=2,color.cor=c("chocolate3","grey20"))
+barplot(t(do.call(cbind,sgccda.final$explained_variance[1:3])*100),beside=T,las=2,col=scales::hue_pal()(4)[4:2],border=NA,ylab="% de varianza explicada",ylim=c(0,8))
+plotLoadings(sgccda.final,comp=1,contrib="max",method="median",block=1,title="metilación en comp1")
+plotLoadings(sgccda.final,comp=1,contrib="max",method="median",block=2,title="expresión de mRNA in comp1")
+plotLoadings(sgccda.final,comp=1,contrib="max",method="median",block=3,title="expresión de miRNA in comp1") 
+circosPlot(sgccda.final, cutoff = 0.7, line =F,color.blocks=scales::hue_pal()(4)[4:2],comp=2,color.cor=c("chocolate3","grey20"))
+plotArrow(sgccda.final,ind.names=F,col=pal_lancet()(5)[design$subtype],legend=T)
 dev.off()
 
 selected=sapply(1:55,function(y) unlist(sapply(selectVar(sgccda.res1,comp=y)[1:3],function(x) x[[1]])))
