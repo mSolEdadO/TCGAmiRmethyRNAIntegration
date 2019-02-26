@@ -11,7 +11,7 @@ JIVEomics=jive(omics)
 pdf("JIVEomics.pdf")
 showVarExplained(JIVEomics)  
 showPCA(JIVEomics,n_joint=2,Colors=pal_lancet()(5)[design$subtype],pch=19)
-legend("top",horiz=T,legend=levels(subtipos),fill=pal_lancet()(5),bty='n',border=NA)
+legend("top",horiz=T,legend=levels(design$subtype),fill=pal_lancet()(5),bty='n',border=NA)
 showPCA(JIVEomics,n_joint=1,n_indiv=c(1,1,1),Colors=pal_lancet()(5)[design$subtype],pch=19)
 dev.off()
 
