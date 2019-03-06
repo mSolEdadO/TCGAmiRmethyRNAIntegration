@@ -4,7 +4,8 @@ library(VennDiagram)
 #indexes of each data type
 mthyltn <-  GDCquery(project = "TCGA-BRCA",
 	data.category = "DNA Methylation",
-	sample.type = "Primary solid Tumor")
+	sample.type = "Primary solid Tumor",
+	platform="Illumina Human Methylation 450")
 mirnas <- GDCquery(project = "TCGA-BRCA",
 	data.category = "Transcriptome Profiling",
 	data.type = "miRNA Expression Quantification",
@@ -39,10 +40,10 @@ venn.diagram(x = list(A=unique(substr(subtipos$patient[subtipos$pbcmc2=="Basal"]
   cex = 1.5, fontface = "bold", label.col="white", cat.cex = 1.5,margin = 0.1,
   category.names=c("expression","miRNAs","methylation"),main="Basal")
 #convert -append Basal.tiff LumB.tiff LumA.tiff Her2-450.tiff Her2.tiff subtipos.tiff
-intersec=sapply(c("LumA","LumB","Basal"),function(x) 
+intersec=sapply(c("LumA","LumB","Basal","Her2"),function(x) 
 	intersect(intersect(unique(substr(subtipos$patient[subtipos$pbcmc2==x],1,12)),mtC),miC))
-intersec$Her2=intersect(intersect(unique(substr(subtipos$patient[subtipos$pbcmc2=="Her2"],1,12)),
-	unique(substr(getResults(mthyltn)$cases,1,12))),miC)
+#intersec$Her2=intersect(intersect(unique(substr(subtipos$patient[subtipos$pbcmc2=="Her2"],1,12)),
+#	unique(substr(getResults(mthyltn)$cases,1,12))),miC)
 #sapply(intersec,length)
 # LumA  LumB Basal  Her2 
 #  331   178   135   119 
@@ -50,7 +51,7 @@ intersec$Her2=intersect(intersect(unique(substr(subtipos$patient[subtipos$pbcmc2
 #data of each type from patients in the intersection
 miC=getResults(mirnas)$cases[substr(getResults(mirnas)$cases,1,12)%in%unlist(intersec)]
 #length(miC)
-#[1] 777
+#[1] 733
 mirna <- GDCquery(project = "TCGA-BRCA",
 	data.category = "Transcriptome Profiling",
 	data.type = "miRNA Expression Quantification",
