@@ -56,44 +56,39 @@ FilteredMatrix = filtered.data(mirna, factor = "subtype",norm = FALSE, method = 
 #con esto me quedo sin miRNAs porque la distribución de lcpm esta muy sesgada a la izq y eso es normal
 #it is expected that in miRNA-seq experiments, the 75th percentile of the data will
 # be found at only 1 or 2 copies/library [10.1093/bib/bbv019]
-#summary(rowSums(mirna))
-#     Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#        0         7       145   1731696      1793 784488389 estan refeos
 sum(rowMedians(as.matrix(mirna))>0)/nrow(mirna)
 #[1] 0.281765 si filtro por mediana de la expresión me quedo con menos de un tercio de la matriz
 sum(rowMeans(as.matrix(mirna))>0)/nrow(mirna)
 #[1] 0.8415736#lcpmF=cpm(FilteredMatrix,log=T)si filtro por media me quedo casi toda la matriz
 #pero puede que los datos sean basura...¿?
-#FilteredMatrix=mirna[rowMedians(as.matrix(mirna))>0,]
-FilteredMatrix1=mirna[rowMeans(as.matrix(mirna))>0,]
-#dim(FilteredMatrix1)
-#[1] 1583  837
 temp=lapply(unique(mirDesign$subtype),function(x) mirna[,colnames(mirna)%in%mirDesign$sample[mirDesign$subtype==x]])
-temp=unique(unlist(lapply(temp,function(x) which(rowSums(x>=5)>=ncol(x)*0.25))))
-FilteredMatrix2=mirna[temp,]# a minimum of  5  counts  in  at  least  25%  of  the  samples Drago-García2017
-#dim(FilteredMatrix2)
+temp1=unique(unlist(lapply(temp,function(x) which(rowSums(x>=5)>=ncol(x)*0.25))))
+FilteredMatrix1=mirna[temp1,]# a minimum of  5  counts  in  at  least  25%  of  the  samples Drago-García2017
+#dim(FilteredMatrix1)
 #[1] 446 837
+temp1=unique(unlist(lapply(temp,function(x) which(rowSums(x>=1)>=ncol(x)*0.25))))
+FilteredMatrix2=mirna[temp1,]# a minimum of  1  counts  in  at  least  25%  of  the  samples Drago-García2017
 
 pdf("lowCountThres.pdf")
-plot(density(rowMeans(cpm(mirna[,mirDesign$subtype=="Basal"],log=T))),ylab="mirna",main="no filter",xlab="mean of log CPM",col="blue",ylim=c(0,1))
+plot(density(rowMeans(cpm(mirna[,mirDesign$subtype=="Basal"],log=T))),main="no filter",xlab="mean of log CPM",col="blue",ylim=c(0,1))
  lines(density(rowMeans(cpm(mirna[,mirDesign$subtype=="Her2"],log=T))),col="green")
  lines(density(rowMeans(cpm(mirna[,mirDesign$subtype=="LumA"],log=T))),col="orange")
  lines(density(rowMeans(cpm(mirna[,mirDesign$subtype=="LumB"],log=T))),col="red")
  lines(density(rowMeans(cpm(mirna[,mirDesign$subtype=="normal"],log=T))),col="purple")
 legend("topright",legend=c("Basal","Her2","LumA","LumB","normal"),fill=c("blue","green","orange","red","purple"),bty="n")
-plot(density(rowMeans(cpm(FilteredMatrix1[,mirDesign$subtype=="Basal"],log=T))),main="rowMeans > 0",ylab="mirna",xlab="mean of log CPM",col="blue",ylim=c(0,0.6))
+plot(density(rowMeans(cpm(FilteredMatrix1[,mirDesign$subtype=="Basal"],log=T))),main="25% per condition > 5",xlab="mean of log CPM",col="blue",ylim=c(0,0.15))
  lines(density(rowMeans(cpm(FilteredMatrix1[,mirDesign$subtype=="Her2"],log=T))),col="green")
  lines(density(rowMeans(cpm(FilteredMatrix1[,mirDesign$subtype=="LumA"],log=T))),col="orange")
  lines(density(rowMeans(cpm(FilteredMatrix1[,mirDesign$subtype=="LumB"],log=T))),col="red")
  lines(density(rowMeans(cpm(FilteredMatrix1[,mirDesign$subtype=="normal"],log=T))),col="purple")
 legend("topright",legend=c("Basal","Her2","LumA","LumB","normal"),fill=c("blue","green","orange","red","purple"),bty="n")
-plot(density(rowMeans(cpm(FilteredMatrix2[,mirDesign$subtype=="Basal"],log=T))),main="25% per condition > 5",ylab="mirna",xlab="mean of log CPM",col="blue",ylim=c(0,0.1))
+plot(density(rowMeans(cpm(FilteredMatrix2[,mirDesign$subtype=="Basal"],log=T))),main="25% per condition > 1",xlab="mean of log CPM",col="blue",ylim=c(0,0.2))
  lines(density(rowMeans(cpm(FilteredMatrix2[,mirDesign$subtype=="Her2"],log=T))),col="green")
  lines(density(rowMeans(cpm(FilteredMatrix2[,mirDesign$subtype=="LumA"],log=T))),col="orange")
  lines(density(rowMeans(cpm(FilteredMatrix2[,mirDesign$subtype=="LumB"],log=T))),col="red")
  lines(density(rowMeans(cpm(FilteredMatrix2[,mirDesign$subtype=="normal"],log=T))),col="purple")
 legend("topright",legend=c("Basal","Her2","LumA","LumB","normal"),fill=c("blue","green","orange","red","purple"),bty="n")
-plot(density(rowMeans(cpm(FilteredMatrix[,mirDesign$subtype=="Basal"],log=T))),main="aveExpress per condition > 1cpm",ylab="mirna",xlab="mean of log CPM",col="blue",ylim=c(0,0.1))
+plot(density(rowMeans(cpm(FilteredMatrix[,mirDesign$subtype=="Basal"],log=T))),main="aveExpress per condition > 1cpm",xlab="mean of log CPM",col="blue",ylim=c(0,0.2))
  lines(density(rowMeans(cpm(FilteredMatrix[,mirDesign$subtype=="Her2"],log=T))),col="green")
  lines(density(rowMeans(cpm(FilteredMatrix[,mirDesign$subtype=="LumA"],log=T))),col="orange")
  lines(density(rowMeans(cpm(FilteredMatrix[,mirDesign$subtype=="LumB"],log=T))),col="red")
@@ -119,21 +114,21 @@ mycdUQUA = dat(noiseqData, type = "cd", norm = T)
 table(mycdUQUA@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #   249    587
-myTMM1=tmm(FilteredMatrix2,lc=0)
+myTMM1=tmm(FilteredMatrix1,lc=0)
 noiseqData = readData(data = myTMM1, factors=mirDesign)
 mycdTMM1 = dat(noiseqData, type = "cd", norm = T)
 table(mycdTMM1@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#    19    817 vs 821, me quedo con ésta
-myUQUA1=uqua(FilteredMatrix2,lc=0)
+#    16    820 vs 821, me quedo con ésta
+myUQUA1=uqua(FilteredMatrix1,lc=0)
 noiseqData = readData(data = myUQUA1, factors=mirDesign)
 mycdUQUA1 = dat(noiseqData, type = "cd", norm = T)
 table(mycdUQUA1@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#   179    657 
+#   168    668 
 deseqFactors=estimateSizeFactors(newCountDataSet(FilteredMatrix, conditions=mirDesign))
 myDESEQ=counts(deseqFactors,normalized=T)
-deseqFactors1=estimateSizeFactors(newCountDataSet(FilteredMatrix2,conditions=mirDesign))
+deseqFactors1=estimateSizeFactors(newCountDataSet(FilteredMatrix1,conditions=mirDesign))
 myDESEQ1=counts(deseqFactors1,normalized=T)
 noiseqData = readData(data = myDESEQ, factors=mirDesign)
 mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
@@ -145,8 +140,14 @@ mycdDESEQ1 = dat(noiseqData, type = "cd", norm = T)
 table(mycdDESEQ1@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #    85    751 
+
+pdf("miRsampleBias.pdf")
+temp=sample(1:ncol(mirna),10)
+explo.plot(mycd,samples=temp)
+explo.plot(mycdTMM1,samples=temp)
+dev.off()
 noiseqData = readData(data = myTMM1, factors=mirDesign)
-tmmARSyn=ARSyNseq(noiseqData, factor = "subtype", batch = F, norm = "n",  logtransf = T)
+tmmARSyn=ARSyNseq(noiseqData, factor = "subtype", batch = F, norm = "n",  logtransf =F)
 
 noiseqData = readData(data = exprs(tmmARSyn), factors=mirDesign)
 mycountsbio1 = dat(noiseqData, type = "countsbio", factor = NULL)
@@ -175,6 +176,6 @@ mirSubti=lapply(mirSubti,function(x) x[,!duplicated(substr(colnames(x),1,12))])#
 #     Basal LumA Her2 LumB normal
 #[1,]   446  446 446  446    446
 #[2,]   135  331  75  177    104
-save(mirSubti,file="ini/mirTMMARSyn1.RData")
+save(mirSubti,file="ini/mirTMMARSyn.RData")
 
 

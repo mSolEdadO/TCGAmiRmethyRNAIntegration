@@ -13,7 +13,7 @@ mirnas <- GDCquery(project = "TCGA-BRCA",
 #unique patients for each data
 miC=unique(substr(getResults(mirnas)$cases,1,12))
 length(miC)
-#[1] 1013
+#[1] 1078
 mtC=unique(substr(getResults(mthyltn)$cases[getResults(mthyltn)$platform=="Illumina Human Methylation 450"],1,12))
 length(mtC)
 #[1] 782
