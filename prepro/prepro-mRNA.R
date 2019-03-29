@@ -125,6 +125,7 @@ mycd = dat(noiseqData, type = "cd", norm = FALSE) #slooooow
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #  1081    133 
+#explo.plot(mycd,samples=sample(1:ncol(expr),10))
 
 #4)check for length & GC bias
 #A cubic spline regression model is fitted. Both the model p-value and the coefficient
@@ -221,6 +222,11 @@ table(mycdDESEQ@dat$DiagnosticTest[,  "Diagnostic Test"])
 
 TMM.TP=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="TP"]]
 TMM.NT=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="NT"]]
+pdf("sampleBias.pdf")
+temp=sample(1:ncol(expr),10)
+explo.plot(mycd,samples=temp)
+explo.plot(mycdTMM,samples=temp)
+dev.off()
 
 #######################starting classification########################################################
 subannot=getBM(attributes = c("ensembl_gene_id","external_gene_name","entrezgene"),values=rownames(TMM.TP), mart=mart)
@@ -303,16 +309,6 @@ names(TMMArsyn)=c("Basal","Her2","LumA","LumB","normal")
 save(TMMArsyn,subtipos,file="subtiTMMArsyn.RData")
 
 ############################--------------------FIN--------------##########################
-
-
-y_DESeq<-DESeqDataSetFromMatrix(countData=rnaseqCombat,colData=designExp, design=~tissue.definition)
-cqnOffset <- normTMM$glm.offset
-cqnNormFactors <- exp(cqnOffset)
-cqnNormFactors <- cqnNormFactors / exp(rowMeans(log(cqnNormFactors)))
-normalizationFactors(y_DESeq) <- cqnNormFactors
-y_DESeq<-estimateDispersions(y_DESeq, fitType="local")
-et_DESeq<-nbinomWaldTest(y_DESeq)
-DESeqDEResults<-results(et_DESeq, alpha=0.001)
 
 #check biotype bias per tissue
 #mybiodetection <- dat(noiseqData, k = 0, type = "biodetection", factor = "tissue.definition")
