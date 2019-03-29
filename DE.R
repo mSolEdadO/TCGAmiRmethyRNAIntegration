@@ -1,8 +1,8 @@
 library(limma)
-load("conca/porSubti.RData")
+load("porSubti.RData")
+#https://ucdavis-bioinformatics-training.github.io/2018-June-RNA-Seq-Workshop/thursday/DE.html
+#https://f1000research.com/articles/5-1408/v1
 
-
-rna=do.call(cbind,sapply(concatenadas,function(x) x[[3]]))
 design=as.data.frame(do.call(rbind,sapply(1:5,function(x) cbind(colnames(concatenadas[[x]][[1]]),names(concatenadas)[x]))))
 colnames(design)=c("sample","subtype")
 DE.design=model.matrix(~0+design$subtype)#a model where each coefficient corresponds to a group mean
@@ -13,34 +13,55 @@ contr.mtrx=makeContrasts(
 	luma_normal=subtypeLumA-subtypenormal,
 	lumb_normal=subtypeLumB-subtypenormal,
 levels=DE.design)
-#tempRNA=voom(rna,DE.design,save.plot=T)#la curva debe ser suave, sino, hay que filtrar más 
+
+rna=do.call(cbind,sapply(concatenadas,function(x) x[[3]]))
+v=voom(rna,DE.design,plot=T,save.plot=T)#ideally count&variance are indi, but a smooth fitted curve is good enough to discard voom 
+#counts are more variable at lower expression, voom address this by making the data “normal enough”
 fit=lmFit(rna,DE.design)#fit a linear model using weighted least squares for each gene
 fitSubtype = contrasts.fit(fit, contr.mtrx)
-fitSubtype = eBayes(fitSubtype)
-#DEG=decideTests(fitSubtype,method="separate",p.value=1e-100,adjust.method="fdr")#alpha de https://github.com/CSB-IG/tcgarnaseqbc/blob/master/DifGenes.R
-#Lower alpha levels are sometimes used when you are carrying out multiple tests at the same time. A common approach is to divide the alpha level by the number of tests being carried out.
-#summary(DEG)
-#       basal_normal her2_normal luma_normal lumb_normal
-#Down            652         426         518         797
-#NotSig        12494       13057       12988       12462
-#Up              758         421         398         645
-#vennDiagram(DEGlimma)
+tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#Users wanting to fc thresholding are recommended to use treat
+#lfc=log2(1.2)or log2(1.5)will usually cause most differentially expressed genes to fc => 2-fold,
+# depending on the sample size and precision of the experiment
+DE.genes=lapply(1:4,function(x) topTreat(tfitSubtype,coef=x,n=nrow(rna)))
+sapply(1:4,function(x) sum(DE.genes[[x]]$adj.P.Val<0.01))
+#[1] 4904 4357 3452 4722
+pdf("DEgenes.pdf")
+par(mfrow=c(2,2))
+sapply(1:4,function(x) plotMA(fitSubtype,coef=x))
+sapply(1:4,function(x) {
+	volcanoplot(tfitSubtype,coef=x)
+	abline(h=-log2(0.01),col="red")
+})
+dev.off()
 
 mirna=do.call(cbind,sapply(concatenadas,function(x) x[[1]]))
-#tempmiR=voom(mirna,DE.design,save.plot=T)
-fit=lmFit(mirna,DE.design)
+v.miR=voom(mirna,DE.design,plot=T,save.plot=T)
+fit=lmFit(v.miR,DE.design)
 fitSubtype.miR = contrasts.fit(fit, contr.mtrx)
-fitSubtype.miR = eBayes(fitSubtype.miR)
-#DEmiR=decideTests(fitSubtype.miR,method="separate",p.value=0.01,adjust.method="fdr")
-#alpha de Drago-Garcia
-#summary(DEmiR)
-#       basal_normal her2_normal luma_normal lumb_normal
-#Down             96          44          79          80
-#NotSig         1353        1503        1489        1469
-#Up              139          41          20          39
+tfitSubtype.miR=treat(fitSubtype.miR, lfc = log2(1.1))
+DE.miR=lapply(1:4,function(x) topTreat(tfitSubtype.miR,coef=x,n=nrow(mirna)))
+sapply(1:4,function(x) sum(DE.miR[[x]]$adj.P.Val<0.01))
+#[1] 328 278 259 291
+#no voom gives
+#[1] 298 259 248 282
+pdf("DEmiRs.pdf")
+par(mfrow=c(2,2))
+sapply(1:4,function(x) plotMA(fitSubtype.miR,coef=x))
+sapply(1:4,function(x) {
+	volcanoplot(tfitSubtype.miR,coef=x)
+	abline(h=-log2(0.01),col="red")
+})
+dev.off()
+
+
+
+
+
 methy=do.call(cbind,sapply(concatenadas,function(x) x[[2]]))
+v.methy=voom(methy,DE.design,plot=T,save.plot=T)
 fit=lmFit(methy,DE.design)
 fitSubtype.M = contrasts.fit(fit, contr.mtrx)
+###
 fitSubtype.M = eBayes(fitSubtype.M)#coefficientes has the log fold changes
 #DEM=decideTests(fitSubtype.M,method="separate",p.value=3.158632e-08,adjust.method="fdr")
 #summary(DEM)
@@ -51,10 +72,10 @@ fitSubtype.M = eBayes(fitSubtype.M)#coefficientes has the log fold changes
 
 svg("voom.svg")
 par(mfrow=c(2,1))
-plot(tempRNA$voom.xy,xlab="log2(count size + 0.5)",ylab="Sqrt(standard deviation)",main="RNA")
-lines(tempRNA$voom.line,col="red")
-plot(tempmiR$voom.xy,xlab="log2(count size + 0.5)",ylab="Sqrt(standard deviation)",main="miRNA")
-lines(tempmiR$voom.line,col="red")#se espera un curva suave y concava y eso es convexo
+plot(v$voom.xy,xlab="log2(count size + 0.5)",ylab="Sqrt(standard deviation)",main="RNA")
+lines(v$voom.line,col="red")
+plot(v.miR$voom.xy,xlab="log2(count size + 0.5)",ylab="Sqrt(standard deviation)",main="miRNA")
+lines(v.miR$voom.line,col="red")#se espera un curva suave y concava y eso es convexo
 #esto ruega que limpie bien los mirna????
 dev.off()
 
