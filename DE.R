@@ -15,11 +15,12 @@ contr.mtrx=makeContrasts(
 levels=DE.design)
 
 rna=do.call(cbind,sapply(concatenadas,function(x) x[[3]]))
-v=voom(rna,DE.design,plot=T,save.plot=T)#ideally count&variance are indi, but a smooth fitted curve is good enough to discard voom 
-#counts are more variable at lower expression, voom address this by making the data “normal enough”
+v=voom(rna,DE.design,plot=T,save.plot=T)#counts are more variable at lower expression, voom address this by making the data “normal enough”
+#ideally count&variance are indi, but a smooth fitted curve is good enough to discard voom
+#rna variance~[0.1,0.3]
 fit=lmFit(rna,DE.design)#fit a linear model using weighted least squares for each gene
 fitSubtype = contrasts.fit(fit, contr.mtrx)
-tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#Users wanting to fc thresholding are recommended to use treat
+tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#fc thresholding + p.val thresholding augments false positives
 #lfc=log2(1.2)or log2(1.5)will usually cause most differentially expressed genes to fc => 2-fold,
 # depending on the sample size and precision of the experiment
 DE.genes=lapply(1:4,function(x) topTreat(tfitSubtype,coef=x,n=nrow(rna)))
@@ -36,8 +37,11 @@ dev.off()
 
 mirna=do.call(cbind,sapply(concatenadas,function(x) x[[1]]))
 v.miR=voom(mirna,DE.design,plot=T,save.plot=T)
+#mirna variance~[0.3,1.6]
 fit=lmFit(v.miR,DE.design)
+	fiTemp=lmFit(mirna,DE.design)#pruebame		   
 fitSubtype.miR = contrasts.fit(fit, contr.mtrx)
+	fiTemp=contrasts.fit(fiTemp, contr.mtrx)#pruebame
 tfitSubtype.miR=treat(fitSubtype.miR, lfc = log2(1.1))
 DE.miR=lapply(1:4,function(x) topTreat(tfitSubtype.miR,coef=x,n=nrow(mirna)))
 sapply(1:4,function(x) sum(DE.miR[[x]]$adj.P.Val<0.01))
@@ -45,7 +49,9 @@ sapply(1:4,function(x) sum(DE.miR[[x]]$adj.P.Val<0.01))
 #no voom gives
 #[1] 298 259 248 282
 pdf("DEmiRs.pdf")
-par(mfrow=c(2,2))
+par(mfrow=c(2,2))     
+###plotMA antes de voom!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+       sapply(1:4,function(x) plotMA(fiTemp,coef=x))#pruebame
 sapply(1:4,function(x) plotMA(fitSubtype.miR,coef=x))
 sapply(1:4,function(x) {
 	volcanoplot(tfitSubtype.miR,coef=x)
@@ -54,9 +60,8 @@ sapply(1:4,function(x) {
 dev.off()
 
 
-
-
-
+	      
+#plot var vs mean a mano????????????????????????????????????????????
 methy=do.call(cbind,sapply(concatenadas,function(x) x[[2]]))
 v.methy=voom(methy,DE.design,plot=T,save.plot=T)
 fit=lmFit(methy,DE.design)
