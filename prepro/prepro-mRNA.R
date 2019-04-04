@@ -237,6 +237,9 @@ subannot=subannot[!duplicated(subannot$probe),]
 #49/50 probes are used for clustering
 subtypes=molecular.subtyping(sbt.model="pam50",data=t(log2(TMM.TP)),annot=subannot,do.mapping=T)
 subtipos=TCGA_MolecularSubtype(colnames(TMM.TP))
+table(subtipos$gender)
+#female   male 
+# 1201     13 
 subtipos=subtipos$subtypes[,c(4,2)]
 temp=cbind(colnames(TMM.TP)[!colnames(TMM.TP)%in%subtipos$barcodes],NA)
 colnames(temp)=colnames(subtipos)
