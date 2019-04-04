@@ -13,38 +13,7 @@ concatenadas=lapply(1:5,function(x) sapply(list(mirSubti,Msubti,TMMArsyn),functi
 names(concatenadas)=names(shared)
 concatenadas=lapply(concatenadas,function(x) sapply(x,function(y) y[,order(substr(colnames(y),1,12))]))
 
-i=grep("^rs",rownames(concatenadas$LumA[[2]]),perl=T,invert=T)
-#hay que quitar las probes de SNPs
-concatenadas$LumA[[2]]=concatenadas$LumA[[2]][i,]
-concatenadas$Basal[[2]]=concatenadas$Basal[[2]][i,]
-concatenadas$LumB[[2]]=concatenadas$LumB[[2]][i,]
-concatenadas$Her2[[2]]=concatenadas$Her2[[2]][i,]
-concatenadas$normal[[2]]=concatenadas$normal[[2]][i,]
-lapply(concatenadas,function(x) sapply(x,dim))
-#$LumA
-#     [,1]   [,2]  [,3]
-#[1,]  446 395741 13904
-#[2,]  331    331   331
 
-#$Basal
-#     [,1]   [,2]  [,3]
-#[1,]  446 395741 13904
-#[2,]  135    135   135
-
-#$LumB
-#     [,1]   [,2]  [,3]
-#[1,]  446 395741 13904
-#[2,]  177    177   177
-
-#$Her2
-#     [,1]   [,2]  [,3]
-#[1,]  446 395741 13904
-#[2,]   75     75    75
-#$normal
-#     [,1]   [,2]  [,3]
-#[1,]  446 395741 13904
-#[2,]   75     75    75
-
-save(concatenadas,file="conca/porSubti.RData")
+save(concatenadas,file="porSubti.RData")
 #########################################
 
