@@ -17,12 +17,14 @@ levels=DE.design)
 rna=do.call(cbind,sapply(concatenadas,function(x) x[[3]]))
 v=voom(rna,DE.design,plot=T,save.plot=T)#ideally count&variance are indi, but a smooth fitted curve is good enough to discard voom 
 #counts are more variable at lower expression, voom address this by making the data “normal enough”
+#rna variance~[0.1,0.3]
 fit=lmFit(rna,DE.design)#fit a linear model using weighted least squares for each gene
 fitSubtype = contrasts.fit(fit, contr.mtrx)
-tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#Users wanting to fc thresholding are recommended to use treat
+tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#fc+p.val thresholding increases false positives, treat overpasses this
 #lfc=log2(1.2)or log2(1.5)will usually cause most differentially expressed genes to fc => 2-fold,
 # depending on the sample size and precision of the experiment
 DE.genes=lapply(1:4,function(x) topTreat(tfitSubtype,coef=x,n=nrow(rna)))
+names(DE.genes)=c("basal_normal","her2_normal","luma_normal","lumb_normal")
 sapply(1:4,function(x) sum(DE.genes[[x]]$adj.P.Val<0.01))
 #[1] 4904 4357 3452 4722
 pdf("DEgenes.pdf")
@@ -35,34 +37,47 @@ sapply(1:4,function(x) {
 dev.off()
 
 mirna=do.call(cbind,sapply(concatenadas,function(x) x[[1]]))
-v.miR=voom(mirna,DE.design,plot=T,save.plot=T)
+v.miR=voom(mirna,DE.design,plot=T,save.plot=T)#mirna variance~[0.3,1.6]
 fit=lmFit(v.miR,DE.design)
 fitSubtype.miR = contrasts.fit(fit, contr.mtrx)
 tfitSubtype.miR=treat(fitSubtype.miR, lfc = log2(1.1))
 DE.miR=lapply(1:4,function(x) topTreat(tfitSubtype.miR,coef=x,n=nrow(mirna)))
+names(DE.miR)=c("basal_normal","her2_normal","luma_normal","lumb_normal")
 sapply(1:4,function(x) sum(DE.miR[[x]]$adj.P.Val<0.01))
 #[1] 328 278 259 291
 #no voom gives
 #[1] 298 259 248 282
+fiTemp=lmFit(mirna,DE.design) 
+fiTemp=contrasts.fit(fiTemp, contr.mtrx)
 pdf("DEmiRs.pdf")
 par(mfrow=c(2,2))
+sapply(1:4,function(x) plotMA(fiTemp,coef=x))
 sapply(1:4,function(x) plotMA(fitSubtype.miR,coef=x))
 sapply(1:4,function(x) {
 	volcanoplot(tfitSubtype.miR,coef=x)
 	abline(h=-log2(0.01),col="red")
 })
 dev.off()
-
-
+save(DE.genes,DE.miR,file="DA.RData")
 
 
 
 methy=do.call(cbind,sapply(concatenadas,function(x) x[[2]]))
-v.methy=voom(methy,DE.design,plot=T,save.plot=T)
-fit=lmFit(methy,DE.design)
+mod0=model.matrix(~0,data=as.data.frame(t(methy)))#con ~1 solo ajusta basal
+n.sv=num.sv(methy,DE.design)#100
+svobj = sva(methy,DE.design,mod0,n.sv=n.sv,B=100)#estimate surrogate variables = estimable 
+#linear combinations of the true unmeasured or unmodeled factors causing noise.
+modSv = cbind(DE.design,svobj$sv)
+fit = lmFit(methy,modSv)
+contr.mtrx=rbind(contr.mtrx[1:5,],matrix(rep(0,n.sv*ncol(contr.mtrx)),ncol=4))#0 for sv, just added for coherence with fit than nows has 105 rows
 fitSubtype.M = contrasts.fit(fit, contr.mtrx)
-###
-fitSubtype.M = eBayes(fitSubtype.M)#coefficientes has the log fold changes
+tfitSubtype.M = treat(fitSubtype.M,lfc=log2(1.5))
+DM.cpg=lapply(1:4,function(x) topTreat(tfitSubtype.M,coef=x,n=nrow(methy)))
+q()
+y
+
+
+fitSubtype.M = eBayes(fitSubtype.M)#coefficientes = log fold changes
 #DEM=decideTests(fitSubtype.M,method="separate",p.value=3.158632e-08,adjust.method="fdr")
 #summary(DEM)
 #       basal_normal her2_normal luma_normal lumb_normal
