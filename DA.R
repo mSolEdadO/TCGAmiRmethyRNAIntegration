@@ -1,5 +1,6 @@
 library(limma)
 library(sva)
+library(missMethyl)
 load("porSubti.RData")
 #https://ucdavis-bioinformatics-training.github.io/2018-June-RNA-Seq-Workshop/thursday/DE.html
 #https://f1000research.com/articles/5-1408/v1
@@ -86,25 +87,26 @@ DE.design=lapply(1:4,function(x)
 fit = lapply(1:4,function(x) lmFit(M[[x]],DE.design[[x]]))
 #unadjusted limma is the worst method coz it has lots of false positive [Maksimovic2015]
 efit=lapply(fit,eBayes)
-topr=lapply(efit,function(x) topTable(x,num=Inf))
+topr=lapply(efit,function(x) topTable(x,num=Inf))## Removing intercept from test coefficients
 sapply(topr,function(x) sum(x$logFC[x$adj.P.Val<0.01]<0))#most DMs possible
 #[1] 118260  82020 113250 109812
 sapply(topr,function(x) sum(x$logFC[x$adj.P.Val<0.01]>0))
 #[1] 113345 131402 103097 102783
 ctl=lapply(topr,function(x) x$adj.P.Val>0.5) 
-# selecting controls based on an FDR 0.5 or ~the bottom 50% of the ranked list should work well
-sapply(ctl,table)
+# performance is consistent when controls are selected based on FDR cut-off
+sapply(ctl,table)#Maksimovic uses  2051 ‘true’ positives and 170 629 ‘true’ negatives
 #        [,1]   [,2]   [,3]   [,4]
 #FALSE 342764 336375 330017 332717
 #TRUE   41811  48200  54558  51858
 # Stage 2 analysis
 rfit <- sapply(1:4,function(x) RUVfit(data=M[[x]], design=DE.design[[x]], coef=2, ctl=ctl[[x]])) 
 rfit <- lapply(rfit,RUVadj)
-topr=lapply(rfit,function(x) topVar(x,num=Inf))
-sapply(topr,function(x) sum(x[x$p.ebayes.BH<0.01,1]<0))
+DM.cpg=lapply(rfit,function(x) topRUV(x,num=Inf))
+sapply(DM.cpg,function(x) sum(x[x$p.ebayes.BH<0.01,1]<0))
 #[1]    8 1146 1710 3620
-sapply(topr,function(x) sum(x[x$p.ebayes.BH<0.01,2]>0))
+sapply(DM.cpg,function(x) sum(x[x$p.ebayes.BH<0.01,2]>0))
 #[1]   48 1312 1664 2877
+#lumA may have less DM coz it has more samples, so the same threshold doesn't work for all subtypes 
 
 #Alternative method
 #given the large N(>>5) and cancer effect (gives the 1st PC), all methods are expected to work similarly
@@ -117,16 +119,16 @@ contr.mtrx=rbind(contr.mtrx,matrix(rep(0,(ncol(DE.design)-nrow(contr.mtrx))*ncol
 fitSubtype.M1 = contrasts.fit(fit1, contr.mtrx)
 tfitSubtype.M1 = treat(fitSubtype.M1,lfc=log2(1.5))
 DM.cpg1=lapply(1:4,function(x) topTreat(tfitSubtype.M1,coef=x,n=nrow(methy)))
+names(DM.cpg1)=colnames(contr.mtrx)
 sapply(DM.cpg1,function(x) sum(x$logFC[x$adj.P.Val<0.01]<0))
-basal_normal  her2_normal  luma_normal  lumb_normal 
-#       12104        11733        12690        25982 
+#[1] 11266 11289  6882 25298
 sapply(DM.cpg1,function(x) sum(x$logFC[x$adj.P.Val<0.01]>0))
-basal_normal  her2_normal  luma_normal  lumb_normal 
-#       11823        27272        18806        37471 
-pdf("DM.png")
+#[1] 18367 27116 10847 39200
+png("DM.png")
 par(mfrow=c(3,4))
-sapply(1:4,function(x) limma::plotMA(fiTemp,coef=x))
-sapply(1:4,function(x) limma::plotMA(fitSubtype.M,coef=x))
-sapply(1:4,function(x) limma::plotMA(fitSubtype.M1,coef=x))
+sapply(efit,limma::plotMA)
+sapply(DM.cpg,function(x) plot(x[,c(1,5)],log="y",ylim=c(1,1e-13),ylab="log(p.ebayes)",xlab="lfc",pch='.'))
+sapply(1:4,function(x) limma::volcanoplot(tfitSubtype.M1,coef=x,main=names(DM.cpg1)[x]))
 dev.off()
-#save(rna,mirna,methy,design,file="conca/subsetmasdiff.Rda")#lo borre porque ya tengo los subsets en useR/MFA.Rda:subti
+
+save(DE.genes,DE.miR,DM.cpg,DM.cpg1,file="DA.RData")
