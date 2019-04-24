@@ -1,5 +1,5 @@
 library(limma)
-library(sva)
+#library(sva)
 library(missMethyl)
 load("porSubti.RData")
 #https://ucdavis-bioinformatics-training.github.io/2018-June-RNA-Seq-Workshop/thursday/DE.html
@@ -7,7 +7,15 @@ load("porSubti.RData")
 
 methy=do.call(cbind,sapply(concatenadas,function(x) x[[2]]))
 design=methyDesign[methyDesign$barcode%in%colnames(methy),]
-#add gender factor, to control for it on DM, nor on DE coz ARSyN is expected to have wiped such signal
+#add gender factor, to control for it on DM, nor on DE coz ARSyN is expected to have wiped all unwanted signal
+table(methyDesign[,c(4,10)])
+#        gender
+#subtype  female male
+#  Basal     135    0
+#  Her2       74    1
+#  LumA      331    0
+#  LumB      170    7
+#  normal     96    0
 load("subtiTMMArsyn.RData")
 gender=sapply(as.character(design$patient),function(x) unique(subtipos$gender[as.character(subtipos$patient)==x]))
 design=cbind(design,gender)
@@ -29,6 +37,12 @@ v=voom(rna,DE.design,plot=T,save.plot=T)#ideally count&variance are indi, but a 
 #rna variance~[0.1,0.3]
 fit=lmFit(rna,DE.design)#fit a linear model using weighted least squares for each gene
 fitSubtype = contrasts.fit(fit, contr.mtrx)
+
+
+#esta bien usar t-test? no sabes si la expresión tiene distro normal, pero seguro no
+#tampoco esperas homogeneity no?
+
+
 tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#fc+p.val thresholding increases false positives, treat overpasses this
 #lfc=log2(1.2)or log2(1.5)will usually cause most differentially expressed genes to fc => 2-fold,
 # depending on the sample size and precision of the experiment
@@ -102,6 +116,7 @@ sapply(ctl,table)#Maksimovic uses  2051 ‘true’ positives and 170 629 ‘true
 rfit <- sapply(1:4,function(x) RUVfit(data=M[[x]], design=DE.design[[x]], coef=2, ctl=ctl[[x]])) 
 rfit <- lapply(rfit,RUVadj)
 DM.cpg=lapply(rfit,function(x) topRUV(x,num=Inf))
+names(DM.cpg1)=c("luma_normal","basal_normal","lumb_normal","her2_normal")
 sapply(DM.cpg,function(x) sum(x[x$p.ebayes.BH<0.01,1]<0))
 #[1]    8 1146 1710 3620
 sapply(DM.cpg,function(x) sum(x[x$p.ebayes.BH<0.01,2]>0))
