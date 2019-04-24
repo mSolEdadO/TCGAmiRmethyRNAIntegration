@@ -118,4 +118,4 @@ pdf("mPCA.pdf")
  explo.plot(myPCAshared, samples = c(3,5), plottype = "scores", factor = "plate")
 dev.off()
 
-save(methySubti,methyDesign,Msubti,annot,file="imptMethy.RData")
+save(methySubti,methyDesign,Msubti,annot,file="ini/imptMethy.RData")

@@ -12,8 +12,10 @@ concatenadas=lapply(1:5,function(x) sapply(list(mirSubti,Msubti,TMMArsyn),functi
 	y[[which(names(y)==names(shared)[x])]][,substr(colnames(y[[which(names(y)==names(shared)[x])]]),1,12)%in%shared[[x]]]))
 names(concatenadas)=names(shared)
 concatenadas=lapply(concatenadas,function(x) sapply(x,function(y) y[,order(substr(colnames(y),1,12))]))
+sapply(concatenadas,function(x) ncol(x[[1]]))
+#  LumA  Basal   LumB   Her2 normal 
+#   331    135    177     75     75 
 
-
-save(concatenadas,file="porSubti.RData")
+save(concatenadas,methyDesign,subtipos,file="porSubti.RData")
 #########################################
 

@@ -10,13 +10,13 @@
 
 library(SummarizedExperiment)
 library(TCGAbiolinks)
-library(Venn.Diagram)
+#library(Venn.Diagram)
 library(biomaRt)  
 library(NOISeq)
 library(edgeR)
 library(cqn)
-library(DESeq2)
-library(pbmc)
+#library(DESeq2)
+library(pbcmc)
 library("BiocParallel")
 library(sva)
 
@@ -26,14 +26,14 @@ xprssn <- GDCquery(project = "TCGA-BRCA",
   data.type = "Gene Expression Quantification",
   sample.type = "Primary solid Tumor",
   workflow.type = "HTSeq - Counts")
-GDCdownload(xprssn)
+#GDCdownload(xprssn)
 expr=GDCprepare(xprssn)
 xprssN <- GDCquery(project = "TCGA-BRCA",
   data.category = "Transcriptome Profiling",
   data.type = "Gene Expression Quantification",
   sample.type = c("Solid Tissue Normal"),
   workflow.type = "HTSeq - Counts")
-GDCdownload(xprssN)
+#GDCdownload(xprssN)
 normal=GDCprepare(xprssN)
 duplicados=colData(expr)$patient[duplicated(colData(expr)$patient)]
 
@@ -63,7 +63,7 @@ myannot$lenght=abs(myannot$end_position-myannot$start_position)
 myannot=myannot[myannot$gene_biotype=="protein_coding"&myannot$hgnc_symbol!="",]
 myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 exprots_hgnc=expr[rownames(expr)%in%myannot$ensembl_gene_id,]
-#19236 transcripts
+#19172 transcripts
 
 #sum duplicated probes = 2 probes mapping to the same hgnc_id
 myannot$hgnc_id[duplicated(myannot$hgnc_id)]
@@ -75,8 +75,7 @@ myannot[myannot$hgnc_id=="HGNC:30046",]
 #      end_position    hgnc_id hgnc_symbol lenght
 #41743     10839884 HGNC:30046       PINX1  74921
 #44594     10839847 HGNC:30046       PINX1 114448
-exprots_hgnc[rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"],][1,]=
-colSums(exprots_hgnc[rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"],])
+exprots_hgnc[rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"],][1,]=colSums(exprots_hgnc[rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"],])
 exprots_hgnc=exprots_hgnc[c(1:(which(rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"])[2]-1),(which(rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"])[2]+1):nrow(exprots_hgnc)),]
 
 ##################CHECK BIASES########################################################
@@ -124,7 +123,7 @@ mycd = dat(noiseqData, type = "cd", norm = FALSE) #slooooow
 #[1] "Diagnostic test: FAILED. Normalization is required to correct this bias."
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#  1081    133 
+#1081    133 
 #explo.plot(mycd,samples=sample(1:ncol(expr),10))
 
 #4)check for length & GC bias
@@ -156,9 +155,8 @@ dev.off()
 #of the library per sample affects the power of the experiment. CPM=(counts/fragments
 # sequenced)*one million. Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
-countMatrixFiltered = filtered.data(exprots_hgnc, factor = "definition", 
-norm = FALSE, method = 3, cpm = 1)#<-----------------
-#13904 features are to be kept for differential expression analysis with filtering method 3
+countMatrixFiltered = filtered.data(exprots_hgnc, factor = "definition", norm = FALSE, method = 3, cpm = 1)#<-----------------
+#13571 features are to be kept for differential expression analysis with filtering method 3
 
 #2)normaliza RNA composition and then GC content coz the 1st needs raw counts
 #and gives you scaling factors that can be exported to the 2nd
@@ -195,7 +193,6 @@ mycdUQUA = dat(noiseqData, type = "cd", norm = T)
 table(mycdUQUA@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #   465    749 
-
 rownames(designExp)=designExp$cases
 myDESEQ=DESeqDataSetFromMatrix(countData=countMatrixFiltered,colData=designExp,design=~definition)
 deseqFactors=estimateSizeFactors(myDESEQ)
@@ -206,10 +203,8 @@ myDESEQ=normDESEQ$y+normDESEQ$offset
 noiseqData = readData(data = myDESEQ, factors=designExp,gc = myannot[,c(1,2)])
 mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
 table(mycdDESEQ@dat$DiagnosticTest[,  "Diagnostic Test"])
-#cpm=1, transcripts=13904 
 #FAILED PASSED 
 #   450    764 
-
 #summary(as.numeric(normalizedDESEQmatrix))
 #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #  17.33   28.56   30.14   29.84   31.39   38.04 
@@ -227,12 +222,12 @@ temp=sample(1:ncol(expr),10)
 explo.plot(mycd,samples=temp)
 explo.plot(mycdTMM,samples=temp)
 dev.off()
-
 #######################starting classification########################################################
 subannot=getBM(attributes = c("ensembl_gene_id","external_gene_name","entrezgene"),values=rownames(TMM.TP), mart=mart)
 colnames(subannot)=c("probe","NCBI.gene.symbol","EntrezGene.ID")#this colnames are needed
 subannot=subannot[subannot$probe%in%rownames(TMM.TP),]
 subannot=subannot[!duplicated(subannot$probe),]
+subannot=subannot[order(match(subannot$probe,rownames(TMM.TP))),]
 
 #49/50 probes are used for clustering
 subtypes=molecular.subtyping(sbt.model="pam50",data=t(log2(TMM.TP)),annot=subannot,do.mapping=T)
