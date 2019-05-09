@@ -15,4 +15,8 @@ lapply(1:33,function(x)
 
 #$ sed -n '12,6007334 p' condor.sub|perl -pe 's/.*?(ENSG|hsa).*?\n//g;unless(/queue/){s/\n/ñ/;s/timeñqueue//g}'>condorsub.edited
 #$ for x in {1..33};do y=$(echo 'sub'$x);sed -n '1,11 p' condor.sub>chunks/$y;grep -w $y condorsub.edited|perl -pe 's/ñ/\n/g'>>chunks/$y;done
+#$ cd chunks
 #$ for x in $(ls );do condor_submit $x;done
+
+#16 ERROR: Failed to create proc Number of submitted jobs would exceed MAX_JOBS_PER_OWNER
+
