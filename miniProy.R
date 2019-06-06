@@ -6,14 +6,10 @@ load("data/MFAmultio.RData")
 
 #get pam50 genes ids
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-myannot=getBM(attributes = c("ensembl_gene_id", "hgnc_id","hgnc_symbol"),
-	filters = "ensembl_gene_id", values=rownames(concatenadas$normal[[3]]), mart=mart)
+myannot=getBM(attributes = c("ensembl_gene_id", "hgnc_id","hgnc_symbol"), mart=mart)
 M<-pam50$centroids#genefu pam50 is on hgnc symbols
-PAM50genes=myannot[myannot$ensembl_gene_id%in%rownames(PAM50),]
-PAM50genes=rbind(PAM50genes,myannot[myannot$hgnc_symbol=="ORC6",])
-PAM50genes=rbind(PAM50genes,myannot[myannot$hgnc_symbol=="NUF2",])
-PAM50genes=rbind(PAM50genes,myannot[myannot$hgnc_symbol=="NDC80",])
-write.table(PAM50genes,"data/PAM50genes.tsv",sep='\t',quote=F,row.names=F)
+PAM50=myannot[myannot$hgnc_symbol%in%rownames(M),]
+write.table(PAM50,"data/pam50.tsv",sep='\t',quote=F,row.names=F)
 
 #############################
 #try for a single "subtype"
