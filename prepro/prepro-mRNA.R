@@ -155,73 +155,171 @@ dev.off()
 #of the library per sample affects the power of the experiment. CPM=(counts/fragments
 # sequenced)*one million. Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
-countMatrixFiltered = filtered.data(exprots_hgnc, factor = "definition", norm = FALSE, method = 3, cpm = 1)#<-----------------
-#13571 features are to be kept for differential expression analysis with filtering method 3
+countMatrixFiltered = exprots_hgnc[rowMeans(exprots_hgnc)>10,]#como Diana
+#13571 features 
 
 #2)normaliza RNA composition and then GC content coz the 1st needs raw counts
 #and gives you scaling factors that can be exported to the 2nd
-factorsTMM=calcNormFactors(countMatrixFiltered)
-normTMM=cqn(countMatrixFiltered,lengths=myannot$lenght[
-  myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-  sizeFactors=factorsTMM,verbose=T)
-normalisedTMMatrix=normTMM$y+normTMM$offset
-noiseqData = readData(data = normalisedTMMatrix, factors=designExp, gc = myannot[,c(1,2)])
-mycdTMM = dat(noiseqData, type = "cd", norm = T)
+#factorsTMM=calcNormFactors(countMatrixFiltered)
+#normTMM=cqn(countMatrixFiltered,lengths=myannot$lenght[
+#  myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
+#  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
+#  sizeFactors=factorsTMM,verbose=T)
+#normalisedTMMatrix=normTMM$y+normTMM$offset
+#noiseqData = readData(data = normalisedTMMatrix, factors=designExp, gc = myannot[,c(1,2)])
+#mycdTMM = dat(noiseqData, type = "cd", norm = T)
 #"Diagnostic test: FAILED. Normalization is required to correct this bias."
-table(mycdTMM@dat$DiagnosticTest[,  "Diagnostic Test"])
-#cpm=0.1, transcripts=15668 desde aqui me falta MIA (gen de PAM50)
-#FAILED PASSED 
-#   560    654 
-#cpm=1, transcripts=13904 
-#FAILED PASSED 
-#   430    784 
-#cpm=2, transcripts=13164 
-#FAILED PASSED 
-#   470    744
-#cpm=5, transcripts=11908
-#FAILED PASSED 
-#   476    738
-factorsUQUA=calcNormFactors(countMatrixFiltered, method="upperquartile")
-normUQUA=cqn(countMatrixFiltered,lengths=myannot$lenght[
-  myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-  sizeFactors=factorsUQUA,verbose=T)
-normalisedUQUAatrix=normUQUA$y+normUQUA$offset
-noiseqData = readData(data = normalisedUQUAatrix, factors=designExp, gc = myannot[,c(1,2)])
-mycdUQUA = dat(noiseqData, type = "cd", norm = T)
-table(mycdUQUA@dat$DiagnosticTest[,  "Diagnostic Test"])
-#FAILED PASSED 
-#   465    749 
-rownames(designExp)=designExp$cases
-myDESEQ=DESeqDataSetFromMatrix(countData=countMatrixFiltered,colData=designExp,design=~definition)
-deseqFactors=estimateSizeFactors(myDESEQ)
-normDESEQ=cqn(countMatrixFiltered,lengths=myannot$lenght[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-  sizeFactors=sizeFactors(deseqFactors),verbose=T)
-myDESEQ=normDESEQ$y+normDESEQ$offset
-noiseqData = readData(data = myDESEQ, factors=designExp,gc = myannot[,c(1,2)])
-mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
-table(mycdDESEQ@dat$DiagnosticTest[,  "Diagnostic Test"])
-#FAILED PASSED 
-#   450    764 
-#summary(as.numeric(normalizedDESEQmatrix))
-#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#  17.33   28.56   30.14   29.84   31.39   38.04 
-# summary(as.numeric(normalisedTMMatrix))
-#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#  17.21   28.62   30.18   29.89   31.44   38.46 
-# summary(as.numeric(normalisedTMMatrix1))
-#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#  17.23   28.62   30.18   29.89   31.44   38.44 
+#factorsUQUA=calcNormFactors(countMatrixFiltered, method="upperquartile")
+#normUQUA=cqn(countMatrixFiltered,lengths=myannot$lenght[
+#  myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
+#  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
+#  sizeFactors=factorsUQUA,verbose=T)
+#normalisedUQUAatrix=normUQUA$y+normUQUA$offset
+#noiseqData = readData(data = normalisedUQUAatrix, factors=designExp, gc = myannot[,c(1,2)])
+#mycdUQUA = dat(noiseqData, type = "cd", norm = T)
+#table(mycdUQUA@dat$DiagnosticTest[,  "Diagnostic Test"])
+#rownames(designExp)=designExp$cases
+#myDESEQ=DESeqDataSetFromMatrix(countData=countMatrixFiltered,colData=designExp,design=~definition)
+#deseqFactors=estimateSizeFactors(myDESEQ)
+#normDESEQ=cqn(countMatrixFiltered,lengths=myannot$lenght[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
+#  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
+#  sizeFactors=sizeFactors(deseqFactors),verbose=T)
+#myDESEQ=normDESEQ$y+normDESEQ$offset
+#noiseqData = readData(data = myDESEQ, factors=designExp,gc = myannot[,c(1,2)])
+#mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
+#table(mycdDESEQ@dat$DiagnosticTest[,  "Diagnostic Test"])
+#TMM.TP=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="TP"]]
+#TMM.NT=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="NT"]]
+#pdf("sampleBias.pdf")
+#temp=sample(1:ncol(expr),10)
+#explo.plot(mycd,samples=temp)
+#explo.plot(mycdTMM,samples=temp)
+#dev.off()
 
-TMM.TP=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="TP"]]
-TMM.NT=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="NT"]]
-pdf("sampleBias.pdf")
-temp=sample(1:ncol(expr),10)
-explo.plot(mycd,samples=temp)
-explo.plot(mycdTMM,samples=temp)
+
+#####sigo el pipeline de Diana para normalizar porque cqn aplana demasiado la vari
+#nombro las columnas de myannot y design de acuerdo a la sig función
+mean10=list(M=countFilt,Annot=annot,Targets=tissue)
+mydataM10EDA <- EDASeq::newSeqExpressionSet(counts=as.matrix(countFilt),featureData=annot,phenoData=tissue)
+PLOTSNORMDIR ="plots"
+dir.create(PLOTSNORMDIR)
+
+getNOISeqResults <- function(step1, step2, step3, n.counts, m10.data) {
+### Check the NOISEq results 
+mydata <- NOISeq::readData(
+  data = n.counts, 
+  length = m10.data$Annot[, c("EnsemblID", "Length")], 
+  biotype = m10.data$Annot[, c("EnsemblID", "Type")], 
+  #     chromosome = m10.data$Annot[, c("Chr", "Start", "End")], 
+  factors = m10.data$Targets[, "Group",drop=FALSE], 
+  gc = m10.data$Annot[, c("EnsemblID", "GC")])
+nsamples <- dim(m10.data$Targets)[1]
+
+### Length bias 
+mylengthbias <- dat(mydata, factor="Group", norm = TRUE, type="lengthbias")
+l.stats.1 <- getRegressionStatistics(mylengthbias@dat$RegressionModels[1])
+l.stats.2 <- getRegressionStatistics(mylengthbias@dat$RegressionModels[2])
+## GC Bias
+mygcbias <- dat(mydata, factor = "Group", norm = TRUE, type ="GCbias")
+gc.stats.1 <- getRegressionStatistics(mygcbias@dat$RegressionModels[1])
+gc.stats.2 <- getRegressionStatistics(mygcbias@dat$RegressionModels[2])
+   
+#RNA Composition
+myrnacomp <- dat(mydata, norm = TRUE, type="cd")
+dtable <- table(myrnacomp@dat$DiagnosticTest[,  "Diagnostic Test"])
+if (is.na(dtable["PASSED"])) dtable <- data.frame(PASSED = 0)
+
+pngPlots <- c(paste(PLOTSNORMDIR, "Lenghtbias.png", sep="/"), 
+              paste(PLOTSNORMDIR, "GCbias.png", sep="/"), 
+              paste(PLOTSNORMDIR, "RNAComposition.png", sep="/"))
+
+png(pngPlots[1], width=w/2, height=h/2)
+explo.plot(mylengthbias, samples = NULL, toplot = "global")
 dev.off()
+
+png(pngPlots[2], width=w/2, height=h/2)
+explo.plot(mygcbias, samples = NULL, toplot = "global")
+dev.off()
+
+png(pngPlots[3],width=w/2, height=h/2)
+explo.plot(myrnacomp, samples = 1:12)
+dev.off()
+
+thePlots <- lapply (pngPlots, function(pngFile) {
+  rasterGrob(readPNG(pngFile, native = FALSE), interpolate = FALSE)
+})
+
+plotname <- paste(step1, step2, step3, sep = "_")
+png(paste(PLOTSNORMDIR, paste(plotname, "png", sep ="."), sep="/"),  height=h/2, width=w*(3/2))
+par(oma = c(0, 0, 1.5, 0))
+plot.new()
+do.call(grid.arrange, c(thePlots,  ncol = 3, nrow=1))
+mtext(plotname, outer = TRUE, cex = 1.5)
+dev.off()
+
+unlink(pngPlots)
+
+norm.set.results <- data.frame(step1, step2, step3, 
+                               l.stats.1$r2, l.stats.1$p, l.stats.2$r2, l.stats.2$p,
+                               gc.stats.1$r2, gc.stats.1$p, gc.stats.2$r2, gc.stats.2$p, 
+                               dtable["PASSED"], dtable["PASSED"]/nsamples)
+colnames(norm.set.results) <- c("Step1", "Step2", "Step3", 
+                                paste("Lenght", l.stats.1$name, "R2", sep = "."), paste("Lenght", l.stats.1$name, "p-value", sep = "."),  
+                                paste("Lenght", l.stats.2$name, "R2", sep = "."), paste("Lenght", l.stats.2$name, "p-value", sep = "."), 
+                                paste("GC", gc.stats.1$name, "R2", sep = "."), paste("GC", gc.stats.1$name, "p-value", sep = "."), 
+                                paste("GC", gc.stats.2$name, "R2", sep = "."), paste("GC", gc.stats.2$name, "p-value", sep = "."),
+                                "RNA.PassedSamples", "RNA.PassedProportion")
+return(norm.set.results)
+  } 
+ getRegressionStatistics <- function(regressionmodel) {
+    name <- names(regressionmodel)
+    print(name)
+    rsquared <- summary(regressionmodel[[1]])$r.squared
+    print(rsquared)
+    fstatistic <- summary(regressionmodel[[1]])$fstatistic
+    pvalue <- signif(pf(q = fstatistic[1], df1 = fstatistic[2], df2 = fstatistic[3], lower.tail = FALSE), 2)
+    return(list("name" = name, "r2" = rsquared, "p" = pvalue))
+  }
+
+  ## We try with GC normalization first
+  for (gcn in gc.norm) {
+    gcn.data <- withinLaneNormalization(mydataM10EDA, "GC", which = gcn)
+    for (ln in lenght.norm) {
+      ln.data <- withinLaneNormalization(gcn.data, "Length", which = ln)
+      for (bn in between.nom) {
+        if (bn == "tmm") {
+          between.data <- tmm(counts(ln.data), long = 1000, lc = 0, k = 0)
+        } else {
+          between.data <- betweenLaneNormalization(ln.data, which = bn, offset = FALSE)
+        }
+        cat("Testing with GC normalization: ", gcn, ",  length normalization: ", ln, " and between lane normalization: ", bn, "\n")
+        norm.noiseq.results <- getNOISeqResults(paste("GC", gcn, sep = "."), paste("Length", ln, sep = "."), paste("Between", bn, sep =  "."), 
+                                                between.data, mean10)
+        normalization.results <- rbind(normalization.results, norm.noiseq.results)                      
+      }
+    }
+  }
+  
+  ## We try with length normalization now
+  for (ln in lenght.norm) {
+    ln.data <- withinLaneNormalization(mydataM10EDA, "Length", which = ln)
+    for (gcn in gc.norm) {
+      gcn.data <- withinLaneNormalization(ln.data, "GC", which = gcn)
+      for (bn in between.nom) {
+        if (bn == "tmm") {
+          between.data <- tmm(gcn.data, long = 1000, lc = 0, k = 0)
+        } else {
+          between.data <- betweenLaneNormalization(gcn.data, which = bn, offset = FALSE)
+        }
+        cat("Testing with length normalization: ", ln, ", GC normalization: ", gcn, " and between lanes normalization: ", bn, "\n")
+        norm.noiseq.results <- getNOISeqResults(paste("Length", ln, sep = "."), paste("GC", gcn, sep = "."), paste("Between", bn, sep =  "."),
+                                                counts(between.data), mean10)
+        normalization.results <- rbind(normalization.results, norm.noiseq.results)                      
+      }
+    }
+  }
+
+ 
 #######################starting classification########################################################
 subannot=getBM(attributes = c("ensembl_gene_id","external_gene_name","entrezgene"),values=rownames(TMM.TP), mart=mart)
 colnames(subannot)=c("probe","NCBI.gene.symbol","EntrezGene.ID")#this colnames are needed
