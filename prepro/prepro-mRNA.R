@@ -288,7 +288,7 @@ return(norm.set.results)
       ln.data <- withinLaneNormalization(gcn.data, "Length", which = ln)
       for (bn in between.nom) {
         if (bn == "tmm") {
-          between.data <- tmm(counts(ln.data), long = 1000, lc = 0, k = 0)
+          between.data <- tmm(normCounts(ln.data), long = 1000, lc = 0, k = 0)
         } else {
           between.data <- betweenLaneNormalization(ln.data, which = bn, offset = FALSE)
         }
