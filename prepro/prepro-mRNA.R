@@ -155,8 +155,9 @@ dev.off()
 #of the library per sample affects the power of the experiment. CPM=(counts/fragments
 # sequenced)*one million. Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
-countMatrixFiltered = exprots_hgnc[rowMeans(exprots_hgnc)>10,]#como Diana
-#13571 features 
+#####sigo lo de Diana porque proportion.test, cpm >1 pierde a MIA
+countMatrixFiltered = exprots_hgnc[rowMeans(exprots_hgnc)>10,]
+#17568 features 
 
 #2)normaliza RNA composition and then GC content coz the 1st needs raw counts
 #and gives you scaling factors that can be exported to the 2nd
@@ -196,149 +197,33 @@ countMatrixFiltered = exprots_hgnc[rowMeans(exprots_hgnc)>10,]#como Diana
 #explo.plot(mycdTMM,samples=temp)
 #dev.off()
 
-
-#####sigo el pipeline de Diana para normalizar porque cqn aplana demasiado la vari
+#sigo lo de Diana para normalizar porque cqn aplana demasiado la varinza
 #nombro las columnas de myannot y design de acuerdo a la sig función
-mean10=list(M=countFilt,Annot=annot,Targets=tissue)
 mydataM10EDA <- EDASeq::newSeqExpressionSet(counts=as.matrix(countFilt),featureData=annot,phenoData=tissue)
-PLOTSNORMDIR ="plots"
-dir.create(PLOTSNORMDIR)
-
-getNOISeqResults <- function(step1, step2, step3, n.counts, m10.data) {
-### Check the NOISEq results 
-mydata <- NOISeq::readData(
-  data = n.counts, 
-  length = m10.data$Annot[, c("EnsemblID", "Length")], 
-  biotype = m10.data$Annot[, c("EnsemblID", "Type")], 
-  #     chromosome = m10.data$Annot[, c("Chr", "Start", "End")], 
-  factors = m10.data$Targets[, "Group",drop=FALSE], 
-  gc = m10.data$Annot[, c("EnsemblID", "GC")])
-nsamples <- dim(m10.data$Targets)[1]
-
-### Length bias 
-mylengthbias <- dat(mydata, factor="Group", norm = TRUE, type="lengthbias")
-l.stats.1 <- getRegressionStatistics(mylengthbias@dat$RegressionModels[1])
-l.stats.2 <- getRegressionStatistics(mylengthbias@dat$RegressionModels[2])
-## GC Bias
-mygcbias <- dat(mydata, factor = "Group", norm = TRUE, type ="GCbias")
-gc.stats.1 <- getRegressionStatistics(mygcbias@dat$RegressionModels[1])
-gc.stats.2 <- getRegressionStatistics(mygcbias@dat$RegressionModels[2])
-   
-#RNA Composition
-myrnacomp <- dat(mydata, norm = TRUE, type="cd")
-dtable <- table(myrnacomp@dat$DiagnosticTest[,  "Diagnostic Test"])
-if (is.na(dtable["PASSED"])) dtable <- data.frame(PASSED = 0)
-
-pngPlots <- c(paste(PLOTSNORMDIR, "Lenghtbias.png", sep="/"), 
-              paste(PLOTSNORMDIR, "GCbias.png", sep="/"), 
-              paste(PLOTSNORMDIR, "RNAComposition.png", sep="/"))
-
-png(pngPlots[1], width=w/2, height=h/2)
-explo.plot(mylengthbias, samples = NULL, toplot = "global")
-dev.off()
-
-png(pngPlots[2], width=w/2, height=h/2)
-explo.plot(mygcbias, samples = NULL, toplot = "global")
-dev.off()
-
-png(pngPlots[3],width=w/2, height=h/2)
-explo.plot(myrnacomp, samples = 1:12)
-dev.off()
-
-thePlots <- lapply (pngPlots, function(pngFile) {
-  rasterGrob(readPNG(pngFile, native = FALSE), interpolate = FALSE)
-})
-
-plotname <- paste(step1, step2, step3, sep = "_")
-png(paste(PLOTSNORMDIR, paste(plotname, "png", sep ="."), sep="/"),  height=h/2, width=w*(3/2))
-par(oma = c(0, 0, 1.5, 0))
-plot.new()
-do.call(grid.arrange, c(thePlots,  ncol = 3, nrow=1))
-mtext(plotname, outer = TRUE, cex = 1.5)
-dev.off()
-
-unlink(pngPlots)
-
-norm.set.results <- data.frame(step1, step2, step3, 
-                               l.stats.1$r2, l.stats.1$p, l.stats.2$r2, l.stats.2$p,
-                               gc.stats.1$r2, gc.stats.1$p, gc.stats.2$r2, gc.stats.2$p, 
-                               dtable["PASSED"], dtable["PASSED"]/nsamples)
-colnames(norm.set.results) <- c("Step1", "Step2", "Step3", 
-                                paste("Lenght", l.stats.1$name, "R2", sep = "."), paste("Lenght", l.stats.1$name, "p-value", sep = "."),  
-                                paste("Lenght", l.stats.2$name, "R2", sep = "."), paste("Lenght", l.stats.2$name, "p-value", sep = "."), 
-                                paste("GC", gc.stats.1$name, "R2", sep = "."), paste("GC", gc.stats.1$name, "p-value", sep = "."), 
-                                paste("GC", gc.stats.2$name, "R2", sep = "."), paste("GC", gc.stats.2$name, "p-value", sep = "."),
-                                "RNA.PassedSamples", "RNA.PassedProportion")
-return(norm.set.results)
-  } 
- getRegressionStatistics <- function(regressionmodel) {
-    name <- names(regressionmodel)
-    print(name)
-    rsquared <- summary(regressionmodel[[1]])$r.squared
-    print(rsquared)
-    fstatistic <- summary(regressionmodel[[1]])$fstatistic
-    pvalue <- signif(pf(q = fstatistic[1], df1 = fstatistic[2], df2 = fstatistic[3], lower.tail = FALSE), 2)
-    return(list("name" = name, "r2" = rsquared, "p" = pvalue))
-  }
-
-  ## We try with GC normalization first
-  for (gcn in gc.norm) {
-    gcn.data <- withinLaneNormalization(mydataM10EDA, "GC", which = gcn)
-    for (ln in lenght.norm) {
-      ln.data <- withinLaneNormalization(gcn.data, "Length", which = ln)
-      for (bn in between.nom) {
-        if (bn == "tmm") {
-          between.data <- tmm(normCounts(ln.data), long = 1000, lc = 0, k = 0)
-        } else {
-          between.data <- betweenLaneNormalization(ln.data, which = bn, offset = FALSE)
-        }
-        cat("Testing with GC normalization: ", gcn, ",  length normalization: ", ln, " and between lane normalization: ", bn, "\n")
-        norm.noiseq.results <- getNOISeqResults(paste("GC", gcn, sep = "."), paste("Length", ln, sep = "."), paste("Between", bn, sep =  "."), 
-                                                between.data, mean10)
-        normalization.results <- rbind(normalization.results, norm.noiseq.results)                      
-      }
-    }
-  }
-  
-  ## We try with length normalization now
-  for (ln in lenght.norm) {
-    ln.data <- withinLaneNormalization(mydataM10EDA, "Length", which = ln)
-    for (gcn in gc.norm) {
-      gcn.data <- withinLaneNormalization(ln.data, "GC", which = gcn)
-      for (bn in between.nom) {
-        if (bn == "tmm") {
-          between.data <- tmm(gcn.data, long = 1000, lc = 0, k = 0)
-        } else {
-          between.data <- betweenLaneNormalization(gcn.data, which = bn, offset = FALSE)
-        }
-        cat("Testing with length normalization: ", ln, ", GC normalization: ", gcn, " and between lanes normalization: ", bn, "\n")
-        norm.noiseq.results <- getNOISeqResults(paste("Length", ln, sep = "."), paste("GC", gcn, sep = "."), paste("Between", bn, sep =  "."),
-                                                counts(between.data), mean10)
-        normalization.results <- rbind(normalization.results, norm.noiseq.results)                      
-      }
-    }
-  }
-
+lFull <- withinLaneNormalization(mydataM10EDA, "length", which = "full")
+gcFull <- withinLaneNormalization(lFull, "percentage_gene_gc_content", which = "full")
+fullfullTMM <-tmm(gcFull, long = 1000, lc = 0, k = 0)
  
-#######################starting classification########################################################
-subannot=getBM(attributes = c("ensembl_gene_id","external_gene_name","entrezgene"),values=rownames(TMM.TP), mart=mart)
-colnames(subannot)=c("probe","NCBI.gene.symbol","EntrezGene.ID")#this colnames are needed
-subannot=subannot[subannot$probe%in%rownames(TMM.TP),]
-subannot=subannot[!duplicated(subannot$probe),]
-subannot=subannot[order(match(subannot$probe,rownames(TMM.TP))),]
+#######################subtipification is no longer needed since TCGA is providing it now########################################################
+#subannot=getBM(attributes = c("ensembl_gene_id","external_gene_name","entrezgene"),values=rownames(TMM.TP), mart=mart)
+#colnames(subannot)=c("probe","NCBI.gene.symbol","EntrezGene.ID")#this colnames are needed
+#subannot=subannot[subannot$probe%in%rownames(TMM.TP),]
+#subannot=subannot[!duplicated(subannot$probe),]
+#subannot=subannot[order(match(subannot$probe,rownames(TMM.TP))),]
 
 #49/50 probes are used for clustering
-subtypes=molecular.subtyping(sbt.model="pam50",data=t(log2(TMM.TP)),annot=subannot,do.mapping=T)
-subtipos=TCGA_MolecularSubtype(colnames(TMM.TP))
-table(subtipos$gender)
+#subtypes=molecular.subtyping(sbt.model="pam50",data=t(log2(TMM.TP)),annot=subannot,do.mapping=T)
+subtipos=TCGA_MolecularSubtype(colnames(fullfullTMM))#https://bioconductor.org/packages/devel/bioc/vignettes/TCGAbiolinks/inst/doc/extension.html#tcga_molecularsubtype:_query_subtypes_for_cancer_data:
+#table(subtipos$gender)
 #female   male 
 # 1201     13 
-subtipos=subtipos$subtypes[,c(4,2)]
-temp=cbind(colnames(TMM.TP)[!colnames(TMM.TP)%in%subtipos$barcodes],NA)
-colnames(temp)=colnames(subtipos)
-subtipos=rbind(subtipos,temp)
-subtipos=cbind(subtipos,subtypes$subtype[order(match(names(subtypes$subtype),subtipos$barcode))])
-table(subtipos[,2:3],useNA="ifany") 
+subtipos=subtipos$subtypes[,c(2,4)]
+subtipos=subtipos[!is.na(subtipos$subtype),]
+#temp=cbind(colnames(TMM.TP)[!colnames(TMM.TP)%in%subtipos$barcodes],NA)
+#colnames(temp)=colnames(subtipos)
+#subtipos=rbind(subtipos,temp)
+#subtipos=cbind(subtipos,subtypes$subtype[order(match(names(subtypes$subtype),subtipos$barcode))])
+#table(subtipos[,2:3],useNA="ifany") 
 #                  X
 #subtype_PAM50.mRNA Basal Her2 LumB LumA Normal
 #     Basal-like       97    0    2    2      0    0
@@ -347,36 +232,37 @@ table(subtipos[,2:3],useNA="ifany")
 #     Luminal B         1    8  112    4      0    0
 #     Normal-like       4    0    2    0      2    0
 #     <NA>            100   55  152  251     20    0
+temp=designExp[designExp$definition=="normal",]
+subtipos=as.data.frame(rbind(as.matrix(temp),cbind(rownames(subtipos),as.character(subtipos$subtype))))
+table(subtipos$definition)
+ #BRCA.Basal   BRCA.Her2   BRCA.LumA   BRCA.LumB BRCA.Normal      normal 
+#        187          82         561         215          40         113 
 
 #############################solve batch effect#######################################################
-temp=cbind(designExp$barcode[!designExp$barcode%in%subtipos[,1]],"normal","normal","normal","normal")
-subtipos=rbind(subtipos,temp)
+fullfullTMM=fullfullTMM[,colnames(fullfullTMM)%in%subtipos$barcode]
+fullfullTMM=fullfullTMM[,order(match(colnames(fullfullTMM),subtipos$barcode))]
 
-noiseqData = readData(data = normalisedTMMatrix, factors=subtipos, gc = myannot[,c(1,2)])
-myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = FALSE)
-TMMARSyn=ARSyNseq(noiseqData, factor = "genefu", batch = F, norm = "n",  logtransf = FALSE)
-myPCA1 = dat(TMM.ARSyn, type = "PCA", norm = T)
-pdf("pre-postArsynPCA.pdf")
+noiseqData = readData(data = fullfullTMM, factors=subtipos)
+myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = T)
+TMMARSyn=ARSyNseq(noiseqData, factor = "definition", batch = F, norm = "n",  logtransf = T)
+myPCA1 = dat(TMMARSyn, type = "PCA", norm = T,logtransf = F)
+pdf("prepostArsynPCA.pdf")
 par(mfrow=c(2,2))
-explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "genefu")
-explo.plot(myPCA, samples = c(1,3), plottype = "scores", factor = "genefu")
-explo.plot(myPCA1, samples = c(1,2), plottype = "scores", factor = "genefu")
-explo.plot(myPCA1, samples = c(1,3), plottype = "scores", factor = "genefu")
+explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "definition")
+explo.plot(myPCA, samples = c(1,3), plottype = "scores", factor = "definition")
+explo.plot(myPCA1, samples = c(1,2), plottype = "scores", factor = "definition")
+explo.plot(myPCA1, samples = c(1,3), plottype = "scores", factor = "definition")
 dev.off()
-
-TMMArsyn.NT=exprs(TMMARSyn)[,colnames(exprs(TMMARSyn))%in%subtipos[subtipos[,3]=="normal",1]]
-TMMArsyn.TP=exprs(TMMARSyn)[,colnames(exprs(TMMARSyn))%in%subtipos[subtipos[,3]!="normal",1]]
-
 ##############final classification based on genefu's alredy classified samples##########################
-rownames(subannot)=subannot$probe
-obje<-PAM50(exprs=log2(TMMArsyn.TP),annotation=subannot)
-obje=filtrate(obje,verbose=T)
-obje=classify(obje,verbose=T,std="scale")
-obje=permutate(obje,verbose=T,keep=T,nPerm=10000, pCutoff=0.01, where="fdr",corCutoff=0.1,seed=1234567890,
-  BPPARAM=MulticoreParam(progressbar=TRUE))
+#rownames(subannot)=subannot$probe
+#obje<-PAM50(exprs=log2(TMMArsyn.TP),annotation=subannot)
+#obje=filtrate(obje,verbose=T)
+#obje=classify(obje,verbose=T,std="scale")
+#obje=permutate(obje,verbose=T,keep=T,nPerm=10000, pCutoff=0.01, where="fdr",corCutoff=0.1,seed=1234567890,
+#  BPPARAM=MulticoreParam(progressbar=TRUE))
 #49/50 probes are used for clustering
-temp=permutation(obje)$subtype
-subtipos[subtipos[,3]!="normal",5]=temp$Subtype[order(match(rownames(temp),subtipos[,1]))]
+#temp=permutation(obje)$subtype
+#subtipos[subtipos[,3]!="normal",5]=temp$Subtype[order(match(rownames(temp),subtipos[,1]))]
 #table(subtipos[,c(2,5)],useNA="always")
 #               pbcmc2
 #tcga            Ambiguous Basal Her2 LumA LumB Normal <NA>
@@ -389,19 +275,17 @@ subtipos[subtipos[,3]!="normal",5]=temp$Subtype[order(match(rownames(temp),subti
 
 
 #final transcript composition bias
-noiseqData = readData(data = exprs(TMM.ARSyn.TP), factors=subtipos, gc = myannot[,c(1,2)])
+noiseqData = readData(data = exprs(TMMARSyn), factors=subtipos)
 mycdnoBatch=dat(noiseqData,type="cd",norm=T)
 table(mycdnoBatch@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #   496    605 
 
 #final expression dataset
-subtipos=subtipos[order(match(subtipos[,1],designExp$barcode)),]
-subtipos=cbind(designExp,subtipos[,2:5])
-#sólo me quedo con una columna por paciente, como están normalizados, según yo no me importa cual agarre
-TMMArsyn=cbind(TMMArsyn.TP[,!duplicated(substr(colnames(TMMArsyn.TP),1,12))],TMMArsyn.NT)
-TMMArsyn=lapply(c("Basal","Her2","LumA","LumB","normal"),function(x) TMMArsyn[,colnames(TMMArsyn)%in%subtipos$barcode[subtipos$pbcmc2==x]])
-names(TMMArsyn)=c("Basal","Her2","LumA","LumB","normal")
+subtipos=subtipos[subtipos$definition!="BRCA.Normal",]
+subtipos=as.data.frame(as.matrix(subtipos))
+finalData=exprs(TMMARSyn)
+finalData=finalData[,colnames(finalData)%in%subtipos$barcode]
 save(TMMArsyn,subtipos,file="subtiTMMArsyn.RData")
 
 ############################--------------------FIN--------------##########################
