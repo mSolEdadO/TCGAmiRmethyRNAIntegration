@@ -5,26 +5,42 @@ load("../resultados/Eigenscaled.RData")#= MFA output: concatenated matrix normal
 
 args = commandArgs(trailingOnly=TRUE)
 subtipo=which(names(Eigenscaled)==args[1])
-subtipo=Eigenscaled[[subtipo]] #fit this subtype expression/methy
+subtipo=Eigenscaled[[subtipo]] #fit this subtype matrix
 gen=args[2]#to this PAM50 gene expression
 
+#over this parameters
 coefGrid <-  expand.grid(lambda=10^ seq (2 , -2 , length =10),
-			alpha=10^ seq (0, -3 , length =10))#over this parameters
+			alpha=10^ seq (0, -3 , length =10))
+#with this training
+trainCtrl <- trainControl("repeatedcv",
+			 number = 10, #k choose this according to n
+			 repeats=100,#?????
+			 verboseIter = F,#T if fit fails,
+			 allowParallel=T,
+			 returnResamp="all")
+
 set.seed(123)
 model <- train(y = subtipo[,colnames(subtipo)==gen],
 	       x = subtipo[,colnames(subtipo)!=gen],
 	       method = "glmnet",
-	       trControl = trainControl("cv", number = 10, verboseIter = F),
-	       #verboseIter = T if fit fails,
-	       #number=nrow(x) for LOU-CV = ¿overfit?
+	       trControl = trainCtrl,
 	       tuneGrid = coefGrid)
+
+#save coefficients and model statistics
 coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))#sif
 colnames(coefs)=paste(model$bestTune,collapse='_')
 write.table(coefs,
 	    file=paste(gen,args[1],sep='.'),
 	    quote=F,
 	    sep='\t')
-
+write.table(model$results,
+	    file=paste(gen,args[1],"results",sep='.'),
+	    quote=F,
+	    sep='\t')
+write.table(model$resample,
+	    file=paste(gen,args[1],"resample",sep='.'),
+	    quote=F,
+	    sep='\t')
 
 #plus elasticNet & elasticNet.sub -> paralell
 ########################################
