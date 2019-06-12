@@ -9,12 +9,14 @@ subtipo=Eigenscaled[[subtipo]] #fit this subtype matrix
 gen=args[2]#to this PAM50 gene expression
 
 #over this parameters
-coefGrid <-  expand.grid(lambda=10^ seq (2 , -2 , length =10),
-			alpha=10^ seq (0, -3 , length =10))
+coefGrid <-  expand.grid(lambda=10^ seq (3 , -2 , length =10),
+			alpha=10^ seq (0, -3 , length =10))#Liu2018 fixed alpha to 0.5 
 #with this training
+k=5#Liu2018 uses this k for prostate
+if(ncol(subtipo)<100){k=3}
 trainCtrl <- trainControl("repeatedcv",
-			 number = 10, #k choose this according to n
-			 repeats=100,#?????
+			 number = k, #k choose this according to n
+			 repeats=100,#????? Liu2018 does 10
 			 verboseIter = F,#T if fit fails,
 			 allowParallel=T,
 			 returnResamp="all")
@@ -33,14 +35,17 @@ write.table(coefs,
 	    file=paste(gen,args[1],sep='.'),
 	    quote=F,
 	    sep='\t')
-write.table(model$results,
-	    file=paste(gen,args[1],"results",sep='.'),
-	    quote=F,
-	    sep='\t')
+#write.table(model$results,
+#	    file=paste(gen,args[1],"results",sep='.'),
+#	    quote=F,
+#	    sep='\t',
+#	    row.names=F)
 write.table(model$resample,
 	    file=paste(gen,args[1],"resample",sep='.'),
 	    quote=F,
-	    sep='\t')
+	    sep='\t',
+   	    row.names=F)
+
 
 #plus elasticNet & elasticNet.sub -> paralell
 ########################################
