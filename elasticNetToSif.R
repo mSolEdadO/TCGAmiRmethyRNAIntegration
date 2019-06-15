@@ -1,5 +1,14 @@
 #load files
 files=list.files()
+
+loadRData <- function(fileName){
+#loads an RData file, and returns it
+    load(fileName)
+    get(ls()[ls() != "fileName"])
+}
+modelos=lapply(files,function(x) modelos[x]=loadRData(x)]
+
+
 #files=files[grep("condor",files,invert=T)]
 files=files[5:length(files)]
 subtis=unique(sapply(strsplit(files,'.',fixed=T),function(x) x[2]))
