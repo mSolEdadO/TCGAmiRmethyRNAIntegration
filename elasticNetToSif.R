@@ -5,10 +5,38 @@ loadRData <- function(fileName){
     get(ls()[ls() != "fileName"])
 }
 
-#load files
-files=list.files()
+modelsToSif=function(subti){
+	f=files[grep(subti,files)]
+	modelos=list()
+	modelos=lapply(1:length(f),function(x) modelos[[x]]=loadRData(f[x]))
+	f=sapply(strsplit(gsub("parallel-caret/eigenscaled/","",f),".",fixed=T),function(x) x[1])
+
+	predictores=lapply(modelos,function(x) predictors(x))
+	transcri=sapply(predictores,function(x) x[grep("ENSG",x)])
+	mirs=lapply(predictores,function(x) x[grep("hsa",x)])
+	cpgs=lapply(predictores,function(x) x[grep("hsa|ENSG",x,perl=T,invert=T)])
+	qualy=lapply(modelos,function(x) x$results)
+	qualy=lapply(1:length(modelos),function(x) 
+		qualy[[x]][qualy[[x]]$alpha==modelos[[x]]$bestTune$alpha&qualy[[x]]$lambda==modelos[[x]]$bestTune$lambda,])
+	qualy=cbind(f,do.call(rbind,qualy))
+	qualy=cbind(qualy,sapply(cpgs,length),sapply(transcri,length),sapply(mirs,length))
+
+	coefis=lapply(1:length(modelos),function(x) 
+		as.array(coef(modelos[[x]]$finalModel,modelos[[x]]$bestTune$lambda)))
+	coefis=lapply(coefis,function(x) x[x>0,])
+	coefis=lapply(1:length(modelos),function(x) cbind(f[x],coefis[[x]]))
+	sif=do.call(rbind,coefis)
+return(list(quality=qualy,sif=sif))}
+
+#list model files
+files=list.files("parallel-caret/eigen0.5/",full.names=T)
 files=files[grep("RD",files)]
 files=gsub("//","/",files)
+
+listos=c("Basal","Her2")#subtype models I want
+resultados=lapply(listos,modelsToSif)
+
+
 temp=files[grep("LumA",files)]
 modelos=list()
 modelos=lapply(1:length(herFiles),function(x) modelos[[x]]=loadRData(temp[x]))
@@ -38,8 +66,7 @@ coefis=lapply(1:45,function(x) cbind(temp[x],coefis[[x]]))
 lumaSif=do.call(rbind,coefis)
 
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-mannot=getBM(attributes = c("chromosome_name","ensembl_gene_id","hgnc_symbol"),filters = "ensembl_gen
-e_id", values=normalQualy$ensembl, mart=mart)
+mannot=getBM(attributes = c("chromosome_name","ensembl_gene_id","hgnc_symbol"),filters = "ensembl_gene_id", values=normalQualy$ensembl, mart=mart)
 diferencias=list(CpGs=cbind(unlist(normalQualy$CpGs),unlist(lumbQualy$CpGs),unlist(basalQualy$CpGs),unlist(h
 erQualy[,10])),transcri=cbind(unlist(normalQualy$transcri),unlist(lumbQualy$transcri),unlist(basalQua
 ly$transcri),unlist(herQualy[,11])),mir=cbind(unlist(normalQualy$miR),unlist(lumbQualy$miR),unlist(ba
