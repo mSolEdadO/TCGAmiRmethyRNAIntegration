@@ -1,56 +1,66 @@
-#load files
-files=list.files()
-
+library(caret)
 loadRData <- function(fileName){
 #loads an RData file, and returns it
     load(fileName)
     get(ls()[ls() != "fileName"])
 }
-modelos=lapply(files,function(x) modelos[x]=loadRData(x)]
 
+#load files
+files=list.files()
+files=files[grep("RD",files)]
+files=gsub("//","/",files)
+temp=files[grep("LumA",files)]
+modelos=list()
+modelos=lapply(1:length(herFiles),function(x) modelos[[x]]=loadRData(temp[x]))
+temp=gsub(".LumA.RData","",gsub("parallel-caret/eigenscaled/","",temp))
 
-#files=files[grep("condor",files,invert=T)]
-files=files[5:length(files)]
-subtis=unique(sapply(strsplit(files,'.',fixed=T),function(x) x[2]))
-subtis=lapply(subtis,function(x) files[grep(x,files)])
-names(subtis)=c("Basal","Her2","LumB","normal","LumA")
-modelos=lapply(subtis,function(x) lapply(x,function(y) read.table(y,header=T)))
+predictores=lapply(modelos,function(x) predictors(x))
+transcri=sapply(predictores,function(x) x[grep("ENSG",x)])
+mirs=lapply(predictores,function(x) x[grep("hsa",x)])
+cpgs=lapply(predictores,function(x) x[grep("hsa|ENSG",x,perl=T,invert=T)])
 
-#check fitted parameters
-params=lapply(modelos,function(x) sapply(x,colnames))
-params=lapply(params,function(x) gsub('X','',x))
-params=lapply(params,function(x) t(do.call(cbind,strsplit(x,'_'))))
-png("alpha.png")
- par(mar=c(2,10,2,2))
- barplot(t(table(temp[,c(1,3)])),beside=T,las=2,horiz=T,xlim=c(0,30))
+qualy=lapply(modelos,function(x) x$results)
+qualy=lapply(1:45,function(x) qualy[[x]][qualy[[x]]$alpha==modelos[[x]]$bestTune$alpha&qualy[[x]]$lambda==modelos[[x]]$bestTune$lambda,])
+qualy=cbind(temp,do.call(rbind,qualy))
+lumaQualy=cbind(qualy,sapply(cpgs,length),sapply(transcri,length),sapply(mirs,length))
+
+temp=lumaQualy[,c(1,10:12)]
+lala=lumbQualy[!lumbQualy$ensembl%in%temp$ensembl,c(1,10:12)]
+lala$CpGs=NA
+lala$transcri=NA
+lala$miR=NA
+temp=rbind(temp,lala)
+temp=temp[order(match(temp$ensembl,lumbQualy$ensembl)),]
+
+coefis=lapply(1:45,function(x) as.array(coef(modelos[[x]]$finalModel,modelos[[x]]$bestTune$lambda)))
+coefis=lapply(coefis,function(x) x[x>0,])
+coefis=lapply(1:45,function(x) cbind(temp[x],coefis[[x]]))
+lumaSif=do.call(rbind,coefis)
+
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+mannot=getBM(attributes = c("chromosome_name","ensembl_gene_id","hgnc_symbol"),filters = "ensembl_gen
+e_id", values=normalQualy$ensembl, mart=mart)
+diferencias=list(CpGs=cbind(unlist(normalQualy$CpGs),unlist(lumbQualy$CpGs),unlist(basalQualy$CpGs),unlist(h
+erQualy[,10])),transcri=cbind(unlist(normalQualy$transcri),unlist(lumbQualy$transcri),unlist(basalQua
+ly$transcri),unlist(herQualy[,11])),mir=cbind(unlist(normalQualy$miR),unlist(lumbQualy$miR),unlist(ba
+salQualy$miR),unlist(herQualy[,12])))
+rownames(diferencias$CpGs)=mannot$hgnc_symbol
+
+totales=diferencias$CpGs+diferencias$transcri+diferencias$mir
+proporciones=lapply(diferencias,function(x) x/totales)
+proporciones[[2]][is.na(proporciones[[2]])]=0
+proporciones[[2]][is.na(totales)]=NA
+
+pdf("proporPredictores.pdf")
+ heatmap.2(proporciones[[1]],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[temp$class],Rowv=F,Colv=F,na.color="gray",main="CpGs/total")
+ heatmap.2(proporciones[[2]],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[temp$class],Rowv=F,Colv=F,na.color="gray",main="transcri/total")
+ heatmap.2(proporciones[[3]],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[temp$class],Rowv=F,Colv=F,na.color="gray",main="miR/total")
 dev.off()
-png("lambda.png")
- par(mar=c(2,10,2,2))
- barplot(t(table(temp[,2:3])),beside=T,las=2,horiz=T,xlim=c(0,25))
-dev.off()
 
-#sif per subtype
-subtis=lapply(subtis,function(x) sapply(strsplit(x,'.',fixed=T),function(y) y[1]))
-modelos=lapply(modelos,function(y) lapply(y,function(x) as.matrix(x)[which(x>0),]))
-modelos=lapply(1:5,function(x) sapply(1:length(modelos[[x]]),function(y) 
-    cbind(subtis[[x]][y],names(modelos[[x]][[y]]),modelos[[x]][[y]])))
-modelos=lapply(modelos,function(x) do.call(rbind,x))
-sapply(modelos,function(x) summary(as.numeric(x[grep("(Intercept)",x[,2]),3])))
-            Basal      Her2      LumB    normal      LumA
-Min.    8.615e-18 1.052e-16 4.303e-17 6.979e-17 1.052e-16
-1st Qu. 6.219e-16 1.109e-15 3.279e-16 5.092e-16 1.109e-15
-Median  1.125e-15 1.527e-15 6.452e-16 1.145e-15 1.527e-15
-Mean    1.597e-15 1.474e-15 1.133e-15 1.407e-15 1.474e-15
-3rd Qu. 2.473e-15 2.144e-15 1.934e-15 1.947e-15 2.144e-15
-Max.    4.190e-15 2.860e-15 3.105e-15 3.668e-15 2.860e-15
-sapply(modelos,function(x) summary(as.numeric(x[grep("(Intercept)",x[,2],invert=T),3])))
-            Basal      Her2      LumB    normal      LumA
-Min.    6.881e-10 2.636e-08 3.198e-07 4.061e-11 2.636e-08
-1st Qu. 5.538e-05 3.677e-04 7.383e-04 6.082e-05 3.677e-04
-Median  1.373e-04 1.009e-03 2.297e-03 1.509e-04 1.009e-03
-Mean    9.030e-04 4.510e-03 8.468e-03 9.555e-04 4.510e-03
-3rd Qu. 2.901e-04 2.752e-03 6.914e-03 3.191e-04 2.752e-03
-Max.    8.175e-01 7.335e-01 7.671e-01 3.909e-01 7.335e-01
-#modelos=sapply(modelos,function(x) x[grep("(Intercept)",x[,2],invert=T),])
+sifs=list(normal=normalSif,basal=basalSif,her2=herSif,lumA=lumaSif,lumB=lumBsif)
+quality=list(normal=normalQualy,basal=basalQualy,her2=herQualy,lumA=lumaQualy,lumB=lumbQualy)
+save(sifs,quality,file="modelosEigenScale.RData")
 
-#get node chr, hgnc_id...
+nodos=lapply(sifs,function(x) unique(c(rownames(x),x[,1])))
+nodos=lapply(nodos,function(x) x[x!="(Intercept)"])
+
