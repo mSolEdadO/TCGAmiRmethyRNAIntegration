@@ -1,6 +1,5 @@
 library(biomaRt)
 library(rentrez)
-library(multiMiR)#https://www.bioconductor.org/packages/devel/bioc/vignettes/multiMiR/inst/doc/multiMiR.html
 
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
 myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","external_gene_name","entrezgene"), mart=mart)
@@ -63,6 +62,8 @@ $normal
 ##############################################################################
 ########### miR
 ##############################################################################
+library(multiMiR)#https://www.bioconductor.org/packages/devel/bioc/vignettes/multiMiR/inst/doc/multiMiR.html
+
 #get all the interactions of selected miRs
 mirInteractions=do.call(rbind,lapply(unique(as.character(interacs[i,2])),function(x) 
 	get_multimir(mirna = x, summary = F)@data))
@@ -77,3 +78,31 @@ sum(knownTarget)
 ##############################################################################
 ########### TFs
 ##############################################################################
+library(tftargets)
+
+TF=read.table("data/TFCheckpoint_download_180515.txt",header=T,sep='\t',fill=T,quote="")
+temp=myannot[myannot$ensembl_gene_id%in%unique(interacs[,2]),c(1,4)]
+i=which(interacs[,2]%in%temp$ensembl_gene_id[temp$entrezgene%in%TF$entrez_human])
+length(i)
+#[1] 2135 interactions with TFs
+pam50annot=myannot[myannot$ensembl_gene_id%in%unique(interacs[,1]),]
+
+knownTF=function(TF,target){
+support=character()
+if(pam50annot$entrezgene[pam50annot$hgnc_symbol==target]%in%TRED[[TF]]){
+	support=c(support,"TRED")}#Predicted and known targets
+if(target%in%ITFP[[TF]]){support=c(support,"ITFP")} #predicted
+if(pam50annot$entrezgene[pam50annot$hgnc_symbol==target]%in%ENCODE[[TF]]){
+	support=c(support,"ENCODE")}#ChipSeq
+if(target%in%Neph2012[[TF]]){support=c(support,"Neph2012")}#DNAseq footprinting
+if(target%in%TRRUST[[TF]]){support=c(support,"TRRUST")}#small-scale experiments
+if(target%in%Marbach2016[[TF]]){support=c(support,"Marbach2016")}
+return(paste(support,collapse=','))}#CAGE+binding motifs
+#no sé cuando recopilaron los datos
+
+intrcsTF=apply(interacs[i,3:4],1,function(x) knownTF(x[2],x[1]))
+sum(intrcsTF!="")
+#[1] 84 interactions with TFs reported in DB
+interacs=cbind(interacs,NA)
+intercs[i,]=intrcsTF
+colnames(interacs)=c("pam50","predictor","pam50Symbol","predictorSymbol","TFsupportedBy")
