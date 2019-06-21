@@ -1,22 +1,21 @@
 #!/usr/bin/env Rscript
 library(caret)
 library(methods)
-load("../resultados/Eigenscaled.RData")#= MFA output: concatenated matrix normalized to weight the omics per variance not size
+load("/home/msoledad/resultados/EigenScaled.RData")
 
 args = commandArgs(trailingOnly=TRUE)
-subtipo=which(names(Eigenscaled)==args[1])
-subtipo=Eigenscaled[[subtipo]] #fit this subtype matrix
-gen=args[2]#to this PAM50 gene expression
+subtipo=which(names(EigenScaled)==args[1])
+subtipo=EigenScaled[[subtipo]]
+gen=args[2]
+rm(EigenScaled);gc()
 
-#over this parameters
 coefGrid <-  expand.grid(lambda=10^ seq (3 , -2 , length =10),
-			alpha=10^ seq (0, -3 , length =10))#Liu2018 fixed alpha to 0.5 
-#with this training
-k=5#Liu2018 uses this k for prostate
+			alpha=10^ seq (0, -3 , length =10))
+k=5
 if(ncol(subtipo)<100){k=3}
 trainCtrl <- trainControl("repeatedcv",
 			 number = k, #k choose this according to n
-			 repeats=100,#????? Liu2018 does 10
+			 repeats=round(100/k),#500 for alpha=0.5
 			 verboseIter = F,#T if fit fails,
 			 allowParallel=T,
 			 returnResamp="all")
@@ -28,23 +27,19 @@ model <- train(y = subtipo[,colnames(subtipo)==gen],
 	       trControl = trainCtrl,
 	       tuneGrid = coefGrid)
 
-#save coefficients and model statistics
-coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))#sif
-colnames(coefs)=paste(model$bestTune,collapse='_')
-write.table(coefs,
-	    file=paste(gen,args[1],sep='.'),
-	    quote=F,
-	    sep='\t')
+#coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
+#coefs=as.matrix(coefs[which(coefs>0),])
+#colnames(coefs)=paste(model$results$Rsquared[model$results$RMSE==min(model$results$RMSE)],model$results$RMSE[model$results$RMSE==min(model$results$RMSE)],sep="_")
+#write.table(coefs,
+#	    file=paste(gen,args[1],sep='.'),
+#	    quote=F,
+#	    sep='\t')
 #write.table(model$results,
 #	    file=paste(gen,args[1],"results",sep='.'),
 #	    quote=F,
 #	    sep='\t',
 #	    row.names=F)
-write.table(model$resample,
-	    file=paste(gen,args[1],"resample",sep='.'),
-	    quote=F,
-	    sep='\t',
-   	    row.names=F)
+save(model,file=paste(gen,args[1],"RData",sep='.'))
 
 
 #plus elasticNet & elasticNet.sub -> paralell

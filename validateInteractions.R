@@ -78,7 +78,7 @@ sum(knownTarget)
 ##############################################################################
 ########### TFs
 ##############################################################################
-library(tftargets)
+library(tftargets)#https://github.com/slowkow/tftargets
 
 TF=read.table("data/TFCheckpoint_download_180515.txt",header=T,sep='\t',fill=T,quote="")
 temp=myannot[myannot$ensembl_gene_id%in%unique(interacs[,2]),c(1,4)]
