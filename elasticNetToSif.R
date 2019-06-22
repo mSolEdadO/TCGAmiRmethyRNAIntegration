@@ -64,3 +64,17 @@ pdf("proporPredictores05.pdf")
  heatmap.2(prediTs[c(1:44,46:50),],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[geneClass$class],Rowv=F,Colv=F,na.color="gray",main="total",labRow=geneClass$hgnc_symbol)
  heatmap.2(prediMs[c(1:44,46:50),],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[geneClass$class],Rowv=F,Colv=F,na.color="gray",main="total",labRow=geneClass$hgnc_symbol)
 dev.off()
+###############################
+#pa' lumA			     
+modelsToSif=function(file){
+modelo=loadRData(file)
+f=gsub("parallel-caret/eigen0.5/ENSG00000011426.LumA.RData","",gsub(".LumA.RData","",file))
+predictores=predictors(modelo)
+qualy=modelo$results
+qualy=cbind(f,qualy,length(grep("hsa|ENSG",predictores,perl=T,invert=T)),length(grep("ENSG",predictores)),length(grep("hsa",predictores)))
+qualy=qualy[qualy$alpha==modelo$bestTune$alpha&qualy$lambda==modelo$bestTune$lambda,]
+sif=as.array(coef(modelo$finalModel,modelo$bestTune$lambda))
+rm(modelo);gc()
+sif=cbind(f,rownames(sif),sif)
+sif=sif[sif[,3]>0,]
+return(list(quality=qualy,g=sif))}
