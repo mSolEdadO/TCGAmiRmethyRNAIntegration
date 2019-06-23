@@ -63,15 +63,26 @@ $normal
 ########### miR
 ##############################################################################
 library(multiMiR)#https://www.bioconductor.org/packages/devel/bioc/vignettes/multiMiR/inst/doc/multiMiR.html
+#Searching mirecords, mirtarbase, tarbase,diana_microt,elmmo, microcosm, miranda, mirdbpictar, pita, targetscan, pharmaco_mir ...
 
 #get all the interactions of selected miRs
-mirInteractions=do.call(rbind,lapply(unique(as.character(interacs[i,2])),function(x) 
-	get_multimir(mirna = x, summary = F)@data))
-
-#found interactions have been reported? NOP
 i=grep("hsa",interacs[,2])
-knownTarget=apply(interacs[i,],1,function(x) 
-	sum(mirInteractions$mature_mirna_id==x[2]&mirInteractions$target_symbol==x[3]))
+length(unique(interacs[i,2]))
+#[1] 241
+miRNAs   = list_multimir("mirna")
+sum(unique(interacs[i,2])%in%miRNAs$mature_mirna_id)
+#[1] 7
+mirInteractions=lapply(miRNAs$mature_mirna_id[miRNAs$mature_mirna_id%in%unique(interacs[i,2])],function(x)
+	get_multimir(mirna = x, summary = F,table="all")@data)
+#found interactions have been reported? NOP
+knownTarget=sapply(mirInteractions,function(x)
+	sum(interacs[i[interacs[i,2]%in%x$mature_mirna_id],3]%in%x$target_symbol))
+sum(knownTarget)
+#[1] 0
+mirInteractions=lapply(unique(interacs[i,3]),function(x)
+	get_multimir(target = x, summary = F,table="all")@data)
+knownTarget=sapply(mirInteractions,function(x)
+	sum(interacs[i[interacs[i,3]%in%x$target_symbol],2]%in%x$mature_mirna_id))
 sum(knownTarget)
 #[1] 0
 
