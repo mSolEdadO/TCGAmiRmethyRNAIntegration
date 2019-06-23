@@ -2,7 +2,7 @@ library(biomaRt)
 library(rentrez)
 
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","external_gene_name","entrezgene"), mart=mart)
+myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), mart=mart)
 myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 
 #hgnc_symbol instead of ensemblID
@@ -32,23 +32,23 @@ methy=read.table("ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
 #am I linking genes with their known regulating CpGs? NOP
 i=grep("ENSG|hsa",interacs[,2],perl=T,invert=T)
 length(i)
-#[1] 3997
+#[1] 4202
 knownReg=sapply(i,function(x) 
 	grep(interacs[x,3],methy$gene_HGNC[methy$probeID==interacs[x,4]]))
 sum(sapply(knownReg,length)==0)
-#[1] 3997
+#[1] 4202
 #are they in the same chr?
 sameChr=apply(interacs[i,1:2],1,function(x) 
 	sum(myannot$chromosome_name[myannot$ensembl_gene_id==x[1]]==methy$CpG_chrm[methy$probeID==x[2]]))
 sum(sameChr!=0) 
-#[1] 156 sólo estos están en el mismo cromosoma y están lejos ↓
+#[1] 173 sólo estos están en el mismo cromosoma y están lejos ↓
 interacs=cbind(interacs,NA)
-interacs[i,5]="n"
-interacs[i[sameChr!=0],5]="y"
-temp=interacs[interacs[,5]=="y",1:2]#todos afectan PTTG1  
+interacs[i,6]="n"
+interacs[i[sameChr!=0],6]="y"
+temp=interacs[which(interacs[,6]=="y"),]#todos afectan PTTG1  
 apply(methy[methy$probeID%in%temp[,2],2:3]-myannot$start_position[myannot$ensembl_gene_id=="ENSG00000164611"],2,function(x) min(abs(x)))
 #CpG_beg CpG_end 
-#4076136 4076138 
+#2846047 2846045 
 lapply(sifs,function(x) sum(x[,1]=="ENSG00000164611"&x[,2]%in%temp[,2]))
 $Basal
 [1] 54
@@ -58,6 +58,8 @@ $LumB
 [1] 30
 $normal
 [1] 0
+$LumA
+[1] 17
 
 ##############################################################################
 ########### miR
@@ -117,7 +119,7 @@ intrcsTF=apply(interacs[i,3:4],1,function(x) knownTF(x[2],x[1]))
 sum(intrcsTF!="")
 #[1] 188 interactions with TFs reported in DB
 interacs=cbind(interacs,NA)
-intercs[i,5]=intrcsTF
+intercs[i,6]=intrcsTF
 colnames(interacs)=c("pam50","predictor","pam50Symbol","predictorSymbol","TFsupportedBy")
 length(unique(interacs[interacs[,5]!=""&!is.na(interacs[,5]),4]))
 #[1] 131 TFs involved in known TF-target interaction
