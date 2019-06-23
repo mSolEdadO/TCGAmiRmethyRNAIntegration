@@ -49,18 +49,46 @@ temp=interacs[which(interacs[,6]=="y"),]#todos afectan PTTG1
 apply(methy[methy$probeID%in%temp[,2],2:3]-myannot$start_position[myannot$ensembl_gene_id=="ENSG00000164611"],2,function(x) min(abs(x)))
 #CpG_beg CpG_end 
 #2846047 2846045 
-lapply(sifs,function(x) sum(x[,1]=="ENSG00000164611"&x[,2]%in%temp[,2]))
-$Basal
-[1] 54
-$Her2
-[1] 72
-$LumB
-[1] 30
-$normal
-[1] 0
-$LumA
-[1] 17
-
+lapply(sifs,function(x) apply(do.call(rbind,apply(x,1,function(y) interacs[interacs[,1]==y[1]&interacs[,2]==y[2],5:6])),2,table))
+#$Basal$TFsupportedBy
+#                                ITFP        Marbach2016             TRRUST 
+#             4361                  4                 18                  1 
+#TRRUST,Marbach2016 
+#                 2 
+#$Basal$sameChr
+#  n   y 
+#852  54 
+#$Her2$TFsupportedBy
+#                   ITFP Marbach2016 
+#       1945           3           7 
+#$Her2$sameChr
+#   n    y 
+#2237   72 
+#$LumB$TFsupportedBy
+#                 ENCODE        ITFP Marbach2016        TRED TRED,TRRUST 
+#       3500           1           3          16           1           1 
+#     TRRUST 
+#          1 
+#$LumB$sameChr
+#  n   y 
+#752  30 
+#$normal$TFsupportedBy
+#                                           ITFP        ITFP,Marbach2016 
+#                   2682                      50                       1 
+#ITFP,TRRUST,Marbach2016             Marbach2016             TRED,TRRUST 
+#                      1                      11                       1 
+#     TRRUST,Marbach2016 
+#                      2 
+#$normal$sameChr
+#< table of extent 0 >
+#$LumA$TFsupportedBy
+#                                         ENCODE                    ITFP 
+#                   8335                       1                      14 
+#            Marbach2016 TRED,TRRUST,Marbach2016      TRRUST,Marbach2016 
+#                     47                       1                       1 
+#$LumA$sameChr
+#  n   y 
+#188  17 
 ##############################################################################
 ########### miR
 ##############################################################################
