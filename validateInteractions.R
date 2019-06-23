@@ -91,12 +91,14 @@ sum(knownTarget)
 ##############################################################################
 library(tftargets)#https://github.com/slowkow/tftargets
 
-TF=read.table("data/TFCheckpoint_download_180515.txt",header=T,sep='\t',fill=T,quote="")
-temp=myannot[myannot$ensembl_gene_id%in%unique(interacs[,2]),c(1,4)]
-i=which(interacs[,2]%in%temp$ensembl_gene_id[temp$entrezgene%in%TF$entrez_human])
-length(i)
+#TF=read.table("data/TFCheckpoint_download_180515.txt",header=T,sep='\t',fill=T,quote="")
+#temp=myannot[myannot$ensembl_gene_id%in%unique(interacs[,2]),c(1,4)]
+#i=which(interacs[,2]%in%temp$ensembl_gene_id[temp$entrezgene%in%TF$entrez_human])
+#length(i)
 #[1] 2135 interactions with TFs
+
 pam50annot=myannot[myannot$ensembl_gene_id%in%unique(interacs[,1]),]
+i=grep("ENSG",interacs[,2])
 
 knownTF=function(TF,target){
 support=character()
@@ -113,7 +115,9 @@ return(paste(support,collapse=','))}#CAGE+binding motifs
 
 intrcsTF=apply(interacs[i,3:4],1,function(x) knownTF(x[2],x[1]))
 sum(intrcsTF!="")
-#[1] 84 interactions with TFs reported in DB
+#[1] 188 interactions with TFs reported in DB
 interacs=cbind(interacs,NA)
-intercs[i,]=intrcsTF
+intercs[i,5]=intrcsTF
 colnames(interacs)=c("pam50","predictor","pam50Symbol","predictorSymbol","TFsupportedBy")
+length(unique(interacs[interacs[,5]!=""&!is.na(interacs[,5]),4]))
+#[1] 131 TFs involved in known TF-target interaction
