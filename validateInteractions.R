@@ -151,3 +151,29 @@ intercs[i,6]=intrcsTF
 colnames(interacs)=c("pam50","predictor","pam50Symbol","predictorSymbol","TFsupportedBy")
 length(unique(interacs[interacs[,5]!=""&!is.na(interacs[,5]),4]))
 #[1] 131 TFs involved in known TF-target interaction
+#####################################################################
+######coherence of regulation
+#####################################################################
+	     
+tempi=sifs[c(1:2,3,5)]
+tempi=lapply(tempi,function(x) x[x[,2]!="(Intercept)",])
+i.cpg=lapply(tempi,function(x) grep("hsa|ENSG",x[,2],perl=T,invert=T))
+i.mir=lapply(tempi,function(x) grep("hsa",x[,2]))
+lapply(1:4,function(x) sum(sapply(i.mir[[x]],function(y) (DE.miR[[x]]$logFC[rownames(DE.miR[[x]])==tempi[[x]][y,2]]>0&DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==tempi[[x]][y,1]]<0)|(DE.miR[[x]]$logFC[rownames(DE.miR[[x]])==tempi[[x]][y,2]]<0&DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==tempi[[x]][y,1]]>0)))/length(i.mir[[x]]))
+[[1]]Basal  
+[1] 0.5
+[[2]]Her2  
+[1] 0.4117647
+[[3]]LumB  
+[1] 0.5272727
+[[4]]LumA
+[1] 0.5208333
+lapply(1:4,function(x) sum(sapply(i.cpg[[x]],function(y) (DM.cpg1[[x]]$logFC[rownames(DM.cpg1[[x]])==tempi[[x]][y,2]]>0&DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==tempi[[x]][y,1]]<0)|(DM.cpg1[[x]]$logFC[rownames(DM.cpg1[[x]])==tempi[[x]][y,2]]<0&DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==tempi[[x]][y,1]]>0)))/length(i.cpg[[x]]))
+[[1]]
+[1] 0.513245
+[[2]]
+[1] 0.5967951
+[[3]]
+[1] 0.5652174
+[[4]]
+[1] 0.4780488
