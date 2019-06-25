@@ -20,18 +20,6 @@ notarg=table(interacs[i,4])
 temp=sapply(1:length(notarg),function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(notarg)[x]],notarg[x]))
 interacs[i,4]=unlist(temp)
 
-#how many times both entities are mentioned in the same paper
-comention=pbsapply(round(seq(1,21984,length=7)),function(i)
- apply(interacs[i:(i+3664),3:4],1,function(x) {
- 	reque=entrez_search(db = "pubmed", term = paste(x[1]," AND ",x[2],collapse=" "));
- 	Sys.sleep(0.1);
- 	return(reque)}))
-cuentas=as.numeric(apply(comention,c(1,2),function(x) unlist(x[[1]][2])))
-query=as.character(apply(comention,c(1,2),function(x) unlist(x[[1]][4])))
-comen=cbind(query,cuentas)
-comen=comen[comen[,2]!="0",]
-#cuentas=apply(interacs,1,function(x) comen[intersect(grep(x[3],comen[,1],ignore.case=T,fixed=T),grep(x[4],comen[,1],ignore.case=T)),2])
-#cat temp|perl -pe 'unless(/ AND \(/){s/.*?\sOR//g}unless(/\) AND \(/){s/\(.*?OR//g;s/\".*?OR //;s/(^ |\"|\)|\[All Fields\])//g}'
 ##############################################################################
 ########### miR
 ##############################################################################
@@ -120,6 +108,44 @@ temp=interacs[which(interacs[,6]=="y"),]#todos afectan PTTG1
 apply(methy[methy$probeID%in%temp[,2],2:3]-myannot$start_position[myannot$ensembl_gene_id=="ENSG00000164611"],2,function(x) min(abs(x)))
 #CpG_beg CpG_end 
 #2846047 2846045 
+      
+#####################################################################
+#######how many times terms are mentioned in literature
+#####################################################################
+#both on the same paper
+comention=pbsapply(round(seq(1,21984,length=7)),function(i)
+ apply(interacs[i:(i+3664),3:4],1,function(x) {
+ 	reque=entrez_search(db = "pubmed", term = paste(x[1]," AND ",x[2],collapse=" "));
+ 	Sys.sleep(0.1);
+ 	return(reque)}))
+cuentas=as.numeric(apply(comention,c(1,2),function(x) unlist(x[[1]][2])))
+query=as.character(apply(comention,c(1,2),function(x) unlist(x[[1]][4])))
+comen=cbind(query,cuentas)
+comen=comen[comen[,2]!="0",]
+#cat temp|perl -pe 'unless(/ AND \(/){s/.*?\sOR//g}unless(/\) AND \(/){s/\(.*?OR//g;s/\".*?OR //;s/(^ |\"|\)|\[All Fields\])//g}'
+comention=read.table("Downloads/temp1",sep='\t',header=T)
+temp=t(sapply(strsplit(as.character(comention$query)," +AND +",perl=T),as.character))
+comention=cbind(comention,temp)
+comention[,3]=toupper(comention[,3])
+comention[,4]=toupper(comention[,4])
+
+#each mentioned
+query=unique(unlist(comention[,3:4]))
+mention=pbsapply(query,function(x){
+	reque=entrez_search(db = "pubmed", term = x);
+	Sys.sleep(0.1);
+	return(reque)})
+mention=as.matrix(t(mention)[,2])
+
+i=apply(comention,1,function(x) which(interacs[,3]==x[3]&interacs[,4]==x[4]))
+interacs=cbind(interacs,NA)
+interacs[i,7]=comention$cuentas
+temp=t(apply(interacs[i,],1,function(x) 
+	cbind(mention[rownames(mention)==x[3],2],mention[rownames(mention)==x[4],2])))
+interacs=cbind(interacs,NA,NA)
+interacs[i,8]=temp[,1]
+interacs[i,9]=temp[,2]
+colnames(interacs)[7:9]=c("comention","pam50Mention","predictorMention")
 
 #####################################################################
 ######all together per subtype
@@ -129,6 +155,7 @@ sifs1=lapply(sifs,function(x) x[x[,2]!="(Intercept)",])
 temp=lapply(sifs,function(x) do.call(rbind,apply(x,1,function(y) interacs[interacs[,1]==y[1]&interacs[,2]==y[2],])))
 sifs1=lapply(1:5,function(x) cbind(as.matrix(sifs1[[x]][,3]),as.matrix(temp[[x]])))
 names(sifs1)=names(sifs)
+	     
 lapply(sifs1,function(x) apply(x[,6:7],2,table,useNA="ifany"))
 #$Basal$TFsupportedBy
 #                                 ITFP        Marbach2016             TRRUST 
