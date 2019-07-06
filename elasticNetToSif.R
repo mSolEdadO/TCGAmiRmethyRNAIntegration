@@ -68,7 +68,7 @@ dev.off()
 #pa' lumA			     
 modelsToSif=function(file){
 modelo=loadRData(file)
-f=gsub("parallel-caret/eigen0.5/ENSG00000011426.LumA.RData","",gsub(".LumA.RData","",file))
+f=gsub("parallel-caret/","",gsub(".LumA.RData","",file))
 predictores=predictors(modelo)
 qualy=modelo$results
 qualy=cbind(f,qualy,length(grep("hsa|ENSG",predictores,perl=T,invert=T)),length(grep("ENSG",predictores)),length(grep("hsa",predictores)))
@@ -78,3 +78,12 @@ rm(modelo);gc()
 sif=cbind(f,rownames(sif),sif)
 sif=sif[sif[,3]>0,]
 return(list(quality=qualy,g=sif))}
+
+lambda=unlist(lapply(quality,function(x) as.numeric(x[,3])))
+lambda=as.data.frame(cbind(lambda,c(rep("Basal",50),rep("Her2",50),rep("LumB",50),rep("normal",50))))
+colnames(lambda)[2]="subtype"
+ggplot(lambda,aes(x=lambda))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)
+rmse=unlist(lapply(quality,function(x) as.numeric(x[,4])))
+rmse=as.data.frame(cbind(rmse,c(rep("Basal",50),rep("Her2",50),rep("LumB",50),rep("normal",50))))
+colnames(rmse)[2]="subtype"
+ggplot(rmse,aes(x=rmse))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)
