@@ -1,17 +1,25 @@
+lambda=unlist(lapply(quality,function(x) as.numeric(x[,3])))
+lambda=as.data.frame(cbind(lambda,as.character(sapply(names(quality),rep,50))))
+colnames(lambda)[2]="subtype"
+ggplot(lambda,aes(x=as.numeric(lambda)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
+rmse=unlist(lapply(quality,function(x) as.numeric(x[,4])))
+rmse=as.data.frame(cbind(rmse,as.character(sapply(names(quality),rep,50))))
+colnames(rmse)[2]="subtype"
+ggplot(rmse,aes(x=as.numeric(rmse)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
+
 library(biomaRt)
 library(rentrez)
 
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://apr2019.archive.ensembl.org")
 myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), mart=mart)
 myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 
 #hgnc_symbol instead of ensemblID
 interacs=unique(do.call(rbind,sifs))
-interacs=apply(interacs,2,as.character)
 interacs=interacs[order(interacs[,1]),]
 interacs=interacs[interacs[,2]!="(Intercept)",]
 targets=table(interacs[,1])
-temp=sapply(1:49,function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(targets)[x]],targets[x]))
+temp=sapply(1:50,function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(targets)[x]],targets[x]))
 interacs=cbind(interacs,unlist(temp))
 interacs=interacs[order(interacs[,2]),]
 i=grep("ENSG",interacs[,2])
@@ -29,8 +37,8 @@ library(multiMiR)#https://www.bioconductor.org/packages/devel/bioc/vignettes/mul
 #get all the interactions of selected miRs
 i=grep("hsa",interacs[,2])
 length(unique(interacs[i,2]))
-#[1] 102
-miRNAs   = list_multimir("mirna")
+#[1] 139
+miRNAs = list_multimir("mirna")
 sum(unique(interacs[i,2])%in%miRNAs$mature_mirna_id)
 #[1] 4
 mirInteractions=lapply(miRNAs$mature_mirna_id[miRNAs$mature_mirna_id%in%unique(interacs[i,2])],function(x)
@@ -76,9 +84,9 @@ return(paste(support,collapse=','))}#CAGE+binding motifs
 
 intrcsTF=apply(interacs[i,4:5],1,function(x) knownTF(x[2],x[1]))
 sum(intrcsTF!="")
-#[1] 74 interactions with TFs reported in DB
+#[1] 202 interactions with TFs reported in DB
 interacs=cbind(interacs,NA)
-intercs[i,6]=intrcsTF
+interacs[i,6]=intrcsTF
 colnames(interacs)=c("pam50","predictor","coef","pam50Symbol","predictorSymbol","TFsupportedBy")
 length(unique(interacs[interacs[,6]!=""&!is.na(interacs[,6]),5]))
 #[1] 131 TFs with known TF-target interaction in tftargets
@@ -112,19 +120,18 @@ apply(methy[methy$probeID%in%temp[,2],2:3]-myannot$start_position[myannot$ensemb
 #######how many times terms are mentioned in literature
 #####################################################################
 #both on the same paper
-comention=pbsapply(round(seq(1,7031,length=100)),function(i)
-  apply(interacs[i:(i+71),4:5],1,function(x) {
+comention=pbsapply(round(seq(1,11119,length=20)),function(i)
+  apply(interacs[i:(i+585),4:5],1,function(x) {
   reque=entrez_search(db = "pubmed", term = paste(x[1]," AND ",x[2],collapse=" "));
   Sys.sleep(0.1);
  return(reque)}))
 
-		   
-		   cuentas=as.numeric(apply(comention,c(1,2),function(x) unlist(x[[1]][2])))
+cuentas=as.numeric(apply(comention,c(1,2),function(x) unlist(x[[1]][2])))
 query=as.character(apply(comention,c(1,2),function(x) unlist(x[[1]][4])))
 comen=cbind(query,cuentas)
 comen=comen[comen[,2]!="0",]
 #cat temp|perl -pe 'unless(/ AND \(/){s/.*?\sOR//g}unless(/\) AND \(/){s/\(.*?OR//g;s/\".*?OR //;s/(^ |\"|\)|\[All Fields\])//g}'
-comention=read.table("Downloads/temp1",sep='\t',header=T)
+comention=read.table("Downloads/temp",sep='\t',header=T)
 temp=t(sapply(strsplit(as.character(comention$query)," +AND +",perl=T),as.character))
 comention=cbind(comention,temp)
 comention[,3]=toupper(comention[,3])
