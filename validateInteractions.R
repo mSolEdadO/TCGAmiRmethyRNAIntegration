@@ -7,18 +7,18 @@ myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 
 #hgnc_symbol instead of ensemblID
 interacs=unique(do.call(rbind,sifs))
+interacs=apply(interacs,2,as.character)
 interacs=interacs[order(interacs[,1]),]
-interacs=interacs[interacs[,2]!="",]
 interacs=interacs[interacs[,2]!="(Intercept)",]
 targets=table(interacs[,1])
-temp=sapply(1:50,function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(targets)[x]],targets[x]))
+temp=sapply(1:49,function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(targets)[x]],targets[x]))
 interacs=cbind(interacs,unlist(temp))
 interacs=interacs[order(interacs[,2]),]
 i=grep("ENSG",interacs[,2])
 interacs=cbind(interacs,interacs[,2])
-notarg=table(interacs[i,4])
+notarg=table(interacs[i,2])
 temp=sapply(1:length(notarg),function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(notarg)[x]],notarg[x]))
-interacs[i,4]=unlist(temp)
+interacs[i,5]=unlist(temp)
 
 ##############################################################################
 ########### miR
@@ -29,10 +29,10 @@ library(multiMiR)#https://www.bioconductor.org/packages/devel/bioc/vignettes/mul
 #get all the interactions of selected miRs
 i=grep("hsa",interacs[,2])
 length(unique(interacs[i,2]))
-#[1] 241
+#[1] 102
 miRNAs   = list_multimir("mirna")
 sum(unique(interacs[i,2])%in%miRNAs$mature_mirna_id)
-#[1] 7
+#[1] 4
 mirInteractions=lapply(miRNAs$mature_mirna_id[miRNAs$mature_mirna_id%in%unique(interacs[i,2])],function(x)
 	get_multimir(mirna = x, summary = F,table="all")@data)
 #found interactions have been reported? NOP
@@ -74,13 +74,13 @@ if(target%in%Marbach2016[[TF]]){support=c(support,"Marbach2016")}
 return(paste(support,collapse=','))}#CAGE+binding motifs
 #no sé cuando recopilaron los datos
 
-intrcsTF=apply(interacs[i,3:4],1,function(x) knownTF(x[2],x[1]))
+intrcsTF=apply(interacs[i,4:5],1,function(x) knownTF(x[2],x[1]))
 sum(intrcsTF!="")
-#[1] 188 interactions with TFs reported in DB
+#[1] 74 interactions with TFs reported in DB
 interacs=cbind(interacs,NA)
-intercs[i,5]=intrcsTF
-colnames(interacs)=c("pam50","predictor","pam50Symbol","predictorSymbol","TFsupportedBy")
-length(unique(interacs[interacs[,5]!=""&!is.na(interacs[,5]),4]))
+intercs[i,6]=intrcsTF
+colnames(interacs)=c("pam50","predictor","coef","pam50Symbol","predictorSymbol","TFsupportedBy")
+length(unique(interacs[interacs[,6]!=""&!is.na(interacs[,6]),5]))
 #[1] 131 TFs with known TF-target interaction in tftargets
 
 ##############################################################################
@@ -91,34 +91,35 @@ methy=read.table("ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
 #am I linking genes with their known regulating CpGs? NOP
 i=grep("ENSG|hsa",interacs[,2],perl=T,invert=T)
 length(i)
-#[1] 4202
+#[1] 3
 knownReg=sapply(i,function(x) 
-	grep(interacs[x,3],methy$gene_HGNC[methy$probeID==interacs[x,4]]))
+	grep(interacs[x,4],methy$gene_HGNC[methy$probeID==interacs[x,2]]))
 sum(sapply(knownReg,length)==0)
-#[1] 4202
+#[1] 3
 #are they in the same chr?
 sameChr=apply(interacs[i,1:2],1,function(x) 
 	sum(myannot$chromosome_name[myannot$ensembl_gene_id==x[1]]==methy$CpG_chrm[methy$probeID==x[2]]))
 sum(sameChr!=0) 
-#[1] 173 sólo estos están en el mismo cromosoma y están lejos ↓
-interacs=cbind(interacs,NA)
-interacs[i,6]="n"
-interacs[i[sameChr!=0],6]="y"
-temp=interacs[which(interacs[,6]=="y"),]#todos afectan PTTG1  
+#[1] 1 sólo este está en el mismo cromosoma y están lejos ↓
+temp=interacs[i[sameChr!=0],]
+#          pam50  predictor       coef pam50Symbol predictorSymbol
+#ENSG00000129514 cg00955911 -0.2298019        ANLN      cg00955911
 apply(methy[methy$probeID%in%temp[,2],2:3]-myannot$start_position[myannot$ensembl_gene_id=="ENSG00000164611"],2,function(x) min(abs(x)))
 #CpG_beg CpG_end 
-#2846047 2846045 
-      
+#122829073 122829071 
+     
 #####################################################################
 #######how many times terms are mentioned in literature
 #####################################################################
 #both on the same paper
-comention=pbsapply(round(seq(1,21984,length=7)),function(i)
- apply(interacs[i:(i+3664),3:4],1,function(x) {
- 	reque=entrez_search(db = "pubmed", term = paste(x[1]," AND ",x[2],collapse=" "));
- 	Sys.sleep(0.1);
- 	return(reque)}))
-cuentas=as.numeric(apply(comention,c(1,2),function(x) unlist(x[[1]][2])))
+comention=pbsapply(round(seq(1,7031,length=100)),function(i)
+  apply(interacs[i:(i+71),4:5],1,function(x) {
+  reque=entrez_search(db = "pubmed", term = paste(x[1]," AND ",x[2],collapse=" "));
+  Sys.sleep(0.1);
+ return(reque)}))
+
+		   
+		   cuentas=as.numeric(apply(comention,c(1,2),function(x) unlist(x[[1]][2])))
 query=as.character(apply(comention,c(1,2),function(x) unlist(x[[1]][4])))
 comen=cbind(query,cuentas)
 comen=comen[comen[,2]!="0",]
