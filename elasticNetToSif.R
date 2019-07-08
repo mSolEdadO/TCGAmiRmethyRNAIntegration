@@ -8,29 +8,23 @@ loadRData <- function(fileName){
 
 modelsToSif=function(subti){
 f=files[grep(subti,files)]
-modelos=list()
-print("Loading files")
-modelos=lapply(1:length(f),function(x) modelos[[x]]=loadRData(f[x]))
-f=sapply(strsplit(gsub("parallel-caret/eigenscaled/","",f),".",fixed=T),function(x) x[1])
-
-print("Getting quality table")
-predictores=lapply(modelos,function(x) predictors(x))
-transcri=sapply(predictores,function(x) x[grep("ENSG",x)])
-mirs=lapply(predictores,function(x) x[grep("hsa",x)])
-cpgs=lapply(predictores,function(x) x[grep("hsa|ENSG",x,perl=T,invert=T)])
-qualy=lapply(modelos,function(x) x$results)
-qualy=lapply(1:length(modelos),function(x) 
-qualy[[x]][qualy[[x]]$alpha==modelos[[x]]$bestTune$alpha&qualy[[x]]$lambda==modelos[[x]]$bestTune$lambda,])
-qualy=cbind(f,do.call(rbind,qualy))
-qualy=cbind(qualy,sapply(cpgs,length),sapply(transcri,length),sapply(mirs,length))
-
-print("Building sif")
-coefis=lapply(1:length(modelos),function(x) 
-as.array(coef(modelos[[x]]$finalModel,modelos[[x]]$bestTune$lambda)))
-coefis=lapply(1:length(modelos),function(x) cbind(f[x],rownames(coefis[[x]]),coefis[[x]]))
-#coefis=lapply(coefis,function(x) x[x>0,])
-sif=do.call(rbind,coefis)
-return(list(quality=qualy,sif=sif))}
+	modelos=sapply(1:length(f),function(x) {
+	gen=lapply(strsplit(gsub("parallel-caret/","",f[x]),".",fixed=T),function(y) y[1])
+	print(paste("Loading",gen,sep=" "))	
+	modelo=loadRData(f[x])
+	predictores=predictors(x)
+	transcri=predictores[grep("ENSG",predictores)]
+	mirs=predictores[grep("hsa",predictores)]
+	cpgs=predictores[grep("hsa|ENSG",x,perl=T,invert=T)]
+    print("Getting quality table")
+	qualy=modelo$results
+	qualy=cbind(gen,qualy,length(cpgs),length(transcri),length(mirs))
+	qualy=qualy[qualy$alpha==modelo$bestTune$alpha&qualy$lambda==modelo$bestTune$lambda,]
+	print("Building sif")
+	coefis=as.array(coef(modelo$finalModel,modelo$bestTune$lambda))
+	coefis=cbind(gen,rownames(coefis),coefis)
+	coefis[as.numeric(coefis[,3])!=0,]
+return(list(quality=qualy,sif=coefis))})}
 
 #list model files
 files=list.files("parallel-caret/eigenscaled/",full.names=T)
@@ -39,6 +33,7 @@ files=gsub("//","/",files)
 
 listos=c("Basal","Her2","LumB","normal")#subtype models I want
 resultados=lapply(listos,modelsToSif)
+
 names(resultados)=listos
 sifs=lapply(resultados,function(x) x$sif[as.numeric(x$sif[,3])!=0,])#needed!
 quality=lapply(resultados,function(x) x$quality)
