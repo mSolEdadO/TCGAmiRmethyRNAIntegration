@@ -8,29 +8,23 @@ loadRData <- function(fileName){
 
 modelsToSif=function(subti){
 f=files[grep(subti,files)]
-modelos=list()
-print("Loading files")
-modelos=lapply(1:length(f),function(x) modelos[[x]]=loadRData(f[x]))
-f=sapply(strsplit(gsub("parallel-caret/eigenscaled/","",f),".",fixed=T),function(x) x[1])
-
-print("Getting quality table")
-predictores=lapply(modelos,function(x) predictors(x))
-transcri=sapply(predictores,function(x) x[grep("ENSG",x)])
-mirs=lapply(predictores,function(x) x[grep("hsa",x)])
-cpgs=lapply(predictores,function(x) x[grep("hsa|ENSG",x,perl=T,invert=T)])
-qualy=lapply(modelos,function(x) x$results)
-qualy=lapply(1:length(modelos),function(x) 
-qualy[[x]][qualy[[x]]$alpha==modelos[[x]]$bestTune$alpha&qualy[[x]]$lambda==modelos[[x]]$bestTune$lambda,])
-qualy=cbind(f,do.call(rbind,qualy))
-qualy=cbind(qualy,sapply(cpgs,length),sapply(transcri,length),sapply(mirs,length))
-
-print("Building sif")
-coefis=lapply(1:length(modelos),function(x) 
-as.array(coef(modelos[[x]]$finalModel,modelos[[x]]$bestTune$lambda)))
-coefis=lapply(1:length(modelos),function(x) cbind(f[x],rownames(coefis[[x]]),coefis[[x]]))
-#coefis=lapply(coefis,function(x) x[x>0,])
-sif=do.call(rbind,coefis)
-return(list(quality=qualy,sif=sif))}
+	modelos=lapply(1:length(f),function(x) {
+	gen=sapply(strsplit(gsub("parallel-caret/","",f[x]),".",fixed=T),function(y) y[1])
+	print(paste("Loading",gen,sep=" "))	
+	load(f[x])
+	predictores=predictors(model)
+	transcri=predictores[grep("ENSG",predictores)]
+	mirs=predictores[grep("hsa",predictores)]
+	cpgs=predictores[grep("hsa|ENSG",predictores,perl=T,invert=T)]
+    print("Getting quality table")
+	qualy=model$results
+	qualy=cbind(gen,qualy,length(cpgs),length(transcri),length(mirs))
+	qualy=qualy[qualy$alpha==model$bestTune$alpha&qualy$lambda==model$bestTune$lambda,]
+	print("Building sif")
+	coefis=as.array(coef(model$finalModel,model$bestTune$lambda))
+	coefis=cbind(gen,rownames(coefis),coefis)
+	coefis=coefis[as.numeric(coefis[,3])!=0,]
+return(list(quality=qualy,sif=coefis))})}
 
 #list model files
 files=list.files("parallel-caret/eigenscaled/",full.names=T)
@@ -40,42 +34,26 @@ files=gsub("//","/",files)
 listos=c("Basal","Her2","LumB","normal")#subtype models I want
 resultados=lapply(listos,modelsToSif)
 names(resultados)=listos
-sifs=lapply(resultados,function(x) x$sif[as.numeric(x$sif[,3])!=0,])#needed!
+sifs=lapply(resultados,function(x) x$sif)
 quality=lapply(resultados,function(x) x$quality)
 save(sifs,quality,file="modelos.RData")
-	       
-#the number of selected predictors is the same across subtypes?
-prediTot=do.call(cbind,lapply(quality,function(x) rowSums(x[,10:12])))
-rownames(prediTot)=quality$Her2[,1]
-geneClass=read.table("resultados/pam50.tsv")
-prediTot=prediTot[order(match(rownames(prediTot),geneClass$ensembl_gene_id)),]
-prediCs=do.call(cbind,lapply(quality,function(x) x[,10]))
-prediTs=do.call(cbind,lapply(quality,function(x) x[,11]))
-prediMs=do.call(cbind,lapply(quality,function(x) x[,12]))
-rownames(prediCs)=quality$Her2[,1]
-rownames(prediTs)=quality$Her2[,1]
-rownames(prediMs)=quality$Her2[,1]
-prediCs=prediCs[order(match(rownames(prediCs),geneClass$ensembl_gene_id)),]
-prediTs=prediTs[order(match(rownames(prediTs),geneClass$ensembl_gene_id)),]
-prediMs=prediMs[order(match(rownames(prediMs),geneClass$ensembl_gene_id)),]   
-pdf("proporPredictores05.pdf")
- heatmap.2(prediTot[c(1:44,46:50),],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[geneClass$class],Rowv=F,Colv=F,na.color="gray",main="total",labRow=geneClass$hgnc_symbol)
- heatmap.2(prediCs[c(1:44,46:50),],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[geneClass$class],Rowv=F,Colv=F,na.color="gray",main="total",labRow=geneClass$hgnc_symbol)
- heatmap.2(prediTs[c(1:44,46:50),],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[geneClass$class],Rowv=F,Colv=F,na.color="gray",main="total",labRow=geneClass$hgnc_symbol)
- heatmap.2(prediMs[c(1:44,46:50),],dendrogram="none",trace="none",col=c("white",rev(heat.colors(100))),colRow=rainbow(4)[geneClass$class],Rowv=F,Colv=F,na.color="gray",main="total",labRow=geneClass$hgnc_symbol)
+#####################################
+#how many predictors are selected por pam50 gene per subtype	       
+sifs=lapply(sifs,function(x) x[x[,2]!="(Intercept)",])
+totales=do.call(rbind,lapply(1:5,function(x) cbind(names(totales)[x],totales[[x]])))
+totales=cbind(totales,rownames(totales))
+g=graph.edgelist(totales[,c(1,3)],directed=F)
+E(g)$weight=as.numeric(totales[,2])
+g=t(as.matrix(g[unique(totales[,1]),unique(totales[,3])]))
+g=g[order(match(rownames(g),pam50$ensembl_gene_id)),]
+pdf("predictoresTotales.pdf")
+ heatmap.2(g,trace="none",col=rev(heat.colors(100)),colRow=rainbow(4)[pam50$class],Rowv=F,Colv=F,na.color="gray",main="Predictores por gen",labRow=pam50$hgnc_symbol)
 dev.off()
-###############################
-#pa' lumA			     
-modelsToSif=function(file){
-modelo=loadRData(file)
-f=gsub("parallel-caret/","",gsub(".LumA.RData","",file))
-predictores=predictors(modelo)
-qualy=modelo$results
-qualy=cbind(f,qualy,length(grep("hsa|ENSG",predictores,perl=T,invert=T)),length(grep("ENSG",predictores)),length(grep("hsa",predictores)))
-qualy=qualy[qualy$alpha==modelo$bestTune$alpha&qualy$lambda==modelo$bestTune$lambda,]
-sif=as.array(coef(modelo$finalModel,modelo$bestTune$lambda))
-rm(modelo);gc()
-sif=cbind(f,rownames(sif),sif)
-sif=sif[sif[,3]>0,]
-return(list(quality=qualy,g=sif))}
-
+#####################################
+#patters of expression/methylation of selected predictors per subtype
+i=unique(unlist(lapply(sifs,function(x) unique(x[,2]))))
+i=which(rownames(concatenadas$LumA)%in%i)
+selec=do.call(cbind,lapply(concatenadas,function(x) x[i,]))
+pdf("selectedHeat.pdf")
+heatmap.2(selec,col=rev(heat.colors(74)),scale="none",Colv=F,trace="none",ColSideColors=rainbow(5)[subtis],symm=F,symkey=F,labCol=NA,dendrogram="row",breaks=col,labRow=NA,RowSideColors=c("cornflowerblue","brown1")[rowColors])
+dev.off()
