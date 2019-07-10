@@ -163,7 +163,7 @@ sifs1=lapply(sifs,function(x) x[x[,2]!="(Intercept)",])
 temp=lapply(sifs,function(x) do.call(rbind,apply(x,1,function(y) interacs[interacs[,1]==y[1]&interacs[,2]==y[2],])))
 sifs1=lapply(1:5,function(x) cbind(as.matrix(sifs1[[x]][,3]),as.matrix(temp[[x]])))
 names(sifs1)=names(sifs)
-sifs1=lapply(sifs1,function(x) x[,c(2:3,1,4:7)])
+sifs1=lapply(sifs1,function(x) x[,c(2:3,1,4:ncol(x))])
 #####################################################################
 ######coherence of regulation
 #####################################################################
@@ -176,12 +176,12 @@ DA=lapply(1:4,function(x) rbind(DE.genes[[x]],DE.miR[[x]],DM.cpg1[[x]]))
 up=lapply(1:4,function(x) sapply(tempi[[x]][,1],function(y) DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==y]))
 prediUP=lapply(1:4,function(x) sapply(tempi[[x]][,2],function(y) DA[[x]]$logFC[rownames(DA[[x]])==y]))
 tempi=lapply(1:4,function(x) cbind(tempi[[x]],up[[x]]>0,prediUP[[x]]>0))
-lapply(1:4,function(x) fisher.test(table(as.data.frame(tempi[[x]][i.mir[[x]],8:9]))))#no significant
+#lapply(1:4,function(x) fisher.test(table(as.data.frame(tempi[[x]][i.mir[[x]],8:9]))))#no significant
 tempi$normal=sifs1$normal
 sifs1=tempi
-colnames(sifs1[[1]])[c(3,8:9)]=c("beta","pam50UP","predictorUP")
-colnames(sifs1[[2]])[c(3,8:9)]=c("beta","pam50UP","predictorUP")
-colnames(sifs1[[3]])[c(3,8:9)]=c("beta","pam50UP","predictorUP")
-colnames(sifs1[[4]])[c(3,8:9)]=c("beta","pam50UP","predictorUP")
+colnames(sifs1[[1]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
+colnames(sifs1[[2]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
+colnames(sifs1[[3]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
+colnames(sifs1[[4]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
 colnames(sifs1[[5]])[3]="beta"
 save(sifs1,file="annotatedSifsAlpha0.5.RData")
