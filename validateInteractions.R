@@ -185,10 +185,3 @@ colnames(sifs1[[3]])[c(3,8:9)]=c("beta","pam50UP","predictorUP")
 colnames(sifs1[[4]])[c(3,8:9)]=c("beta","pam50UP","predictorUP")
 colnames(sifs1[[5]])[3]="beta"
 save(sifs1,file="annotatedSifsAlpha0.5.RData")
-#####################################
-i=unique(unlist(lapply(sifs,function(x) unique(x[,2]))))
-i=which(rownames(concatenadas$LumA)%in%i)
-selec=do.call(cbind,lapply(concatenadas,function(x) x[i,]))
-pdf("selectedHeat.pdf")
-heatmap.2(selec,col=rev(heat.colors(74)),scale="none",Colv=F,trace="none",ColSideColors=rainbow(5)[subtis],symm=F,symkey=F,labCol=NA,dendrogram="row",breaks=col,labRow=NA,RowSideColors=c("cornflowerblue","brown1")[rowColors])
-dev.off()

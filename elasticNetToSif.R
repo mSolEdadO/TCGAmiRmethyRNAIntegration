@@ -40,7 +40,6 @@ save(sifs,quality,file="modelos.RData")
 #####################################
 #how many predictors are selected por pam50 gene per subtype	       
 sifs=lapply(sifs,function(x) x[x[,2]!="(Intercept)",])
-sifs=lapply(sifs,function(x) x[x[,2]!="(Intercept)",])
 totales=do.call(rbind,lapply(1:5,function(x) cbind(names(totales)[x],totales[[x]])))
 totales=cbind(totales,rownames(totales))
 g=graph.edgelist(totales[,c(1,3)],directed=F)
