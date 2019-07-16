@@ -25,3 +25,27 @@ pdf("copredictors.pdf")
 > heatmap.2(g$LumB,col=rev(heat.colors(100)),colRow=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%rownames(g1$LumB)]],colCol=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%colnames(g1$LumB)]],key=F,main="LumB",na.color="black",Rowv=NA,Colv=NA,dendrogram='n',trace="b",margins=c(4,6))
 > heatmap.2(g$normal,col=rev(heat.colors(100)),colRow=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%rownames(g1$normal)]],colCol=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%colnames(g1$normal)]],key=F,main="normal",na.color="black",Rowv=NA,Colv=NA,dendrogram='n',trace="b",margins=c(4,6))
 > dev.off()
+#########################################################3
+g=lapply(sifs2,function(x) {g=graph.edgelist(x[,4:5],directed=F);E(g)$weight=as.numer
+ic(x[,3]);as.matrix(g[unique(x[,4]),unique(x[,5])])})
+g=lapply(g,function(x) x[,colSums(x>0)>1])
+g=lapply(g,function(x) x[rowSums(x==0)<ncol(x),])
+g1=g
+g1$Basal[g1$Basal==0]=NA
+g1$Her2[g1$Her2==0]=NA
+g1$LumA[g1$LumA==0]=NA
+g1$LumB[g1$LumB==0]=NA
+g1$normal[g1$normal==0]=NA
+pdf("copredictors.pdf")
+heatmap.2(g1$Basal,scale='n',col=colorRampPalette(colors = c("red4","red"))(10),na.color="black",dendrogram='n',Colv=NA,Rowv=NA,symm=F,breaks=seq(0.01,0.1,length=11),colRow=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%rownames(g1$Basal)]],margins=c(8,5),key=F,trace='n')
+
+
+heatmap.2(g1$Her2,scale='n',col=colorRampPalette(colors = c("red4","red"))(10),na.color="black",dendrogram='n',Colv=NA,Rowv=NA,symm=F,breaks=seq(0.01,0.1,length=11),colRow=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%rownames(g1$Her2)]],margins=c(10,10),key=F,trace='n')
+
+heatmap.2(g1$LumA,scale='n',col=colorRampPalette(colors = c("green","green4","red4","red"))(10),na.color="black",dendrogram='n',Colv=NA,Rowv=NA,symm=F,colRow=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%rownames(g1$LumA)]],margins=c(8,5),trace='n',breaks=c(seq(-0.5,-0.1,length=5),0,seq(0.01,0.5,length=5)),key=F)
+
+heatmap.2(g1$LumB,scale='n',col=colorRampPalette(colors = c("green","green4","red4","red"))(10),na.color="black",dendrogram='n',Colv=NA,Rowv=NA,symm=F,colRow=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%rownames(g1$LumB)]],margins=c(8,5),trace='n',breaks=c(seq(-0.5,-0.1,length=5),0,seq(0.01,0.5,length=5)),key=F)
+
+heatmap.2(g1$normal,scale='n',col=colorRampPalette(colors = c("green","green4","red4","red"))(10),na.color="black",dendrogram='n',Colv=NA,Rowv=NA,symm=F,colRow=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%rownames(g1$normal)]],margins=c(8,5),trace='n',breaks=c(seq(-0.5,-0.1,length=5),0,seq(0.01,0.5,length=5)),key=F)
+> dev.off()
+
