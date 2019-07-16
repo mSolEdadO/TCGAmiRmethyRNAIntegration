@@ -48,4 +48,10 @@ heatmap.2(g1$LumB,scale='n',col=colorRampPalette(colors = c("green","green4","re
 
 heatmap.2(g1$normal,scale='n',col=colorRampPalette(colors = c("green","green4","red4","red"))(10),na.color="black",dendrogram='n',Colv=NA,Rowv=NA,symm=F,colRow=ggsci::pal_jama()(4)[pam50$class[pam50$hgnc_symbol%in%rownames(g1$normal)]],margins=c(8,5),trace='n',breaks=c(seq(-0.5,-0.1,length=5),0,seq(0.01,0.5,length=5)),key=F)
 > dev.off()
+##############################
+i=names(which(table(unlist(lapply(g,colnames)))>1))
+g=sapply(g,function(x) dim(x[,colnames(x)%in%i]))
+total=as.matrix(rbind.fill(lapply(g,as.data.frame)))
+rownames(total)=unlist(sapply(g,rownames))
+
 
