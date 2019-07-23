@@ -54,22 +54,40 @@ save(concatenadas,file="porSubti.RData")
 #Min.    -8.5370 -1.196e+06 -26820.000
 #Max.     8.2840  3.294e+06 680800.000
 
-#since omics have different ranges →scale
-concatenadas=lapply(concatenadas,function(x) scale(do.call(rbind,x)))
-lapply(concatenadas,function(x) summary(as.numeric(x)))
-#$normal
-#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#-13.4100  -0.0515  -0.0498   0.0000  -0.0479 413.9000 
+#since omics have different ranges →MFA weight
+evals=lapply(concatenadas,function(x) sapply(x,function(y) svd(y,nu=0,nv=0)))
+evals=lapply(evals,function(x) sapply(x,function(y) 1/sqrt(y[1])))
 #$LumA
-#    Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#-97.98000  -0.02165  -0.02113   0.00000  -0.02050 298.80000 
+#     methy.d   transcri.d        mir.d 
+#0.0049129995 0.0002105128 0.0002012404 
 #$LumB
-#      Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
-#-109.50000   -0.02229   -0.02174    0.00000   -0.02114  243.50000 
+#     methy.d   transcri.d        mir.d 
+#0.0066157577 0.0002897397 0.0002886322 
+#$normal
+#     methy.d   transcri.d        mir.d 
+#0.0072579414 0.0003289092 0.0003312752 
 #$Her2
-#     Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-#-60.21000  -0.02019  -0.01969   0.00000  -0.01903 242.70000 
+#     methy.d   transcri.d        mir.d 
+#0.0085562074 0.0003376987 0.0003486907 
 #$Basal
-#      Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
-#-109.20000   -0.02097   -0.02045    0.00000   -0.01967  281.10000 
-
+#     methy.d   transcri.d        mir.d 
+#0.0065336421 0.0002825550 0.0003301057 
+concatenadas=lapply(1:5,function(x) scale(do.call(rbind,lapply(1:3,function(y) 
+	as.matrix(concatenadas[[x]][[y]]*evals[[x]][y])))))
+save(concatenadas,file="escaladas.RData")
+lapply(concatenadas,function(x) summary(as.numeric(x)))
+#$LumA
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#-49.0892  -0.0787  -0.0445   0.0000  -0.0225 396.1100 
+#$LumB
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+# -6.3675  -0.0844  -0.0489   0.0000  -0.0257 396.6516 
+#normal
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+# -2.9152  -0.0843  -0.0471   0.0000  -0.0237 379.8674 
+#Her2
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+# -6.0729  -0.0750  -0.0427   0.0000  -0.0227 413.7628 
+#Basal
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#-13.1357  -0.0875  -0.0497   0.0000  -0.0257 369.4758 
