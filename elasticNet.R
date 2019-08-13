@@ -1,22 +1,33 @@
 #!/usr/bin/env Rscript
 library(caret)
 library(methods)
-load("/home/msoledad/resultados/EigenScaled.RData")
+library(data.table)
+library(doParallel)
+#load("/home/msoledad/resultados/EigenScaled.RData")
+registerDoParallel(cores=3)
 
 args = commandArgs(trailingOnly=TRUE)
-subtipo=which(names(EigenScaled)==args[1])
-subtipo=EigenScaled[[subtipo]]
+#subtipo=which(names(EigenScaled)==args[1])
+#subtipo=EigenScaled[[subtipo]]
+subtipo=args[1]
 gen=args[2]
-rm(EigenScaled);gc()
+print("Cargo datos")
+subtipo=fread(subtipo)
+nombres=subtipo$V1
+subtipo$V1=NULL
+i=sample(1:ncol(subtipo),45)
+subtipo=t(as.matrix(subtipo)[,i])
+colnames(subtipo)=nombres
+#rm(EigenScaled);gc()
 
-coefGrid <-  expand.grid(lambda=10^ seq (3 , -2 , length =10),
-			alpha=10^ seq (0, -3 , length =10))
+coefGrid <-  expand.grid(lambda=10^ seq (3 , -2 , length =100),
+			alpha=0.5)
 k=5
 if(ncol(subtipo)<100){k=3}
 trainCtrl <- trainControl("repeatedcv",
 			 number = k, #k choose this according to n
-			 repeats=round(100/k),#500 for alpha=0.5
-			 verboseIter = F,#T if fit fails,
+			 repeats=600/k,#500 for alpha=0.5
+			 verboseIter = T,#T if fit fails,
 			 allowParallel=T,
 			 returnResamp="all")
 
@@ -25,21 +36,23 @@ model <- train(y = subtipo[,colnames(subtipo)==gen],
 	       x = subtipo[,colnames(subtipo)!=gen],
 	       method = "glmnet",
 	       trControl = trainCtrl,
-	       tuneGrid = coefGrid)
+	       tuneGrid = coefGrid,
+	       standardize=T,
+	       penalty.factor=c(rep(0.1,384575),rep(1,16475),rep(0.5,433)))
 
-#coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
-#coefs=as.matrix(coefs[which(coefs>0),])
+coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
+coefs=as.matrix(coefs[which(coefs>0),])
 #colnames(coefs)=paste(model$results$Rsquared[model$results$RMSE==min(model$results$RMSE)],model$results$RMSE[model$results$RMSE==min(model$results$RMSE)],sep="_")
-#write.table(coefs,
-#	    file=paste(gen,args[1],sep='.'),
-#	    quote=F,
-#	    sep='\t')
-#write.table(model$results,
-#	    file=paste(gen,args[1],"results",sep='.'),
-#	    quote=F,
-#	    sep='\t',
-#	    row.names=F)
-save(model,file=paste(gen,args[1],"RData",sep='.'))
+write.table(coefs,
+	    file=paste(gen,args[1],"coefs",sep='.'),
+	    quote=F,
+	    sep='\t')
+write.table(model$results,
+	    file=paste(gen,args[1],"results",sep='.'),
+	    quote=F,
+	    sep='\t',
+	    row.names=F)
+#save(model,file=paste(gen,args[1],"RData",sep='.'))
 
 
 #plus elasticNet & elasticNet.sub -> paralell
