@@ -12,21 +12,21 @@ args = commandArgs(trailingOnly=TRUE)
 subtipo=args[1]
 gen=args[2]
 print("Cargo datos")
-subtipo=fread(subtipo)
+subtipo=fread(paste("../",subtipo,sep=""),sep='\t')
 nombres=subtipo$V1
 subtipo$V1=NULL
-i=sample(1:ncol(subtipo),45)
-subtipo=t(as.matrix(subtipo)[,i])
+subtipo=t(as.matrix(subtipo)[,1:40])#training subset should not be used for testing
 colnames(subtipo)=nombres
 #rm(EigenScaled);gc()
 
 coefGrid <-  expand.grid(lambda=10^ seq (3 , -2 , length =100),
 			alpha=0.5)
-k=5
-if(ncol(subtipo)<100){k=3}
+#k=5
+#if(nrow(subtipo)<100){k=3}
+k=3
 trainCtrl <- trainControl("repeatedcv",
 			 number = k, #k choose this according to n
-			 repeats=600/k,#500 for alpha=0.5
+			 repeats=600/k,#200 for the small training set=40 samples, 
 			 verboseIter = T,#T if fit fails,
 			 allowParallel=T,
 			 returnResamp="all")
@@ -38,7 +38,7 @@ model <- train(y = subtipo[,colnames(subtipo)==gen],
 	       trControl = trainCtrl,
 	       tuneGrid = coefGrid,
 	       standardize=T,
-	       penalty.factor=c(rep(0.1,384575),rep(1,16475),rep(0.5,433)))
+	       penalty.factor=c(rep(0.1,384575),rep(1,16475),rep(0.5,433)))#variate
 
 coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
 coefs=as.matrix(coefs[which(coefs>0),])
