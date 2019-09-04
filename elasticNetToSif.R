@@ -1,59 +1,52 @@
-library(caret)
-library(gplots)
-loadRData <- function(fileName){
-#loads an RData file, and returns it
-    load(fileName)
-    get(ls()[ls() != "fileName"])
-}
+library(ggplot2)
+library(biomaRt)
 
-modelsToSif=function(subti){
-f=files[grep(subti,files)]
-	modelos=lapply(1:length(f),function(x) {
-	gen=sapply(strsplit(gsub("parallel-caret/","",f[x]),".",fixed=T),function(y) y[1])
-	print(paste("Loading",gen,sep=" "))	
-	load(f[x])
-	predictores=predictors(model)
-	transcri=predictores[grep("ENSG",predictores)]
-	mirs=predictores[grep("hsa",predictores)]
-	cpgs=predictores[grep("hsa|ENSG",predictores,perl=T,invert=T)]
-    print("Getting quality table")
-	qualy=model$results
-	qualy=cbind(gen,qualy,length(cpgs),length(transcri),length(mirs))
-	qualy=qualy[qualy$alpha==model$bestTune$alpha&qualy$lambda==model$bestTune$lambda,]
-	print("Building sif")
-	coefis=as.array(coef(model$finalModel,model$bestTune$lambda))
-	coefis=cbind(gen,rownames(coefis),coefis)
-	coefis=coefis[as.numeric(coefis[,3])!=0,]
-return(list(quality=qualy,sif=coefis))})}
-
-#list model files
-files=list.files("parallel-caret/eigenscaled/",full.names=T)
-files=files[grep("RD",files)]
-files=gsub("//","/",files)
-
-listos=c("Basal","Her2","LumB","normal")#subtype models I want
-resultados=lapply(listos,modelsToSif)
-names(resultados)=listos
-sifs=lapply(resultados,function(x) x$sif)
-quality=lapply(resultados,function(x) x$quality)
-save(sifs,quality,file="modelos.RData")
-#####################################
-#how many predictors are selected por pam50 gene per subtype	       
-sifs=lapply(sifs,function(x) x[x[,2]!="(Intercept)",])
-totales=do.call(rbind,lapply(1:5,function(x) cbind(names(totales)[x],totales[[x]])))
-totales=cbind(totales,rownames(totales))
-g=graph.edgelist(totales[,c(1,3)],directed=F)
-E(g)$weight=as.numeric(totales[,2])
-g=t(as.matrix(g[unique(totales[,1]),unique(totales[,3])]))
-g=g[order(match(rownames(g),pam50$ensembl_gene_id)),]
-pdf("predictoresTotales.pdf")
- heatmap.2(g,trace="none",col=rev(heat.colors(100)),colRow=rainbow(4)[pam50$class],Rowv=F,Colv=F,na.color="gray",main="Predictores por gen",labRow=pam50$hgnc_symbol)
+#plot model quality accross subtypes
+bestModels=read.table("bestModels.tsv",sep='\t')
+png("modelsDevratio.png")
+ ggplot(bestModels,aes(x=dev.ratio))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+ggtitle("Dev.ratio")
 dev.off()
-#####################################
-#patters of expression/methylation of selected predictors per subtype
-i=unique(unlist(lapply(sifs,function(x) unique(x[,2]))))
-i=which(rownames(concatenadas$LumA)%in%i)
-selec=do.call(cbind,lapply(concatenadas,function(x) x[i,]))
-pdf("selectedHeat.pdf")
-heatmap.2(selec,col=rev(heat.colors(74)),scale="none",Colv=F,trace="none",ColSideColors=rainbow(5)[subtis],symm=F,symkey=F,labCol=NA,dendrogram="row",breaks=col,labRow=NA,RowSideColors=c("cornflowerblue","brown1")[rowColors])
-dev.off()
+
+#build sifs for non null models 
+files=apply(bestModels,1,function(x) paste(x[2],x[1],"coefs",sep='.'))
+coefs=sapply(files,readLines)
+names(coefs)=gsub(".coefs","",files)
+coefs=sapply(coefs,function(x) t(do.call(cbind,strsplit(x,"\t"))))
+coefs=do.call(rbind,lapply(1:195,function(x) cbind(names(coefs)[x],coefs[[x]])))
+coefs=coefs[coefs[,2]!="x",]
+coefs=coefs[coefs[,2]!="(Intercept)",]
+coefs=coefs[order(coefs[,1]),]
+#hgnc symbols instead of ensembl_ids
+temp1=table(sapply(strsplit(coefs[,1],".",fixed=T),function(x) x[1]))
+#49 de los 50 tienen modelo en algun subtipo
+length(temp1)
+[1] 49
+ids=unlist(sapply(1:49,function(x) 
+	rep(as.character(pam50$hgnc_symbol)[pam50$ensembl_gene_id==names(temp1)[x]],temp1[x])))
+temp=cbind(ids,coefs)
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+myannot=getBM(attributes = c("ensembl_gene_id", "hgnc_id","hgnc_symbol"),
+filters = "ensembl_gene_id", values=unique(as.character(temp[,3])),mart=mart)
+temp=temp[order(temp[,3]),]
+temp1=table(temp[grep("ENSG",temp[,3]),3])
+ids=unlist(sapply(1:length(temp1),function(x) 
+	rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(temp1)[x]],temp1[x])))
+temp[grep("ENSG",temp[,3]),3]=ids
+coefs=lapply(unique(bestModels$subtype),function(x) temp[grep(x,temp[,2]),c(1,3,4)])
+
+#no hay modelo para los 50 genes en ningún subtipo
+sapply(coefs,function(x) length(unique(x[,1])))
+ Basal   Her2   LumA   LumB normal 
+    38     46     33     40     38 
+modelados=lapply(coefs,function(x) unique(sapply(strsplit(x[,1],".",fixed=T),function(y) y[1])))
+#solo 17 tienen modelo en todos
+length(intersect(intersect(intersect(intersect(modelados[[1]],modelados[[2]]),modelados[[3]]),modelados[[4]]),modelados[[5]]))
+[1] 17
+#las 3 omicas están en los modelos de todos los subtipos
+sapply(coefs,function(x) table(substr(x[,2],1,1)))
+  Basal Her2  LumA  LumB normal
+c  8103 8657 50589 22071  18746
+E   897  480   905   647    733
+h    18  107    55   147     65
+lapply(1:5,function(x) 
+	write.table(coefs[[x]],paste(names(coefs)[x],"sif",sep='.'),sep='\t',quote=F,row.names=F,col.names=F))
