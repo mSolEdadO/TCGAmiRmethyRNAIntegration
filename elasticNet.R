@@ -26,6 +26,8 @@ write.table(coefs[coefs!=0,],
 	    quote=F,
 	    sep='\t')
 write.table(paste(args[1],args[2],args[3],args[4],args[5],args[6],model$nulldev,model$dev.ratio,sep=" "),
+#nulldev=2*(model with a free parameter per observatio loglikelihood-loglikelihood of the intercept model)
+#dev.ratio=fraction of (null) deviance explained=1-dev/nulldev
 	    file=paste(gen,args[1],"results",sep='.'),
 	    quote=F,
 	    sep='\t',
