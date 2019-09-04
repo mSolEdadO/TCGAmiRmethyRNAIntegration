@@ -18,14 +18,17 @@ get.minRMSE=function(folder){
 
 #get characteristics of the best model per scheme and gene
 cg01ENSG1hsa05=get.minRMSE("cg0.1ENSG1hsa0.5")
-cg01ENSG1hsa01=get.minRMSE("cg0.1ENSG1hsa0.1")
 cg05ENSG1hsa01=get.minRMSE("cg0.5ENSG1hsa0.1")
+cg01ENSG1hsa01=get.minRMSE("cg0.1ENSG1hsa0.1")
+cg05ENSG1hsa05=get.minRMSE("cg0.5ENSG1hsa0.5")
 cg1ENSG1hsa1=get.minRMSE("cg1.0ENSG1hsa1.0")
-opci=list(cg1ENSG1hsa1,cg01ENSG1hsa01,cg01ENSG1hsa05,cg05ENSG1hsa01)
-names(opci)=list("cg1ENSG1hsa1","cg01ENSG1hsa01","cg01ENSG1hsa05","cg05ENSG1hsa01")
+opci=list(cg1ENSG1hsa1,cg01ENSG1hsa01,cg01ENSG1hsa05,cg05ENSG1hsa01,cg05ENSG1hsa05)
+names(opci)=list("cg1ENSG1hsa1","cg01ENSG1hsa01","cg01ENSG1hsa05","cg05ENSG1hsa01","cg05ENSG1hsa05")
 
 elegidos=do.call(cbind,lapply(1:5,function(x)
  apply(sapply(opci,function(y) y[[x]][3,]),1,function(z) names(opci)[z==min(as.numeric(z))])))
+colnames(elegidos)=names(opci$cg1ENSG1hsa1)
+lambdas=t(sapply(1:50,function(x) sapply(1:5,function(y) opci[[elegidos[x,y]]][[y]][,x]$lambda)))
 modelos=as.character(sapply(1:50,function(x) sapply(1:5,function(y)
  paste(colnames(elegidos)[y],rownames(elegidos)[x],lambdas[x,y],elegidos[x,y],sep=' '))))
 modelos=gsub("hsa"," ",gsub("cg","",gsub("hsa0"," 0.",gsub("ENSG1"," 1",gsub("cg0","0.",modelos)))))
