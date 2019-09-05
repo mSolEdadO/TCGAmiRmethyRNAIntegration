@@ -15,18 +15,18 @@ print("Cargo datos")
 subtipo=fread(paste("../",subtipo,sep=""),sep='\t')
 nombres=subtipo$V1
 subtipo$V1=NULL
-subtipo=t(as.matrix(subtipo)[,1:40])#training subset should not be used for testing
+i=round(ncol(subtipo)*0.8)
+subtipo=t(as.matrix(subtipo)[,1:i])#training subset should not be used for testing
 colnames(subtipo)=nombres
 #rm(EigenScaled);gc()
 
 coefGrid <-  expand.grid(lambda=10^ seq (3 , -2 , length =100),
 			alpha=0.5)
-#k=5
-#if(nrow(subtipo)<100){k=3}
-k=3
+k=5
+if(nrow(subtipo)<100){k=3}
 trainCtrl <- trainControl("repeatedcv",
 			 number = k, #k choose this according to n
-			 repeats=600/k,#200 for the small training set=40 samples, 
+			 repeats=600/k,#200 for the small training set, 
 			 verboseIter = T,#T if fit fails,
 			 allowParallel=T,
 			 returnResamp="all")
@@ -40,13 +40,13 @@ model <- train(y = subtipo[,colnames(subtipo)==gen],
 	       standardize=T,
 	       penalty.factor=c(rep(0.1,384575),rep(1,16475),rep(0.5,433)))#variate
 
-coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
-coefs=as.matrix(coefs[which(coefs>0),])
+#coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
+#coefs=as.matrix(coefs[which(coefs>0),])
 #colnames(coefs)=paste(model$results$Rsquared[model$results$RMSE==min(model$results$RMSE)],model$results$RMSE[model$results$RMSE==min(model$results$RMSE)],sep="_")
-write.table(coefs,
-	    file=paste(gen,args[1],"coefs",sep='.'),
-	    quote=F,
-	    sep='\t')
+#write.table(coefs,
+#	    file=paste(gen,args[1],"coefs",sep='.'),
+#	    quote=F,
+#	    sep='\t')
 write.table(model$results,
 	    file=paste(gen,args[1],"results",sep='.'),
 	    quote=F,
