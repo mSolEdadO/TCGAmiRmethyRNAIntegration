@@ -18,7 +18,7 @@ model <- glmnet(y = subtipo[,colnames(subtipo)==gen],
 	       alpha = 0.5,
 	       lambda = args[3],
 	       standardize=T,
-	       penalty.factor=c(rep(args[4],384575),rep(args[4],16475),rep(args[6],433))) 
+	       penalty.factor=c(rep(args[4],384575),rep(args[5],16475),rep(args[6],433))) 
 
 coefs=as.matrix(coef(model))
 write.table(coefs[coefs!=0,],
