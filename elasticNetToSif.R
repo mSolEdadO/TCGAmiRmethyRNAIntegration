@@ -18,13 +18,13 @@ coefs=coefs[coefs[,2]!="(Intercept)",]
 coefs=coefs[order(coefs[,1]),]
 #hgnc symbols instead of ensembl_ids
 temp1=table(sapply(strsplit(coefs[,1],".",fixed=T),function(x) x[1]))
-#49 de los 50 tienen modelo en algun subtipo
+#39 de los 50 tienen modelo en algun subtipo
 length(temp1)
-[1] 49
+[1] 39
 ids=unlist(sapply(1:49,function(x) 
 	rep(as.character(pam50$hgnc_symbol)[pam50$ensembl_gene_id==names(temp1)[x]],temp1[x])))
 temp=cbind(ids,coefs)
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://apr2019.archive.ensembl.org")
 myannot=getBM(attributes = c("ensembl_gene_id", "hgnc_id","hgnc_symbol"),
 filters = "ensembl_gene_id", values=unique(as.character(temp[,3])),mart=mart)
 temp=temp[order(temp[,3]),]
@@ -32,21 +32,21 @@ temp1=table(temp[grep("ENSG",temp[,3]),3])
 ids=unlist(sapply(1:length(temp1),function(x) 
 	rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(temp1)[x]],temp1[x])))
 temp[grep("ENSG",temp[,3]),3]=ids
-coefs=lapply(unique(bestModels$subtype),function(x) temp[grep(x,temp[,2]),c(1,3,4)])
+coefs1=lapply(unique(bestModels$subtype),function(x) temp[grep(x,temp[,2]),c(1,3,4)])
 
 #no hay modelo para los 50 genes en ningún subtipo
-sapply(coefs,function(x) length(unique(x[,1])))
+sapply(coefs1,function(x) length(unique(x[,1])))
  Basal   Her2   LumA   LumB normal 
-    38     46     33     40     38 
+    33     32     34     36     39 
 modelados=lapply(coefs,function(x) unique(sapply(strsplit(x[,1],".",fixed=T),function(y) y[1])))
-#solo 17 tienen modelo en todos
+#solo 25 tienen modelo en todos
 length(intersect(intersect(intersect(intersect(modelados[[1]],modelados[[2]]),modelados[[3]]),modelados[[4]]),modelados[[5]]))
-[1] 17
+[1] 25
 #las 3 omicas están en los modelos de todos los subtipos
 sapply(coefs,function(x) table(substr(x[,2],1,1)))
   Basal Her2  LumA  LumB normal
-c  8103 8657 50589 22071  18746
-E   897  480   905   647    733
-h    18  107    55   147     65
+c  2052 1872  1555   908   1465
+E   299   49   948   294    379
+h    11    4    12    29     38
 lapply(1:5,function(x) 
 	write.table(coefs[[x]],paste(names(coefs)[x],"sif",sep='.'),sep='\t',quote=F,row.names=F,col.names=F))
