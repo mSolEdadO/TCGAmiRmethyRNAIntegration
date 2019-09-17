@@ -1,64 +1,96 @@
-lambda=unlist(lapply(quality,function(x) as.numeric(x[,3])))
-lambda=as.data.frame(cbind(lambda,as.character(sapply(names(quality),rep,50))))
-colnames(lambda)[2]="subtype"
-ggplot(lambda,aes(x=as.numeric(lambda)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
-rmse=unlist(lapply(quality,function(x) as.numeric(x[,4])))
-rmse=as.data.frame(cbind(rmse,as.character(sapply(names(quality),rep,50))))
-colnames(rmse)[2]="subtype"
-ggplot(rmse,aes(x=as.numeric(rmse)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
+##############################################################################
+########### methy: am I linking genes with their KNOWN regulatory CpGs?
+##############################################################################
+#Input CpG-gene annotation = https://zwdzwd.github.io/InfiniumAnnotation
+methy=fread("ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
+methy=methy[,c(5,21)]
+methy=do.call(rbind,apply(methy,1,function(x) cbind(x[1],unlist(strsplit(x[2],";")))))
 
-library(biomaRt)
-library(rentrez)
+#build contingency tables for CpGs
+testMethyRegul=function(gen,subtype){
+anotadas=methy[which(methy[,2]==gen),1]
+seleccionadas=subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^c",subtype$predictor))]
+a=sum(anotadas%in%seleccionadas)
+b=sum(!anotadas%in%seleccionadas)
+c=sum(!seleccionadas%in%anotadas)
+d=length(unique(methy[,1]))-a-b-c
+signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
+#I expect an overlap between annotated and selected regulators
+return(cbind(a,b,c,d,signif))}
 
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://apr2019.archive.ensembl.org")
-myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), mart=mart)
-myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
-
-#hgnc_symbol instead of ensemblID
-interacs=unique(do.call(rbind,sifs))
-interacs=interacs[order(interacs[,1]),]
-interacs=interacs[interacs[,2]!="(Intercept)",]
-targets=table(interacs[,1])
-temp=sapply(1:50,function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(targets)[x]],targets[x]))
-interacs=cbind(interacs,unlist(temp))
-interacs=interacs[order(interacs[,2]),]
-i=grep("ENSG",interacs[,2])
-interacs=cbind(interacs,interacs[,2])
-notarg=table(interacs[i,2])
-temp=sapply(1:length(notarg),function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(notarg)[x]],notarg[x]))
-interacs[i,5]=unlist(temp)
+contingenciasMethy=pblapply(interacs,function(x) sapply(unique(x$pam50),function(y) t(testMethyRegul(y,x))))
+#genes with CpGs selected
+sapply(contingencias,function(x) sum(x[,3]>0))
+#    Basal      Her2      LumA      LumB non-tumor 
+#       44        42        45        44        45 
+sapply(contingenciasMethy,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
+#proportion of pam50 genes per subtype with known CpG regulators selected
+#     Basal       Her2       LumA       LumB  non-tumor 
+#0.02272727 0.00000000 0.08888889 0.00000000 0.00000000 
+#sampe proportions when I test alternative="both"
+#sapply(contingenciasMethy,function(x) sum(apply(x[,1:4],1,function(y) fisher.test(matrix(y,ncol=2,nrow=2))$p.val)<0.01)/nrow(x))     
 
 ##############################################################################
-########### miR
+########### miR: am I linking genes with their KNOWN regulatory miRr?
 ##############################################################################
 library(multiMiR)#https://www.bioconductor.org/packages/devel/bioc/vignettes/multiMiR/inst/doc/multiMiR.html
 #Searching mirecords, mirtarbase, tarbase,diana_microt,elmmo, microcosm, miranda, mirdbpictar, pita, targetscan, pharmaco_mir ...
 
-#get all the interactions of selected miRs
-i=grep("hsa",interacs[,2])
-length(unique(interacs[i,2]))
-#[1] 139
-miRNAs = list_multimir("mirna")
-sum(unique(interacs[i,2])%in%miRNAs$mature_mirna_id)
-#[1] 4
-mirInteractions=lapply(miRNAs$mature_mirna_id[miRNAs$mature_mirna_id%in%unique(interacs[i,2])],function(x)
-	get_multimir(mirna = x, summary = F,table="all")@data)
-#found interactions have been reported? NOP
-knownTarget=sapply(mirInteractions,function(x)
-	sum(interacs[i[interacs[i,2]%in%x$mature_mirna_id],3]%in%x$target_symbol))
-sum(knownTarget)
-#[1] 0
-mirInteractions=lapply(unique(interacs[i,3]),function(x)
-	get_multimir(target = x, summary = F,table="all")@data)
-knownTarget=sapply(mirInteractions,function(x)
-	sum(interacs[i[interacs[i,3]%in%x$target_symbol],2]%in%x$mature_mirna_id))
-sum(knownTarget)
-#[1] 0
+#get all validated miRs interactions for PAM50 genes
+miRtargets=get_multimir(target=pam50$ensembl_gene_id,summary=F,table="all",legacy.out=F)
+miRtargetsV=select(miRtargets,keys="validated",columns=columns(miRtargets),keytype="type")
+miRtargetsP=select(miRtargets,keys="predicted",columns=columns(miRtargets),keytype="type")
+#i want miR stem names coz my datset miR names are for stem stage  
+miRtargetsV=cbind(miRtargetsV,sapply(strsplit(miRtargetsV$mature_mirna_id,"-"),function(x) paste(x[1],x[2],x[3],sep='-')))
 
+#I'm only interested on the interacs I could find with my miR dataset
+load("../ini/porSubti.RData")
+miR=rownames(concatenadas$Her2$mir)
+miRtargetsV=miRtargetsV[miRtargetsV[,14]%in%miR|miRtargetsV$mature_mirna_id%in%miR,]
+
+test.miRegul=function(gen,subtype,annot){
+anotadas=unique(unlist(annot[which(annot$target_symbol==gen),c(3,14)]))
+seleccionadas=subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^h",subtype$predictor))]
+a=sum(anotadas%in%seleccionadas)
+b=sum(!anotadas%in%seleccionadas)
+c=sum(!seleccionadas%in%anotadas)
+d=length(miR)-a-b-c
+signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
+return(cbind(a,b,c,d,signif))}
+contingencias.miR=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.miRegul(y,x,miRtargetsV))))
+#genes with miRs selected
+sapply(contingencias.miR,function(x) sum(x[,3]>0))
+#    Basal      Her2      LumA      LumB non-tumor 
+#        9         3        12        13         8 
+#models didnt selected regulataroy miR
+sapply(contingencias.miR,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
+#    Basal      Her2      LumA      LumB non-tumor 
+#        0         0         0         0         0 
+
+#predicted miR are neither selected
+miRtargetsP=cbind(miRtargetsP,sapply(strsplit(miRtargetsP$mature_mirna_id,"-"),function(x) paste(x[1],x[2],x[3],sep='-')))
+miRtargetsP=miRtargetsP[miRtargetsP[,14]%in%miR|miRtargetsP$mature_mirna_id%in%miR,]
+contingencias.miR=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.miRegul(y,x,miRtargetsP))))
+sapply(contingencias.miR,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
+#    Basal      Her2      LumA      LumB non-tumor 
+#        0         0         0         0         0 
+
+#but there are very few interactions that I could have found
+dim(miRtargetsP)
+#[1] 89 14
+dim(miRtargetsV)
+#[1] 32 14
+
+##############################################################################
+########### TFs: am I linking genes with their KNOWN tfs?
+##############################################################################
 ##############################################################################
 ########### TFs
 ##############################################################################
 library(tftargets)#https://github.com/slowkow/tftargets
+
+#transform TF target lists to tables easier to work with
+
 
 TF=read.table("data/TFCheckpoint_download_180515.txt",header=T,sep='\t',fill=T,quote="")
 temp=myannot[myannot$ensembl_gene_id%in%unique(interacs[,2]),c(1,7)]
@@ -91,31 +123,38 @@ colnames(interacs)=c("pam50","predictor","coef","pam50Symbol","predictorSymbol",
 length(unique(interacs[interacs[,6]!=""&!is.na(interacs[,6]),5]))
 #[1] 131 TFs with known TF-target interaction in tftargets
 
-##############################################################################
-########### methy
-##############################################################################
 
-methy=read.table("ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
-#am I linking genes with their known regulating CpGs? NOP
-i=grep("ENSG|hsa",interacs[,2],perl=T,invert=T)
-length(i)
-#[1] 3
-knownReg=sapply(i,function(x) 
-	grep(interacs[x,4],methy$gene_HGNC[methy$probeID==interacs[x,2]]))
-sum(sapply(knownReg,length)==0)
-#[1] 3
-#are they in the same chr?
-sameChr=apply(interacs[i,1:2],1,function(x) 
-	sum(myannot$chromosome_name[myannot$ensembl_gene_id==x[1]]==methy$CpG_chrm[methy$probeID==x[2]]))
-sum(sameChr!=0) 
-#[1] 1 sólo este está en el mismo cromosoma y están lejos ↓
-temp=interacs[i[sameChr!=0],]
-#          pam50  predictor       coef pam50Symbol predictorSymbol
-#ENSG00000129514 cg00955911 -0.2298019        ANLN      cg00955911
-apply(methy[methy$probeID%in%temp[,2],2:3]-myannot$start_position[myannot$ensembl_gene_id=="ENSG00000164611"],2,function(x) min(abs(x)))
-#CpG_beg CpG_end 
-#122829073 122829071 
-     
+
+lambda=unlist(lapply(quality,function(x) as.numeric(x[,3])))
+lambda=as.data.frame(cbind(lambda,as.character(sapply(names(quality),rep,50))))
+colnames(lambda)[2]="subtype"
+ggplot(lambda,aes(x=as.numeric(lambda)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
+rmse=unlist(lapply(quality,function(x) as.numeric(x[,4])))
+rmse=as.data.frame(cbind(rmse,as.character(sapply(names(quality),rep,50))))
+colnames(rmse)[2]="subtype"
+ggplot(rmse,aes(x=as.numeric(rmse)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
+
+library(biomaRt)
+library(rentrez)
+
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://apr2019.archive.ensembl.org")
+myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), mart=mart)
+myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
+
+#hgnc_symbol instead of ensemblID
+interacs=unique(do.call(rbind,sifs))
+interacs=interacs[order(interacs[,1]),]
+interacs=interacs[interacs[,2]!="(Intercept)",]
+targets=table(interacs[,1])
+temp=sapply(1:50,function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(targets)[x]],targets[x]))
+interacs=cbind(interacs,unlist(temp))
+interacs=interacs[order(interacs[,2]),]
+i=grep("ENSG",interacs[,2])
+interacs=cbind(interacs,interacs[,2])
+notarg=table(interacs[i,2])
+temp=sapply(1:length(notarg),function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(notarg)[x]],notarg[x]))
+interacs[i,5]=unlist(temp)
+
 #####################################################################
 #######how many times terms are mentioned in literature
 #####################################################################
