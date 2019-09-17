@@ -21,8 +21,7 @@ coefs=coefs[order(coefs[,1]),]
 temp1=table(sapply(strsplit(coefs[,1],".",fixed=T),function(x) x[1]))
 #los 50 tienen modelo en algun subtipo
 length(temp1)
-[1] 50
-ids=unlist(sapply(1:49,function(x) 
+ids=unlist(sapply(1:50,function(x) 
 	rep(as.character(pam50$hgnc_symbol)[pam50$ensembl_gene_id==names(temp1)[x]],temp1[x])))
 temp=cbind(ids,coefs)
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://apr2019.archive.ensembl.org")
@@ -38,7 +37,9 @@ coefs1=lapply(unique(bestModels$subtype),function(x) temp[grep(x,temp[,2]),c(1,3
 sum(table(unlist(lapply(coefs1,function(x) unique(x[,1]))))==5)
 #32 genes tienen modelo en todos los subtipos
 #[1] 32
-#las 3 omicas están en los modelos de todos los subtipos
+sapply(coefs1,function(x) length(unique(x[,1])))
+ Basal   Her2   LumA   LumB normal 
+    33     32     34     36     39 
 sapply(coefs1,function(x) table(substr(x[,2],1,1)))
   Basal Her2 LumA LumB non-tumor
 c  2374 2192 2112 1144      1761
