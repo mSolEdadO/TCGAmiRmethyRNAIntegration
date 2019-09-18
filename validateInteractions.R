@@ -1,4 +1,7 @@
 ##############################################################################
+library(biomaRt)
+library(rentrez)
+
 ########### methy: am I linking genes with their KNOWN regulatory CpGs?
 ##############################################################################
 #Input CpG-gene annotation = https://zwdzwd.github.io/InfiniumAnnotation
@@ -90,40 +93,56 @@ dim(miRtargetsV)
 library(tftargets)#https://github.com/slowkow/tftargets
 
 #transform TF target lists to tables easier to work with
+load("TFtargets.RData")
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://jan2019.archive.ensembl.org")
+myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), mart=mart)
+myannot=myannot[!is.na(myannot$entrezgene),]
+myannot=myannot[!duplicated(myannot$entrezgene),]
+#get hgnc_id for data annotated with entrez id
+TFtargets$TRED=TFtargets$TRED[TFtargets$TRED[,2]%in%myannot$entrezgene,]
+TFtargets$TRED=TFtargets$TRED[order(TFtargets$TRED[,2]),]
+temp=table(TFtargets$TRED[,2])
+ids=unlist(sapply(1:length(temp),function(x) rep(as.character(myannot$hgnc_symbol)[which(as.character(myannot$entrezgene)==names(temp)[x])],temp[x])))
+TFtargets$TRED[,2]=unlist(ids)
 
+#only interested on TFs actually presente on the input dataset
+genes=rownames(DE.genes$her2_normal)
+myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","external_gene_name"), mart=mart)
+myannot=myannot[myannot$ensembl_gene_id%in%genes,]
+myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
+TFtargets=TFtargets[TFtargets[,1]%in%myannot$hgnc_symbol,]
 
-TF=read.table("data/TFCheckpoint_download_180515.txt",header=T,sep='\t',fill=T,quote="")
-temp=myannot[myannot$ensembl_gene_id%in%unique(interacs[,2]),c(1,7)]
-i=which(interacs[,2]%in%temp$ensembl_gene_id[temp$entrezgene%in%TF$entrez_human])
-length(i)
-#[1] 3553 interactions with TFs on TFCheckpoint
+test.TFregul=function(gen,subtype){
+anotadas=unique(TFtargets[which(TFtargets[,2]==gen),1])
+seleccionadas=as.character(subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^h|c",subtype$predictor,invert=T,perl=T))])
+a=sum(anotadas%in%seleccionadas)
+b=sum(!anotadas%in%seleccionadas)
+c=sum(!seleccionadas%in%anotadas)
+d=length(genes)-a-b-c
+signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
+return(cbind(a,b,c,d,signif))}
 
-pam50annot=myannot[myannot$ensembl_gene_id%in%unique(interacs[,1]),]
-i=grep("ENSG",interacs[,2])
+contingencias.ENSG=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.TFregul(y,x))))
+#genes with ENSGs selected
+sapply(contingencias.ENSG,function(x) sum(x[,3]>0))
+#    Basal      Her2      LumA      LumB non-tumor 
+#       36        19        40        32        39 
+#predicted TFs are neither selected
+sapply(contingencias.ENSG,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
+#     Basal       Her2       LumA       LumB  non-tumor 
+#0.00000000 0.00000000 0.05000000 0.00000000 0.02564103 
 
-knownTF=function(TF,target){
-support=character()
-if(pam50annot$entrezgene[pam50annot$hgnc_symbol==target]%in%TRED[[TF]]){
-	support=c(support,"TRED")}#Predicted and known targets
-if(target%in%ITFP[[TF]]){support=c(support,"ITFP")} #predicted
-if(pam50annot$entrezgene[pam50annot$hgnc_symbol==target]%in%ENCODE[[TF]]){
-	support=c(support,"ENCODE")}#ChipSeq
-if(target%in%Neph2012[[TF]]){support=c(support,"Neph2012")}#DNAseq footprinting
-if(target%in%TRRUST[[TF]]){support=c(support,"TRRUST")}#small-scale experiments
-if(target%in%Marbach2016[[TF]]){support=c(support,"Marbach2016")}
-return(paste(support,collapse=','))}#CAGE+binding motifs
-#no sé cuando recopilaron los datos
-
-intrcsTF=apply(interacs[i,4:5],1,function(x) knownTF(x[2],x[1]))
-sum(intrcsTF!="")
-#[1] 202 interactions with TFs reported in DB
-interacs=cbind(interacs,NA)
-interacs[i,6]=intrcsTF
-colnames(interacs)=c("pam50","predictor","coef","pam50Symbol","predictorSymbol","TFsupportedBy")
-length(unique(interacs[interacs[,6]!=""&!is.na(interacs[,6]),5]))
-#[1] 131 TFs with known TF-target interaction in tftargets
-
-
+#as a whole, there is no enrichment for TFs
+coefs=fread("slctdPrdctrs.csv",header=T)
+coefs=coefs[grep("^h|c",as.character(coefs$predictor),perl=T,invert=T),]
+sum(unique(TFtargets$TF)%in%unique(coefs$predictor))
+#[1] 274
+sum(!unique(TFtargets$TF)%in%unique(coefs$predictor))
+#[1] 2041
+sum(!unique(coefs$predictor)%in%unique(TFtargets$TF))
+#[1] 1858
+fisher.test(matrix(c(274,2041,1858,16475-274-2041-1858),nrow=2,ncol=2))$p.val
+#[1] 0.9603
 
 lambda=unlist(lapply(quality,function(x) as.numeric(x[,3])))
 lambda=as.data.frame(cbind(lambda,as.character(sapply(names(quality),rep,50))))
@@ -134,26 +153,6 @@ rmse=as.data.frame(cbind(rmse,as.character(sapply(names(quality),rep,50))))
 colnames(rmse)[2]="subtype"
 ggplot(rmse,aes(x=as.numeric(rmse)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
 
-library(biomaRt)
-library(rentrez)
-
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://apr2019.archive.ensembl.org")
-myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), mart=mart)
-myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
-
-#hgnc_symbol instead of ensemblID
-interacs=unique(do.call(rbind,sifs))
-interacs=interacs[order(interacs[,1]),]
-interacs=interacs[interacs[,2]!="(Intercept)",]
-targets=table(interacs[,1])
-temp=sapply(1:50,function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(targets)[x]],targets[x]))
-interacs=cbind(interacs,unlist(temp))
-interacs=interacs[order(interacs[,2]),]
-i=grep("ENSG",interacs[,2])
-interacs=cbind(interacs,interacs[,2])
-notarg=table(interacs[i,2])
-temp=sapply(1:length(notarg),function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(notarg)[x]],notarg[x]))
-interacs[i,5]=unlist(temp)
 
 #####################################################################
 #######how many times terms are mentioned in literature
