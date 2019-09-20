@@ -169,7 +169,7 @@ fisher.test(matrix(c(274,2041,1858,16475-274-2041-1858),nrow=2,ncol=2))$p.val
 #both on the same paper
 set_entrez_key("49b3079321d573aaa12522e38a1b31d38e08")#ncbi account for dopreto to submit 10 queries per second
 
-comention=sapply(seq(1,12112,10),function(i) 
+comention=pbsapply(seq(1,12112,10),function(i) 
 	apply(interacs[i:(i+9),],1,function(x) {
 		reque=entrez_search(db = "pubmed", term = paste(x[2]," AND ",x[3],collapse=" "));
 		Sys.sleep(0.1);
@@ -184,11 +184,15 @@ write.table(comen,"comention.tsv",sep='\t',quote=F,row.names=F)
 
 #each mentioned
 query=unique(unlist(comen[,3:4]))
-mention=pbsapply(query,function(x){
+mention=pbsapply(seq(1,10746,7),function(i)
+	sapply(query[i:(i+6)],function(x){
 	reque=entrez_search(db = "pubmed", term = x);
 	Sys.sleep(0.1);
-	return(reque)})
-mention=as.matrix(t(mention)[,2])
+	return(reque)}))
+#gives a matrix of output lines(5)*searched terms(7) rows per length(seq(1,10746,7)) columns
+cuentas=unlist(apply(mention,2,function(x) x[seq(2,35,5)]))[1:length(query)]#2 is the index of id counts in the columns
+#further than query len, search was NA
+mention=cbind(query,cuentas)
 
 i=apply(comention,1,function(x) which(interacs[,3]==x[3]&interacs[,4]==x[4]))
 interacs=cbind(interacs,NA)
