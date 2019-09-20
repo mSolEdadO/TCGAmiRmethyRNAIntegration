@@ -1,11 +1,13 @@
 ##############################################################################
 library(biomaRt)
 library(rentrez)
+library(data.table)
+library(pbapply)
 
 ########### methy: am I linking genes with their KNOWN regulatory CpGs?
 ##############################################################################
 #Input CpG-gene annotation = https://zwdzwd.github.io/InfiniumAnnotation
-methy=fread("ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
+methy=fread("../ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
 methy=methy[,c(5,21)]
 methy=do.call(rbind,apply(methy,1,function(x) cbind(x[1],unlist(strsplit(x[2],";")))))
 
@@ -21,15 +23,15 @@ signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
 #I expect an overlap between annotated and selected regulators
 return(cbind(a,b,c,d,signif))}
 
-contingenciasMethy=pblapply(interacs,function(x) sapply(unique(x$pam50),function(y) t(testMethyRegul(y,x))))
+contingenciasMethy=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) testMethyRegul(y,x))))
 #genes with CpGs selected
-sapply(contingencias,function(x) sum(x[,3]>0))
+sapply(contingenciasMethy,function(x) sum(x[,3]>0))
 #    Basal      Her2      LumA      LumB non-tumor 
-#       44        42        45        44        45 
+#       44        42        45        44        45
+#known CpG interactios from the total selected per subtype 
 sapply(contingenciasMethy,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
-#proportion of pam50 genes per subtype with known CpG regulators selected
-#     Basal       Her2       LumA       LumB  non-tumor 
-#0.02272727 0.00000000 0.08888889 0.00000000 0.00000000 
+#       Basal         Her2         LumA         LumB    non-tumor 
+#0.0004214075 0.0000000000 0.0019002375 0.0000000000 0.0000000000 
 #sampe proportions when I test alternative="both"
 #sapply(contingenciasMethy,function(x) sum(apply(x[,1:4],1,function(y) fisher.test(matrix(y,ncol=2,nrow=2))$p.val)<0.01)/nrow(x))     
 
@@ -38,13 +40,15 @@ sapply(contingenciasMethy,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
 ##############################################################################
 library(multiMiR)#https://www.bioconductor.org/packages/devel/bioc/vignettes/multiMiR/inst/doc/multiMiR.html
 #Searching mirecords, mirtarbase, tarbase,diana_microt,elmmo, microcosm, miranda, mirdbpictar, pita, targetscan, pharmaco_mir ...
+pam50=read.table("../ini/pam50.tsv",header=T)
 
 #get all validated miRs interactions for PAM50 genes
 miRtargets=get_multimir(target=pam50$ensembl_gene_id,summary=F,table="all",legacy.out=F)
 miRtargetsV=select(miRtargets,keys="validated",columns=columns(miRtargets),keytype="type")
 miRtargetsP=select(miRtargets,keys="predicted",columns=columns(miRtargets),keytype="type")
 #i want miR stem names coz my datset miR names are for stem stage  
-miRtargetsV=cbind(miRtargetsV,sapply(strsplit(miRtargetsV$mature_mirna_id,"-"),function(x) paste(x[1],x[2],x[3],sep='-')))
+miRtargetsV=cbind(miRtargetsV,sapply(strsplit(miRtargetsV$mature_mirna_id,"-"),function(x) 
+	paste(x[1],x[2],x[3],sep='-')))
 
 #I'm only interested on the interacs I could find with my miR dataset
 load("../ini/porSubti.RData")
@@ -65,13 +69,18 @@ contingencias.miR=pblapply(interacs,function(x) t(sapply(unique(x$pam50),functio
 sapply(contingencias.miR,function(x) sum(x[,3]>0))
 #    Basal      Her2      LumA      LumB non-tumor 
 #        9         3        12        13         8 
+#interactions with miR selected per subtype
+sapply(contingencias.miR,function(x) sum(x[,3]))
+#    Basal      Her2      LumA      LumB non-tumor 
+#       15         4        20        30        40 
 #models didnt selected regulataroy miR
 sapply(contingencias.miR,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
 #    Basal      Her2      LumA      LumB non-tumor 
 #        0         0         0         0         0 
 
 #predicted miR are neither selected
-miRtargetsP=cbind(miRtargetsP,sapply(strsplit(miRtargetsP$mature_mirna_id,"-"),function(x) paste(x[1],x[2],x[3],sep='-')))
+miRtargetsP=cbind(miRtargetsP,sapply(strsplit(miRtargetsP$mature_mirna_id,"-"),function(x)
+ paste(x[1],x[2],x[3],sep='-')))
 miRtargetsP=miRtargetsP[miRtargetsP[,14]%in%miR|miRtargetsP$mature_mirna_id%in%miR,]
 contingencias.miR=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.miRegul(y,x,miRtargetsP))))
 sapply(contingencias.miR,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
@@ -87,22 +96,22 @@ dim(miRtargetsV)
 ##############################################################################
 ########### TFs: am I linking genes with their KNOWN tfs?
 ##############################################################################
-##############################################################################
-########### TFs
-##############################################################################
 library(tftargets)#https://github.com/slowkow/tftargets
 
 #transform TF target lists to tables easier to work with
 load("TFtargets.RData")
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://jan2019.archive.ensembl.org")
-myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), mart=mart)
+myannot=getBM(
+ attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), 
+ mart=mart)
 myannot=myannot[!is.na(myannot$entrezgene),]
 myannot=myannot[!duplicated(myannot$entrezgene),]
 #get hgnc_id for data annotated with entrez id
 TFtargets$TRED=TFtargets$TRED[TFtargets$TRED[,2]%in%myannot$entrezgene,]
 TFtargets$TRED=TFtargets$TRED[order(TFtargets$TRED[,2]),]
 temp=table(TFtargets$TRED[,2])
-ids=unlist(sapply(1:length(temp),function(x) rep(as.character(myannot$hgnc_symbol)[which(as.character(myannot$entrezgene)==names(temp)[x])],temp[x])))
+ids=unlist(sapply(1:length(temp),function(x)
+ rep(as.character(myannot$hgnc_symbol)[which(as.character(myannot$entrezgene)==names(temp)[x])],temp[x])))
 TFtargets$TRED[,2]=unlist(ids)
 
 #only interested on TFs actually presente on the input dataset
@@ -113,12 +122,12 @@ myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 TFtargets=TFtargets[TFtargets[,1]%in%myannot$hgnc_symbol,]
 
 test.TFregul=function(gen,subtype){
-anotadas=unique(TFtargets[which(TFtargets[,2]==gen),1])
-seleccionadas=as.character(subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^h|c",subtype$predictor,invert=T,perl=T))])
+anotadas=unique(TFtargets[which(TFtargets$'target'==gen),1])
+seleccionadas=as.character(subtype$predictor[intersect(which(subtype$'pam50'==gen),which(subtype$predictor%in%TFtargets$TF))])
 a=sum(anotadas%in%seleccionadas)
 b=sum(!anotadas%in%seleccionadas)
 c=sum(!seleccionadas%in%anotadas)
-d=length(genes)-a-b-c
+d=length(unique(TFtargets$TF))-a-b-c
 signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
 return(cbind(a,b,c,d,signif))}
 
@@ -127,10 +136,20 @@ contingencias.ENSG=pblapply(interacs,function(x) t(sapply(unique(x$pam50),functi
 sapply(contingencias.ENSG,function(x) sum(x[,3]>0))
 #    Basal      Her2      LumA      LumB non-tumor 
 #       36        19        40        32        39 
+#interactions with ENSG selected per subtype
+#sapply(contingencias.ENSG,function(x) sum(x[,3]))
+#    Basal      Her2      LumA      LumB non-tumor 
+#      369        73      1138       341       458 
+#interactions with TFs selected per subtype
+sapply(contingencias.ENSG,function(x) sum(x[,3]))
+#    Basal      Her2      LumA      LumB non-tumor 
+#       40         9       140        40        42 
 #predicted TFs are neither selected
 sapply(contingencias.ENSG,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
 #     Basal       Her2       LumA       LumB  non-tumor 
 #0.00000000 0.00000000 0.05000000 0.00000000 0.02564103 
+validatedTFs=do.call(rbind,lapply(c(1,3:5),function(x) 
+	cbind(names(interacs)[x],as.character(unique(interacs[[x]]$pam50)[contingencias.ENSG[[x]][,1]>0]),contingencias.ENSG[[x]][contingencias.ENSG[[x]][,1]>0,])))
 
 #as a whole, there is no enrichment for TFs
 coefs=fread("slctdPrdctrs.csv",header=T)
@@ -144,39 +163,27 @@ sum(!unique(coefs$predictor)%in%unique(TFtargets$TF))
 fisher.test(matrix(c(274,2041,1858,16475-274-2041-1858),nrow=2,ncol=2))$p.val
 #[1] 0.9603
 
-lambda=unlist(lapply(quality,function(x) as.numeric(x[,3])))
-lambda=as.data.frame(cbind(lambda,as.character(sapply(names(quality),rep,50))))
-colnames(lambda)[2]="subtype"
-ggplot(lambda,aes(x=as.numeric(lambda)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
-rmse=unlist(lapply(quality,function(x) as.numeric(x[,4])))
-rmse=as.data.frame(cbind(rmse,as.character(sapply(names(quality),rep,50))))
-colnames(rmse)[2]="subtype"
-ggplot(rmse,aes(x=as.numeric(rmse)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
-
-
 #####################################################################
 #######how many times terms are mentioned in literature
 #####################################################################
 #both on the same paper
-comention=pbsapply(round(seq(1,11119,length=20)),function(i)
-  apply(interacs[i:(i+585),4:5],1,function(x) {
-  reque=entrez_search(db = "pubmed", term = paste(x[1]," AND ",x[2],collapse=" "));
-  Sys.sleep(0.1);
- return(reque)}))
+set_entrez_key("49b3079321d573aaa12522e38a1b31d38e08")#ncbi account for dopreto to submit 10 queries per second
+
+comention=sapply(seq(1,12112,10),function(i) 
+	apply(interacs[i:(i+9),],1,function(x) {
+		reque=entrez_search(db = "pubmed", term = paste(x[2]," AND ",x[3],collapse=" "));
+		Sys.sleep(0.1);
+		return(reque)}))
+
 
 cuentas=as.numeric(apply(comention,c(1,2),function(x) unlist(x[[1]][2])))
-query=as.character(apply(comention,c(1,2),function(x) unlist(x[[1]][4])))
-comen=cbind(query,cuentas)
+comen=cbind(interacs[,2:3],cuentas[1:12112])#further than interacs nrow, search was NA AND NA
 comen=comen[comen[,2]!="0",]
-#cat temp|perl -pe 'unless(/ AND \(/){s/.*?\sOR//g}unless(/\) AND \(/){s/\(.*?OR//g;s/\".*?OR //;s/(^ |\"|\)|\[All Fields\])//g}'
-comention=read.table("Downloads/temp",sep='\t',header=T)
-temp=t(sapply(strsplit(as.character(comention$query)," +AND +",perl=T),as.character))
-comention=cbind(comention,temp)
-comention[,3]=toupper(comention[,3])
-comention[,4]=toupper(comention[,4])
+colnames(comen)[3]="comention"
+write.table(comen,"comention.tsv",sep='\t',quote=F,row.names=F)
 
 #each mentioned
-query=unique(unlist(comention[,3:4]))
+query=unique(unlist(comen[,3:4]))
 mention=pbsapply(query,function(x){
 	reque=entrez_search(db = "pubmed", term = x);
 	Sys.sleep(0.1);
@@ -223,3 +230,12 @@ colnames(sifs1[[3]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
 colnames(sifs1[[4]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
 colnames(sifs1[[5]])[3]="beta"
 save(sifs1,file="annotatedSifsAlpha0.5.RData")
+
+lambda=unlist(lapply(quality,function(x) as.numeric(x[,3])))
+lambda=as.data.frame(cbind(lambda,as.character(sapply(names(quality),rep,50))))
+colnames(lambda)[2]="subtype"
+ggplot(lambda,aes(x=as.numeric(lambda)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
+rmse=unlist(lapply(quality,function(x) as.numeric(x[,4])))
+rmse=as.data.frame(cbind(rmse,as.character(sapply(names(quality),rep,50))))
+colnames(rmse)[2]="subtype"
+ggplot(rmse,aes(x=as.numeric(rmse)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)

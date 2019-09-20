@@ -37,9 +37,6 @@ coefs1=lapply(unique(bestModels$subtype),function(x) temp[grep(x,temp[,2]),c(1,3
 sum(table(unlist(lapply(coefs1,function(x) unique(x[,1]))))==5)
 #32 genes tienen modelo en todos los subtipos
 #[1] 32
-sapply(coefs1,function(x) length(unique(x[,1])))
- Basal   Her2   LumA   LumB normal 
-    33     32     34     36     39 
 sapply(coefs1,function(x) table(substr(x[,2],1,1)))
   Basal Her2 LumA LumB non-tumor
 c  2374 2192 2112 1144      1761
