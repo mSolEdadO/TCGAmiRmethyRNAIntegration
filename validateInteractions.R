@@ -35,6 +35,15 @@ sapply(contingenciasMethy,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
 #sampe proportions when I test alternative="both"
 #sapply(contingenciasMethy,function(x) sum(apply(x[,1:4],1,function(y) fisher.test(matrix(y,ncol=2,nrow=2))$p.val)<0.01)/nrow(x))     
 
+#as a whole, there is no enrichment for CpGs
+a=length(grep("^c",unique(interacs$predictor)))
+c=384575-a
+b=length(unique(interacs$predictor))-a
+d=16475+433-b
+CpGenri=t(matrix(c(a,c,b,d),ncol=2,nrow=2))
+fisher.test(CpGenri,alternative="greater")$p.val
+#p-value = 1
+
 ##############################################################################
 ########### miR: am I linking genes with their KNOWN regulatory miRr?
 ##############################################################################
@@ -93,6 +102,18 @@ dim(miRtargetsP)
 dim(miRtargetsV)
 #[1] 32 14
 
+#as a whole, there is an enrichment for miRs
+a=length(grep("^h",unique(interacs$predictor)))
+b=length(unique(interacs$predictor))-a
+c=433-a
+d=384575+16475-b
+miRenri=t(matrix(c(a,c,b,d),ncol=2,nrow=2))
+#      slctd NOslctd
+#miR      97     336
+#nomiR 10617  390433
+fisher.test(miRenri,alternative="greater")
+#p-value < 2.2e-16
+
 ##############################################################################
 ########### TFs: am I linking genes with their KNOWN tfs?
 ##############################################################################
@@ -114,7 +135,7 @@ ids=unlist(sapply(1:length(temp),function(x)
  rep(as.character(myannot$hgnc_symbol)[which(as.character(myannot$entrezgene)==names(temp)[x])],temp[x])))
 TFtargets$TRED[,2]=unlist(ids)
 
-#only interested on TFs actually presente on the input dataset
+#only interested on TFs actually present on the input dataset
 genes=rownames(DE.genes$her2_normal)
 myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","external_gene_name"), mart=mart)
 myannot=myannot[myannot$ensembl_gene_id%in%genes,]
@@ -151,17 +172,17 @@ sapply(contingencias.ENSG,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
 validatedTFs=do.call(rbind,lapply(c(1,3:5),function(x) 
 	cbind(names(interacs)[x],as.character(unique(interacs[[x]]$pam50)[contingencias.ENSG[[x]][,1]>0]),contingencias.ENSG[[x]][contingencias.ENSG[[x]][,1]>0,])))
 
-#as a whole, there is no enrichment for TFs
-coefs=fread("slctdPrdctrs.csv",header=T)
-coefs=coefs[grep("^h|c",as.character(coefs$predictor),perl=T,invert=T),]
-sum(unique(TFtargets$TF)%in%unique(coefs$predictor))
-#[1] 274
-sum(!unique(TFtargets$TF)%in%unique(coefs$predictor))
-#[1] 2041
-sum(!unique(coefs$predictor)%in%unique(TFtargets$TF))
-#[1] 1858
-fisher.test(matrix(c(274,2041,1858,16475-274-2041-1858),nrow=2,ncol=2))$p.val
-#[1] 0.9603
+#as a whole, there is an enrichment for TFs
+a=sum(unique(interacs$predictor)%in%TFtargets$TF)
+b=length(unique(interacs$predictor))-a
+c=length(unique(TFtargets$TF))-a
+d=384575+433+16475-length(unique(interacs$predictor))
+TFenri=t(matrix(c(a,c,b,d),ncol=2,nrow=2))
+#     slctd NOslctd
+#TF     268    2011
+#noTF 10446  390769
+fisher.test(TFenri,alternative="greater")
+#p-value < 2.2e-16
 
 #####################################################################
 #######how many times terms are mentioned in literature
