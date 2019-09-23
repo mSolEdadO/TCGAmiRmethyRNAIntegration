@@ -194,15 +194,20 @@ cuentas=unlist(apply(mention,2,function(x) x[seq(2,35,5)]))[1:length(query)]#2 i
 #further than query len, search was NA
 mention=cbind(query,cuentas)
 
-i=apply(comention,1,function(x) which(interacs[,3]==x[3]&interacs[,4]==x[4]))
-interacs=cbind(interacs,NA)
-interacs[i,7]=comention$cuentas
-temp=t(apply(interacs[i,],1,function(x) 
-	cbind(mention[rownames(mention)==x[3],2],mention[rownames(mention)==x[4],2])))
-interacs=cbind(interacs,NA,NA)
-interacs[i,8]=temp[,1]
-interacs[i,9]=temp[,2]
-colnames(interacs)[7:9]=c("comention","pam50Mention","predictorMention")
+continComent=function(interac){
+	members=as.character(interac)
+	a=interac$comention
+	b=mention$cuentas[mention$query==members[1]]-a
+	c=mention$cuentas[mention$query==members[2]]-a
+	d=30151833-b-c-a
+	mat=matrix(c(a,b,c,d),ncol=2,nrow=2)
+	pval=fisher.test(mat,alternative="greater")$p.val
+	return(c(mat,pval))}
+fshr=sapply(1:nrow(comen),function(x) continComent(comen))
+fshr=cbind(fshr,p.adjust(fshr[,5],"fdr")
+colnames(fshr)=c("comention","pam50mention","predimention","neither","p.val","fdr")
+comention=cbind(comention,fshr)
+write.table(comention,"comention.tsv",sep='\t',quote=F,row.names=F)
 
 #####################################################################
 ######all together per subtype
