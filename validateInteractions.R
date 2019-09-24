@@ -4,8 +4,66 @@ library(rentrez)
 library(data.table)
 library(pbapply)
 
-########### methy: am I linking genes with their KNOWN regulatory CpGs?
 ##############################################################################
+########### coherence with regulation models
+##############################################################################
+type=as.matrix(interacs[,3:4])
+type[grep("^c",type[,1]),1]="CpG"
+type[grep("^h",type[,1]),1]="miRNA"
+type[type[,1]%in%TFtargets$TF,1]="TF"
+type[!type[,1]%in%c("CpG","miRNA","TF"),1]="transcript"
+potens=type[type$predictor!="transcript",]
+
+#coeff distribution
+png("coefficients")
+ partR=ggplot(potens,aes(x=as.numeric(as.character(coef))))+geom_density(aes(group=predictor,color=predictor,fill=predictor),alpha=0.3)+xlim(-1,1)+scale_fill_manual(values=custom.col)+scale_color_manual(values=custom.col)+xlab("coefficient")
+ partT=ggplot(type,aes(x=as.numeric(as.character(coef))))+geom_density(aes(group=predictor,color=predictor,fill=predictor),alpha=0.3)+xlim(-1,1)+scale_fill_manual(values=custom.col)+scale_color_manual(values=custom.col)+xlab("coefficient")
+ grid.arrange(partR,partT,nrow=2)
+dev.off()
+
+png("coefficientsB.png")
+ ggplot(type,aes(y=as.numeric(as.character(coef)),color=predictor))+geom_boxplot()+scale_color_manual(values=custom.col)+ylab("coefficient")
+dev.off()
+
+# CpGs enrichment for negative coeffs
+length(intersect(grep("^c",interacs$predictor),which(interacs$coef<0)))
+#[1] 5051
+length(intersect(grep("^c",interacs$predictor),which(interacs$coef>0)))
+#[1] 4532
+length(intersect(grep("^c",interacs$predictor,invert=T),which(interacs$coef<0)))
+#[1] 673
+length(intersect(grep("^c",interacs$predictor,invert=T),which(interacs$coef>0)))
+#[1] 1856
+fisher.test(t(matrix(c(5051,673,4532,1856),ncol=2,nrow=2)),alternative="greater")
+#p-value < 2.2e-16
+# miRNAs enrichment for negative coeffs
+length(intersect(grep("^h",interacs$predictor),which(interacs$coef<0)))
+#[1] 33
+length(intersect(grep("^h",interacs$predictor),which(interacs$coef>0)))
+#[1] 76
+length(intersect(grep("^h",interacs$predictor,invert=T),which(interacs$coef<0)))
+#[1] 5691
+length(intersect(grep("^h",interacs$predictor,invert=T),which(interacs$coef>0)))
+#[1] 6312
+fisher.test(t(matrix(c(33,5691,76,6312),ncol=2,nrow=2)),"greater")
+#p-value = 0.0003342
+# TFs enrichment for negative coeffs
+sum(interacs$predictor%in%TFtargets$TF&interacs$coef<0)
+#[1] 88
+sum(interacs$predictor%in%TFtargets$TF&interacs$coef>0)
+#[1] 224
+length(intersect(intersect(which(!interacs$predictor%in%TFtargets$TF),grep("^h|c",interacs$predictor,invert=T,perl=T)),which(interacs$coef<0)))
+#[1] 552
+length(intersect(intersect(which(!interacs$predictor%in%TFtargets$TF),grep("^h|c",interacs$predictor,invert=T,perl=T)),which(interacs$coef>0)))
+#[1] 1556
+fisher.test(t(matrix(c(88,552,224,1556),ncol=2,nrow=2)))
+#p-value = 0.4499
+
+##############################################################################
+########### am I linking genes with their KNOWN regulators?
+##############################################################################
+########### CpGs
+
 #Input CpG-gene annotation = https://zwdzwd.github.io/InfiniumAnnotation
 methy=fread("../ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
 methy=methy[,c(5,21)]
@@ -45,8 +103,8 @@ fisher.test(CpGenri,alternative="greater")$p.val
 #p-value = 1
 
 ##############################################################################
-########### miR: am I linking genes with their KNOWN regulatory miRr?
-##############################################################################
+########### miRNAs
+
 library(multiMiR)#https://www.bioconductor.org/packages/devel/bioc/vignettes/multiMiR/inst/doc/multiMiR.html
 #Searching mirecords, mirtarbase, tarbase,diana_microt,elmmo, microcosm, miranda, mirdbpictar, pita, targetscan, pharmaco_mir ...
 pam50=read.table("../ini/pam50.tsv",header=T)
@@ -115,8 +173,8 @@ fisher.test(miRenri,alternative="greater")
 #p-value < 2.2e-16
 
 ##############################################################################
-########### TFs: am I linking genes with their KNOWN tfs?
-##############################################################################
+########### TFs
+
 library(tftargets)#https://github.com/slowkow/tftargets
 
 #transform TF target lists to tables easier to work with
@@ -185,7 +243,7 @@ fisher.test(TFenri,alternative="greater")
 #p-value < 2.2e-16
 
 #####################################################################
-#######how many times terms are mentioned in literature
+#######how many times terms are comentioned in literature
 #####################################################################
 #both on the same paper
 set_entrez_key("49b3079321d573aaa12522e38a1b31d38e08")#ncbi account for dopreto to submit 10 queries per second
