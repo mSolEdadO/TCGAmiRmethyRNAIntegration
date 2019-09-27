@@ -69,29 +69,20 @@ methy=fread("../ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
 methy=methy[,c(5,21)]
 methy=do.call(rbind,apply(methy,1,function(x) cbind(x[1],unlist(strsplit(x[2],";")))))
 
-#build contingency tables for CpGs
-testMethyRegul=function(gen,subtype){
-anotadas=methy[which(methy[,2]==gen),1]
-seleccionadas=subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^c",subtype$predictor))]
-a=sum(anotadas%in%seleccionadas)
-b=sum(!anotadas%in%seleccionadas)
-c=sum(!seleccionadas%in%anotadas)
-d=length(unique(methy[,1]))-a-b-c
-signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
-#I expect an overlap between annotated and selected regulators
-return(cbind(a,b,c,d,signif))}
-
-contingenciasMethy=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) testMethyRegul(y,x))))
-#genes with CpGs selected
-sapply(contingenciasMethy,function(x) sum(x[,3]>0))
-#    Basal      Her2      LumA      LumB non-tumor 
-#       44        42        45        44        45
-#known CpG interactios from the total selected per subtype 
-sapply(contingenciasMethy,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
-#       Basal         Her2         LumA         LumB    non-tumor 
-#0.0004214075 0.0000000000 0.0019002375 0.0000000000 0.0000000000 
-#sampe proportions when I test alternative="both"
-#sapply(contingenciasMethy,function(x) sum(apply(x[,1:4],1,function(y) fisher.test(matrix(y,ncol=2,nrow=2))$p.val)<0.01)/nrow(x))     
+nega=interacs[interacs$coef<0,]
+negaCpG=nega[grep("^c",nega$predictor),]
+negCpGanno=lapply(unique(negaCpG$predictor),function(x) sum(negaCpG$pam50[negaCpG$predictor==x]%in%methy[methy[,1]==x,2]))
+table(unlist(negCpGanno))
+#   0    1 
+#4712    8 
+posi=interacs[interacs$coef>0,]
+posCpG=posi[grep("^c",posi$predictor),]
+posCpGanno=lapply(unique(posCpG$predictor),function(x) sum(posCpG$pam50[posCpG$predictor==x]%in%methy[methy[,1]==x,2]))
+table(unlist(posCpGanno))
+#   0 
+#4212 
+fisher.test(matrix(c(8,0,4712,4212),ncol=2,nrow=2))
+#p-value = 0.0085
 
 #as a whole, there is no enrichment for CpGs
 a=length(grep("^c",unique(interacs$predictor)))
