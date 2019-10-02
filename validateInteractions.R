@@ -82,11 +82,22 @@ methy=do.call(rbind,apply(methy,1,function(x) cbind(x[1],unlist(strsplit(x[2],";
 #return(cbind(a,b,c,d,signif))}
 
 #contingenciasMethy=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) testMethyRegul(y,x))))
-#genes with CpGs selected
-#sapply(contingenciasMethy,function(x) sum(x[,3]>0))
-#    Basal      Her2      LumA      LumB non-tumor 
-#       44        42        45        44        45
-#known CpG interactios from the total selected per subtype 
+
+#sign of the known CpGs 
+nega=interacs[interacs$coef<0,]
+negaCpG=nega[grep("^c",nega$predictor),]
+negCpGanno=lapply(unique(negaCpG$predictor),function(x) sum(negaCpG$pam50[negaCpG$predictor==x]%in%methy[methy[,1]==x,2]))
+table(unlist(negCpGanno))
+#   0    1 
+#4712    8 
+posi=interacs[interacs$coef>0,]
+posCpG=posi[grep("^c",posi$predictor),]
+posCpGanno=lapply(unique(posCpG$predictor),function(x) sum(posCpG$pam50[posCpG$predictor==x]%in%methy[methy[,1]==x,2]))
+table(unlist(posCpGanno))
+#   0 
+#4212 
+fisher.test(matrix(c(8,0,4712,4212),ncol=2,nrow=2))
+#p-value = 0.0085
 
 #as a whole, there is no enrichment for CpGs
 a=length(grep("^c",unique(interacs$predictor)))
@@ -99,7 +110,7 @@ fisher.test(CpGenri,alternative="greater")$p.val
 
 #there is neither an enrichment for known regulatory CpGs
 cg=interacs[grep("^c",interacs$predictor),]
-a=sapply(unique(cg$predictor),function(x) sum(cg$pam50[cg$predictor==x]%in%methy[methy[,1]==x,2]))
+#a=sapply(unique(cg$predictor),function(x) sum(cg$pam50[cg$predictor==x]%in%methy[methy[,1]==x,2]))
 #[1] 8
 pam50=read.table("../ini/pam50.tsv",header=T)
 methy[methy[,2]%in%pam50$hgnc_symbol,]
