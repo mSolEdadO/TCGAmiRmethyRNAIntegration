@@ -70,28 +70,23 @@ methy=methy[,c(5,21)]
 methy=do.call(rbind,apply(methy,1,function(x) cbind(x[1],unlist(strsplit(x[2],";")))))
 
 #build contingency tables for CpGs
-testMethyRegul=function(gen,subtype){
-anotadas=methy[which(methy[,2]==gen),1]
-seleccionadas=subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^c",subtype$predictor))]
-a=sum(anotadas%in%seleccionadas)
-b=sum(!anotadas%in%seleccionadas)
-c=sum(!seleccionadas%in%anotadas)
-d=length(unique(methy[,1]))-a-b-c
-signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
+#testMethyRegul=function(gen,subtype){
+#anotadas=methy[which(methy[,2]==gen),1]
+#seleccionadas=subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^c",subtype$predictor))]
+#a=sum(anotadas%in%seleccionadas)
+#b=sum(!anotadas%in%seleccionadas)
+#c=sum(!seleccionadas%in%anotadas)
+#d=length(unique(methy[,1]))-a-b-c
+#signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
 #I expect an overlap between annotated and selected regulators
-return(cbind(a,b,c,d,signif))}
+#return(cbind(a,b,c,d,signif))}
 
-contingenciasMethy=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) testMethyRegul(y,x))))
+#contingenciasMethy=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) testMethyRegul(y,x))))
 #genes with CpGs selected
-sapply(contingenciasMethy,function(x) sum(x[,3]>0))
+#sapply(contingenciasMethy,function(x) sum(x[,3]>0))
 #    Basal      Her2      LumA      LumB non-tumor 
 #       44        42        45        44        45
 #known CpG interactios from the total selected per subtype 
-sapply(contingenciasMethy,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
-#       Basal         Her2         LumA         LumB    non-tumor 
-#0.0004214075 0.0000000000 0.0019002375 0.0000000000 0.0000000000 
-#sampe proportions when I test alternative="both"
-#sapply(contingenciasMethy,function(x) sum(apply(x[,1:4],1,function(y) fisher.test(matrix(y,ncol=2,nrow=2))$p.val)<0.01)/nrow(x))     
 
 #as a whole, there is no enrichment for CpGs
 a=length(grep("^c",unique(interacs$predictor)))
@@ -101,6 +96,17 @@ d=16475+433-b
 CpGenri=t(matrix(c(a,c,b,d),ncol=2,nrow=2))
 fisher.test(CpGenri,alternative="greater")$p.val
 #p-value = 1
+
+#there is neither an enrichment for known regulatory CpGs
+cg=interacs[grep("^c",interacs$predictor),]
+a=sapply(unique(cg$predictor),function(x) sum(cg$pam50[cg$predictor==x]%in%methy[methy[,1]==x,2]))
+#[1] 8
+pam50=read.table("../ini/pam50.tsv",header=T)
+methy[methy[,2]%in%pam50$hgnc_symbol,]
+fisher.test(matrix(c(8,nrow(cg)-8,nrow(methy)-8,384575-nrow(cg)-nrow(methy)+8),ncol=2,nrow=2),alternative="greater")
+#p-value = 1
+fisher.test(matrix(c(8,9583-8,1182-8,384575-9583-1182+8),ncol=2,nrow=2),alternative="less")
+#p-value = 2.447e-06
 
 ##############################################################################
 ########### miRNAs
@@ -200,35 +206,20 @@ myannot=myannot[myannot$ensembl_gene_id%in%genes,]
 myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 TFtargets=TFtargets[TFtargets[,1]%in%myannot$hgnc_symbol,]
 
-test.TFregul=function(gen,subtype){
-anotadas=unique(TFtargets[which(TFtargets$'target'==gen),1])
-seleccionadas=as.character(subtype$predictor[intersect(which(subtype$'pam50'==gen),which(subtype$predictor%in%TFtargets$TF))])
-a=sum(anotadas%in%seleccionadas)
-b=sum(!anotadas%in%seleccionadas)
-c=sum(!seleccionadas%in%anotadas)
-d=length(unique(TFtargets$TF))-a-b-c
-signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
-return(cbind(a,b,c,d,signif))}
+#test.TFregul=function(gen,subtype){
+#anotadas=unique(TFtargets[which(TFtargets$'target'==gen),1])
+#seleccionadas=as.character(subtype$predictor[intersect(which(subtype$'pam50'==gen),which(subtype$predictor%in%TFtargets$TF))])
+#a=sum(anotadas%in%seleccionadas)
+#b=sum(!anotadas%in%seleccionadas)
+#c=sum(!seleccionadas%in%anotadas)
+#d=length(unique(TFtargets$TF))-a-b-c
+#signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
+#return(cbind(a,b,c,d,signif))}
 
-contingencias.ENSG=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.TFregul(y,x))))
+#contingencias.ENSG=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.TFregul(y,x))))
 #genes with ENSGs selected
-sapply(contingencias.ENSG,function(x) sum(x[,3]>0))
-#    Basal      Her2      LumA      LumB non-tumor 
-#       36        19        40        32        39 
-#interactions with ENSG selected per subtype
-#sapply(contingencias.ENSG,function(x) sum(x[,3]))
-#    Basal      Her2      LumA      LumB non-tumor 
-#      369        73      1138       341       458 
-#interactions with TFs selected per subtype
-sapply(contingencias.ENSG,function(x) sum(x[,3]))
-#    Basal      Her2      LumA      LumB non-tumor 
-#       40         9       140        40        42 
-#predicted TFs are neither selected
-sapply(contingencias.ENSG,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
-#     Basal       Her2       LumA       LumB  non-tumor 
-#0.00000000 0.00000000 0.05000000 0.00000000 0.02564103 
-validatedTFs=do.call(rbind,lapply(c(1,3:5),function(x) 
-	cbind(names(interacs)[x],as.character(unique(interacs[[x]]$pam50)[contingencias.ENSG[[x]][,1]>0]),contingencias.ENSG[[x]][contingencias.ENSG[[x]][,1]>0,])))
+#validatedTFs=do.call(rbind,lapply(c(1,3:5),function(x) 
+#	cbind(names(interacs)[x],as.character(unique(interacs[[x]]$pam50)[contingencias.ENSG[[x]][,1]>0]),contingencias.ENSG[[x]][contingencias.ENSG[[x]][,1]>0,])))
 
 #as a whole, there is an enrichment for TFs
 a=sum(unique(interacs$predictor)%in%TFtargets$TF)
@@ -240,6 +231,17 @@ TFenri=t(matrix(c(a,c,b,d),ncol=2,nrow=2))
 #TF     268    2011
 #noTF 10446  390769
 fisher.test(TFenri,alternative="greater")
+#p-value < 2.2e-16
+
+#there is also an enrichment for known TFs
+tfs=interacs[interacs$predictor%in%TFtargets$TF,]
+tfs=lapply(unique(tfs$subtype),function(x) tfs[tfs$subtype==x,])
+a=lapply(tfs,function(y) sapply(unique(y$predictor),function(x) 
+	sum(y$pam50[y$predictor==x]%in%interesTF$target[interesTF$TF==x])))
+sum(sapply(a,sum))
+#[1] 41
+interesTF=TFtargets[TFtargets$target%in%pam50$hgnc_symbol,]
+fisher.test(matrix(c(41,sum(sapply(tfs,nrow))-41,nrow(interesTF)-41,nrow(TFtargets)-sum(sapply(tfs,nrow))-nrow(interesTF)+41),ncol=2,nrow=2),alternative="greater")
 #p-value < 2.2e-16
 
 #####################################################################
