@@ -302,41 +302,62 @@ comention=cbind(comention,fshr)
 write.table(comention,"comention.tsv",sep='\t',quote=F,row.names=F)
 
 #####################################################################
-######all together per subtype
-#####################################################################
-
-sifs1=lapply(sifs,function(x) x[x[,2]!="(Intercept)",])
-temp=lapply(sifs,function(x) do.call(rbind,apply(x,1,function(y) interacs[interacs[,1]==y[1]&interacs[,2]==y[2],])))
-sifs1=lapply(1:5,function(x) cbind(as.matrix(sifs1[[x]][,3]),as.matrix(temp[[x]])))
-names(sifs1)=names(sifs)
-sifs1=lapply(sifs1,function(x) x[,c(2:3,1,4:ncol(x))])
-#####################################################################
 ######coherence of regulation
 #####################################################################
-	     
-tempi=sifs1[c(1:2,5,3)]
-i.cpg=lapply(tempi,function(x) grep("hsa|ENSG",x[,2],perl=T,invert=T))
-i.mir=lapply(tempi,function(x) grep("hsa",x[,2]))
+#negative coeff CpGs methylation is opposite to target gene expression	     
+cpgs=interacs[grep("^c",interacs$predictor),]
+cpgs=lapply(unique(cpgs$subtype),function(x) cpgs[cpgs$subtype==x,])
+dvalues=lapply(1:4,function(x) t(apply(cpgs[[x]],1,function(z) 
+	rbind(DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==z[2]],DM.cpg1[[x]]$logFC[rownames(DM.cpg1[[x]])==z[3]]))))
+sameSign=lapply(dvalues,function(x) rowSums(x<0))
+sameSign=lapply(1:4,function(x) cbind(cpgs[[x]]$coef,sameSign[[x]]))
+table(unlist(lapply(1:4,function(x) sameSign[[x]][sameSign[[x]][,1]<0,2])))
+#   0    1    2 
+#1083 1864  637
+table(unlist(lapply(1:4,function(x) sameSign[[x]][sameSign[[x]][,1]>0,2])))
+#   0    1    2 
+#1002 2089 1147
+fisher.test(matrix(c(1864,2089,1720,2149),ncol=2,nrow=2),alternative="less")
+#p-value = 0.008846
 
-DA=lapply(1:4,function(x) rbind(DE.genes[[x]],DE.miR[[x]],DM.cpg1[[x]]))
-up=lapply(1:4,function(x) sapply(tempi[[x]][,1],function(y) DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==y]))
-prediUP=lapply(1:4,function(x) sapply(tempi[[x]][,2],function(y) DA[[x]]$logFC[rownames(DA[[x]])==y]))
-tempi=lapply(1:4,function(x) cbind(tempi[[x]],up[[x]]>0,prediUP[[x]]>0))
-#lapply(1:4,function(x) fisher.test(table(as.data.frame(tempi[[x]][i.mir[[x]],8:9]))))#no significant
-tempi$normal=sifs1$normal
-sifs1=tempi
-colnames(sifs1[[1]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
-colnames(sifs1[[2]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
-colnames(sifs1[[3]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
-colnames(sifs1[[4]])[c(3,10:11)]=c("beta","pam50UP","predictorUP")
-colnames(sifs1[[5]])[3]="beta"
-save(sifs1,file="annotatedSifsAlpha0.5.RData")
+#negative coeff miRs expression is NOT opposite to target gene expression	     
+mirs=interacs[grep("^h",interacs$predictor),]
+mirs=lapply(unique(mirs$subtype),function(x) mirs[mirs$subtype==x,])
+dvalues.miR=lapply(1:4,function(x) t(apply(mirs[[x]],1,function(z) 
+	rbind(DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==z[2]],DE.miR[[x]]$logFC[rownames(DE.miR[[x]])==z[3]]))))
+sameSign.miR=lapply(dvalues.miR,function(x) rowSums(x<0))
+sameSign.miR=lapply(1:4,function(x) cbind(mirs[[x]]$coef,sameSign.miR[[x]]))
+table(unlist(lapply(1:4,function(x) sameSign.miR[[x]][sameSign.miR[[x]][,1]<0,2])))
+#0 1 2 
+#9 8 1 
+table(unlist(lapply(1:4,function(x) sameSign.miR[[x]][sameSign.miR[[x]][,1]>0,2])))
+# 0  1  2 
+#21 24  6 
+fisher.test(matrix(c(8,24,10,27),ncol=2,nrow=2))
+#p-value = 1
 
-lambda=unlist(lapply(quality,function(x) as.numeric(x[,3])))
-lambda=as.data.frame(cbind(lambda,as.character(sapply(names(quality),rep,50))))
-colnames(lambda)[2]="subtype"
-ggplot(lambda,aes(x=as.numeric(lambda)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
-rmse=unlist(lapply(quality,function(x) as.numeric(x[,4])))
-rmse=as.data.frame(cbind(rmse,as.character(sapply(names(quality),rep,50))))
-colnames(rmse)[2]="subtype"
-ggplot(rmse,aes(x=as.numeric(rmse)))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+scale_x_continuous(minor_breaks=NULL)
+#negative coeff TFs expression is NOT opposite to target gene expression	     
+tfs=interacs[interacs$predictor%in%TFtargets$TF,]
+tfs=lapply(unique(tfs$subtype),function(x) tfs[tfs$subtype==x,])
+dvalues.TF=lapply(1:4,function(x) t(apply(tfs[[x]],1,function(z) 
+	rbind(DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==z[2]],DE.genes[[x]]$logFC[rownames(DE.genes[[x]])==z[3]]))))
+sameSign.TF=lapply(dvalues.TF,function(x) rowSums(x<0))
+sameSign.TF=lapply(1:4,function(x) cbind(tfs[[x]]$coef,sameSign.TF[[x]]))
+table(unlist(lapply(1:4,function(x) sameSign.TF[[x]][sameSign.TF[[x]][,1]<0,2])))
+# 0  1  2 
+#19 30 21 
+table(unlist(lapply(1:4,function(x) sameSign.TF[[x]][sameSign.TF[[x]][,1]>0,2])))
+#0  1  2 
+#54 86 53 
+fisher.test(matrix(c(30,86,40,107),ncol=2,nrow=2))
+#p-value = 0.8884
+
+#joining all regulators negative coeff predictors are NOT opposite to target gene expression	     
+colSums(rbind(table(unlist(lapply(1:4,function(x) sameSign[[x]][sameSign[[x]][,1]<0,2]))),table(unlist(lapply(1:4,function(x) sameSign.miR[[x]][sameSign.miR[[x]][,1]<0,2]))),table(unlist(lapply(1:4,function(x) sameSign.TF[[x]][sameSign.TF[[x]][,1]<0,2])))))
+#   0    1    2 
+#1030 2127 1169 
+colSums(rbind(table(unlist(lapply(1:4,function(x) sameSign[[x]][sameSign[[x]][,1]>0,2]))),table(unlist(lapply(1:4,function(x) sameSign.miR[[x]][sameSign.miR[[x]][,1]>0,2]))),table(unlist(lapply(1:4,function(x) sameSign.TF[[x]][sameSign.TF[[x]][,1]>0,2])))))
+#   0    1    2 
+#1158 1974  696 
+fisher.test(matrix(c(2127,1974,2199,1854),ncol=2,nrow=2),alternative="less")
+#p-value = 0.01615
