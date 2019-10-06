@@ -23,20 +23,20 @@ nombres=subtipo$V1
 subtipo$V1=NULL
 subtipo=t(as.matrix(subtipo))
 colnames(subtipo)=nombres
-i=round(nrow(subtipo)*0.8)
-subtipo=subtipo[(i+1):nrow(subtipo),]
+#i=round(nrow(subtipo)*0.8)
+#subtipo=subtipo[(i+1):nrow(subtipo),]
 
-splits=nrow(subtipo)*nrow(subtipo)/2
+#splits=nrow(subtipo)*(nrow(subtipo)-1)/2
 fit.multi=multi.split(x=subtipo[,colnames(subtipo)!=gen],
 		      y=subtipo[,colnames(subtipo)==gen],
-		      B=splits,
-		      fraction=2/nrow(subtipo),
-		      repeat.max=40000,#no entiendo por qué no jala sin esto
 		      model.selector=enet,
-		      args.model.selector = list(s=args[3],ppC=args[4],ppE=args[5],ppM=args[6]))
+		      args.model.selector = list(s=args[3],ppC=args[4],ppE=args[5],ppM=args[6]).
+		      verbose=T,
+		      return.selmodels=T,
+		      return.nonaggr=T)
 
-write.table(fit.multi$pval.corr,
-	    paste(gen,"pvals",sep='.'),
+write.table(t(rbind(fit.multi$sel.models,fit.multi$pval.corr)),
+	    paste(args[1],gen,"pvals",sep='.'),
 	    sep='\t',
 	    quote=F,
 	    col.names=F)
