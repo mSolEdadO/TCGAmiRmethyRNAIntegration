@@ -2,6 +2,17 @@
 library(glmnet)
 library(methods)
 library(data.table)
+library(hdi)
+enet=function(y,x,s,ppC,ppE,ppM){
+fit <- glmnet(y = y,
+	       x = x,
+	       alpha = 0.5,
+	       lambda = s,
+	       standardize=T,
+	       penalty.factor=c(rep(ppC,384575),rep(ppE,16475),rep(ppM,433))) 
+ m   <- predict(fit, type = "nonzero")
+ m[[1]]}
+
 
 args = commandArgs(trailingOnly=TRUE)
 subtipo=args[1]
@@ -15,22 +26,17 @@ colnames(subtipo)=nombres
 i=round(nrow(subtipo)*0.8)
 subtipo=subtipo[(i+1):nrow(subtipo),]
 
-model <- glmnet(y = subtipo[,colnames(subtipo)==gen],
-	       x = subtipo[,colnames(subtipo)!=gen],
-	       alpha = 0.5,
-	       lambda = args[3],
-	       standardize=T,
-	       penalty.factor=c(rep(args[4],384575),rep(args[5],16475),rep(args[6],433))) 
+splits=nrow(subtipo)*nrow(subtipo)/2
+fit.multi=multi.split(x=subtipo[,colnames(subtipo)!=gen],
+		      y=subtipo[,colnames(subtipo)==gen],
+		      B=splits,
+		      fraction=2/nrow(subtipo),
+		      repeat.max=40000,#no entiendo por qué no jala sin esto
+		      model.selector=enet,
+		      args.model.selector = list(s=args[3],ppC=args[4],ppE=args[5],ppM=args[6]))
 
-coefs=as.matrix(coef(model))
-write.table(coefs[coefs!=0,],
-	    file=paste(gen,args[1],"coefs",sep='.'),
-	    quote=F,
-	    sep='\t')
-write.table(paste(args[1],args[2],args[3],args[4],args[5],args[6],model$nulldev,model$dev.ratio,sep=" "),
-#nulldev=2*(model with a free parameter per observatio loglikelihood-loglikelihood of the intercept model)
-#dev.ratio=fraction of (null) deviance explained=1-dev/nulldev
-	    file=paste(gen,args[1],"results",sep='.'),
-	    quote=F,
+write.table(fit.multi$pval.corr,
+	    paste(gen,"pvals",sep='.'),
 	    sep='\t',
-	    row.names=F)
+	    quote=F,
+	    col.names=F)
