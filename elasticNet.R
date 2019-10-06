@@ -12,6 +12,8 @@ nombres=subtipo$V1
 subtipo$V1=NULL
 subtipo=t(as.matrix(subtipo))
 colnames(subtipo)=nombres
+i=round(nrow(subtipo)*0.8)
+subtipo=subtipo[(i+1):nrow(subtipo),]
 
 model <- glmnet(y = subtipo[,colnames(subtipo)==gen],
 	       x = subtipo[,colnames(subtipo)!=gen],
