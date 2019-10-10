@@ -197,6 +197,7 @@ library(tftargets)#https://github.com/slowkow/tftargets
 #transform TF target lists to tables easier to work with
 load("TFtargets.RData")
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://jan2019.archive.ensembl.org")
+#mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",version=95)
 myannot=getBM(
  attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position","end_position","external_gene_name","entrezgene"), 
  mart=mart)
