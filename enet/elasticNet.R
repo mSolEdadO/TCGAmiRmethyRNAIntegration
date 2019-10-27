@@ -12,9 +12,10 @@ nombres=subtipo$V1
 subtipo$V1=NULL
 subtipo=t(as.matrix(subtipo))
 colnames(subtipo)=nombres
+testing=subtipo[((nrow(subtipo)*0.8)+1):nrow(subtipo),]
 
-model <- glmnet(y = subtipo[,colnames(subtipo)==gen],
-	       x = subtipo[,colnames(subtipo)!=gen],
+model <- glmnet(y = testing[,colnames(testing)==gen],
+	       x = testing[,colnames(testing)!=gen],
 	       alpha = 0.5,
 	       lambda = args[3],
 	       standardize=T,
