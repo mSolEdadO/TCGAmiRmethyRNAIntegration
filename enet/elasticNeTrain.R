@@ -20,38 +20,38 @@ subtipo=t(as.matrix(subtipo)[,1:i])#training subset should not be used for testi
 colnames(subtipo)=nombres
 #rm(EigenScaled);gc()
 
-coefGrid <-  expand.grid(lambda=10^ seq (3 , -2 , length =100),
+coefGrid <-  expand.grid(lambda=10^ seq (3 , -2 , length =50),#length is usually 100
 			alpha=0.5)
 k=5
 if(nrow(subtipo)<100){k=3}
 trainCtrl <- trainControl("repeatedcv",
 			 number = k, #k choose this according to n
-			 repeats=600/k,#200 for the small training set, 
+			 repeats=60/k,#200 its ok, the more the better 
 			 verboseIter = T,#T if fit fails,
 			 allowParallel=T,
 			 returnResamp="all")
-
 set.seed(123)
-model <- train(y = subtipo[,colnames(subtipo)==gen],
-	       x = subtipo[,colnames(subtipo)!=gen],
+model <- train(y = training[,colnames(training)==gen],
+	       x = training[,colnames(training)!=gen],
 	       method = "glmnet",
 	       trControl = trainCtrl,
 	       tuneGrid = coefGrid,
 	       standardize=T,
-	       penalty.factor=c(rep(0.1,384575),rep(1,16475),rep(0.5,433)))#variate
-
-#coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
-#coefs=as.matrix(coefs[which(coefs>0),])
-#colnames(coefs)=paste(model$results$Rsquared[model$results$RMSE==min(model$results$RMSE)],model$results$RMSE[model$results$RMSE==min(model$results$RMSE)],sep="_")
-#write.table(coefs,
-#	    file=paste(gen,args[1],"coefs",sep='.'),
-#	    quote=F,
-#	    sep='\t')
-write.table(model$results,
-	    file=paste(gen,args[1],"results",sep='.'),
+	       penalty.factor=c(rep(1,384575),rep(1,16475),rep(1,433)),#at taste
+	       intercept=F)
+ajuste=RMSE(predict(model,testing),testing[,colnames(testing)==gen])
+coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
+coefs=as.matrix(coefs[which(coefs!=0),])
+colnames(coefs)=paste("lamda",model$bestTune$lambda,"RMSE",ajuste,sep=':')
+write.table(coefs,
+	    file=paste(gen,args[1],"coefs",sep='.'),
 	    quote=F,
-	    sep='\t',
-	    row.names=F)
+	    sep='\t')
+#write.table(model$results,
+#	    file=paste(gen,args[1],"results",sep='.'),
+#	    quote=F,
+#	    sep='\t',
+#	    row.names=F)
 #save(model,file=paste(gen,args[1],"RData",sep='.'))
 
 
