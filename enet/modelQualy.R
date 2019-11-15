@@ -30,9 +30,9 @@ docus=do.call(rbind,lapply(1:250,function(x) cbind(docus[x],data[[x]])))
 docus=cbind(t(sapply(strsplit(as.character(docus[,1]),".",fixed=T),function(x) cbind(x[2],x[1]))),docus)
 colnames(docus)=c("subtype","pam50","trash","predictor","coef")
 docus$trash=NULL
-cpgs=grep("^c",docus$predictor)
-mirs=grep("^h",docus$predictor)
-transcri=grep("^E",docus$predictor)
+cpgs=grep("^c",docus$predictor,perl=T)
+mirs=grep("^h",docus$predictor,perl=T)
+transcri=grep("^E",docus$predictor,perl=T)
 
 png("SlctdOmic.png")
  ggplot(df,aes(y=count,x=predictor,color=predictor,fill=predictor))+geom_bar(stat="identity")+ scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9"))+ scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
@@ -59,6 +59,10 @@ ks.test(docus$coef[transcri],docus$coef[mirs])
 #D = 0.29293, p-value < 2.2e-16
 t.test(docus$coef[transcri],docus$coef[mirs])
 #t = 1.4305, df = 918.89, p-value = 0.1529
+png("PrediNum1.png")
+ heatmap.2(t(table(coefs1[,c(1,3)])),col=rev(heat.colors(10)),scale="n",Rowv=F,Colv=F,trace="none",dendrogram="none",srtCol=45,margins=c(5,10))
+dev.off()
+
 
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://jan2019.archive.ensembl.org")
 #mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",version=95)
@@ -71,7 +75,7 @@ temp=table(docus$pam50)
 lala=sapply(1:length(temp),function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(temp)[x]],temp[x]))
 docus=cbind(docus,unlist(lala))
 docus=docus[order(docus$predictor),]
-ranscri=grep("^E",docus$predictor)
+transcri=grep("^E",docus$predictor,perl=T)
 temp=table(as.character(docus$predictor[transcri]))
 lala=unlist(sapply(1:length(temp),function(x) rep(myannot$hgnc_symbol[myannot$ensembl_gene_id==names(temp)[x]],temp[x])))
 docus=as.matrix(cbind(docus,docus$predictor))
