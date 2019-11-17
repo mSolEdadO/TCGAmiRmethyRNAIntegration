@@ -1,22 +1,40 @@
 library(RColorBrewer)
 library(gplots)
+library(gridExtra)
 library(igraph)
 library(biomaRt)
 
+#Eval models differences
 qualy=read.table("modelQuality.tsv",header=T)
+boxes=ggplot(qualy,aes(x=subtype,y=RMSE,color=subtype))+geom_boxplot()+ylab("testing RMSE")+
+      geom_signif(test='ks.test',
+                  comparisons=list(c("LumA","Basal"),c("LumA","LumB"),c("normal","Basal"),c("normal","Her2"),c("normal","LumB")),
+                  map_signif_level=T,y_position=c(70000,75000,90000,170000,80000))
+densi=ggplot(qualy,aes(x=RMSE))+
+       geom_density(aes(group=subtype,color=subtype,fill=subtype,y=..scaled..),alpha=0.3)+
+       ylab("scaled frequency")+xlab("testing RMSE")+scale_x_continuous(trans='log10')
+png("RMSE.png")
+ grid.arrange(boxes,densi,nrow=2)
+dev.off()
+#ks p-value=probability of a test statistic >= than the one observed if samples came from the same distribution
+boxes=ggplot(qualy,aes(x=subtype,y=predictors,color=subtype))+geom_boxplot()+
+      geom_signif(test='ks.test',
+                  comparisons=list(c("LumA","Basal"),c("LumA","Her2"),c("LumA","LumB"),c("LumA","normal"),c("Her2","Basal")),
+                  y_position=c(5500,5100,5600,6000,1500),map_signif_level=T)
+densi=ggplot(qualy,aes(x=predictors))+
+      geom_density(aes(group=subtype,color=subtype,fill=subtype,y=..scaled..),alpha=0.3)+
+      ylab("scaled frequency")+scale_x_continuous(trans='log10')
+png("predisDistri.png")
+  grid.arrange(boxes,densi,nrow=2)
+dev.off()
+
 g=graph.data.frame(qualy[,1:2],directed=F)
 E(g)$weight=qualy$predictors
 M=g[unique(qualy$pam50),unique(qualy$subtype)]
 M=M[order(match(rownames(M),pam50$ensembl_gene_id)),]
 rownames(M)=pam50$hgnc_symbol
-png("RMSE.png")
- boxes=ggplot(qualy,aes(y=as.numeric(as.character(RMSE)),color=subtype))+geom_boxplot()
- densi=ggplot(qualy,aes(x=as.numeric(as.character(RMSE))))+geom_density(aes(group=subtype,color=subtype,fill=subtype),alpha=0.3)+xlim(0,20000)+ylab("scaled frequency")
- grid.arrange(boxes,densi,nrow=2)
-dev.off()
-
 png("PrediNum.png")
-heatmap.2(as.matrix(M),col=rev(heat.colors(40)),trace="none",colRow=brewer.pal(n=4,name="Set2")[pam50$class],scale="none",breaks=c(seq(1,10,1),seq(20,100,10),seq(150,1000,50),seq(2000,5000,1000)),key=F,Colv=F,Rowv=F,dendrogram="none",srtCol=45)
+heatmap.2(as.matrix(M),col=rev(heat.colors(40)),trace="none",colRow=brewer.pal(n=4,name="Set2")[pam50$class],scale="r",key=F,Colv=F,Rowv=F,dendrogram="none",srtCol=45)
 legend("topright",fill=brewer.pal(n=4,name="Set2"),legend=levels(pam50$class),bty="n",border="white")
 dev.off()
 png("RMSEvsNumPredi.png")
