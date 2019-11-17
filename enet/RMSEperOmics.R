@@ -12,20 +12,18 @@ training=subtype[1:i,]
 testing=subtype[(i+1):nrow(subtype),]
 
 #define used function
-rmse_omic=function(data,gen,omic){
- model=interacs[interacs$subtype==data&interacs$pam50==gen,]
- predis=model$predictor[substr(model$predictor,1,1)==omic]
- coefs=unlist(model$coef[substr(model$predictor,1,1)==omic])
- if(omic=="all"){
- 	predis=model$predictor
- 	coefs=unlist(model$coef)}
- if(length(predis)==0){return(NA)}
- tofit=paste(gen,paste(predis,collapse="+"),sep="~0+")
- fit=lm(tofit,
- 		data=as.data.frame(training,stringsAsFactors=F))
- fit$coefficients=coefs
-RMSE(predict(fit,as.data.frame(testing[,colnames(testing)!=gen],stringsAsFactors=F)),
-testing[,colnames(testing)==gen])}
+rmse_omic=function(gen,omic){
+ model=interacs[interacs$pam50==gen,]
+ subset=testing[,colnames(testing)%in%model$predictor]
+ if(nrow(model)==1){
+ 	return(RMSE(colSums(t(subset)*model$coef),testing[,colnames(testing)==gen]))}
+ subset=subset[,order(match(colnames(subset),model$predictor))]
+ i=which(substr(colnames(subset),1,1)==omic)
+ if(omic=="all"){i=seq(1,ncol(subset))}
+ if(length(i)==0){return(NA)}
+ predis=colSums(t(subset[,i])*model$coef[i])
+ obs=testing[,colnames(testing)==gen]
+ RMSE(predis,obs)}
 
 #use function
 omicsContri=t(pbsapply(pam50$ensembl_gene_id,function(y) 
@@ -38,7 +36,9 @@ p.adjust(sapply(1:3,function(x)
                                 paired=T,
                                 alternative="less")$p.val),
 "fdr")
-#[1] 2.539086e-06 6.672246e-01 8.142789e-02
+#[1] 1.358028e-08 2.682722e-05 8.492150e-08
 table(apply(omicsContri,1,which.min))
+ 1  2  3  4 
+ 7  8  5 30 
 
 
