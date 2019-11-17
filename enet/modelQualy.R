@@ -4,7 +4,7 @@ library(gridExtra)
 library(igraph)
 library(biomaRt)
 
-#Eval models differences
+#Eval subtype differences
 qualy=read.table("modelQuality.tsv",header=T)
 boxes=ggplot(qualy,aes(x=subtype,y=RMSE,color=subtype))+geom_boxplot()+ylab("testing RMSE")+
       geom_signif(test='ks.test',
@@ -41,6 +41,7 @@ png("RMSEvsNumPredi.png")
  ggplot(qualy,aes(x=RMSE,y=predictors))+geom_point()+ylab("selected predictors")
 dev.off()
 
+#eval omic differences
 docus=list.files("data",full.names=T)
 data=lapply(docus,read.table,skip=1)
 ocus=gsub("data/","",docus)
@@ -48,12 +49,16 @@ docus=do.call(rbind,lapply(1:250,function(x) cbind(docus[x],data[[x]])))
 docus=cbind(t(sapply(strsplit(as.character(docus[,1]),".",fixed=T),function(x) cbind(x[2],x[1]))),docus)
 colnames(docus)=c("subtype","pam50","trash","predictor","coef")
 docus$trash=NULL
-cpgs=grep("^c",docus$predictor,perl=T)
-mirs=grep("^h",docus$predictor,perl=T)
-transcri=grep("^E",docus$predictor,perl=T)
-
+omics=as.data.frame(table(substr(unique(interacs$predictor),1,1)))
+omics[,1]=c("CpG","transcript","miRNA")
+input=omics
+input[,2]=c(384575,16475,433)  
+omics=rbind(omics,input)
+omics$selected=c(rep("output",3),rep("input",3))
 png("SlctdOmic.png")
- ggplot(df,aes(y=count,x=predictor,color=predictor,fill=predictor))+geom_bar(stat="identity")+ scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9"))+ scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
+ ggplot(omics, aes(fill=Var1, y=as.numeric(Freq), x=selected)) +
+        geom_bar(position="fill", stat="identity")+ylab("proportion")+xlab("")+
+        scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
 dev.off()
 coefs1=as.matrix(docus)
 coefs1[mirs,3]="miRNA"
