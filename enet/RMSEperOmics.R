@@ -29,7 +29,6 @@ rmse_omic=function(gen,omic){
 omicsContri=t(pbsapply(pam50$ensembl_gene_id,function(y) 
               sapply(c("c","E","h","all"),function(x) rmse_omic("Her2",y,x))))
 rownames(omicsContri)=pam50$ensembl_gene_id
-boxplot(omicsContri,y="log")
 p.adjust(sapply(1:3,function(x)
                     wilcox.test(omicsContri[,4],
                                 omicsContri[,x],
@@ -40,5 +39,12 @@ p.adjust(sapply(1:3,function(x)
 table(apply(omicsContri,1,which.min))
  1  2  3  4 
  7  8  5 30 
-
+temp=as.numeric(omicsContri)
+temp=as.data.frame(cbind(c(rep("CpGs",50),rep("transcript",50),rep("miRNAs",50),rep("all",50)),temp))
+colnames(temp)=c("predictor","RMSE")
+ggplot(temp,aes(y=as.numeric(as.character(RMSE)),color=predictor))+
+         geom_boxplot()+
+         coord_trans(y="log")+
+         ylab("RMSE")+
+         scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))
 
