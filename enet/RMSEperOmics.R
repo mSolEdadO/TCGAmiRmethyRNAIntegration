@@ -39,6 +39,6 @@ p.adjust(sapply(1:3,function(x)
                                 alternative="less")$p.val),
 "fdr")
 #[1] 2.539086e-06 6.672246e-01 8.142789e-02
-
+table(apply(omicsContri,1,which.min))
 
 
