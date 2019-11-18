@@ -60,6 +60,16 @@ png("SlctdOmic.png")
         geom_bar(position="fill", stat="identity")+ylab("proportion")+xlab("")+
         scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
 dev.off()
+omics1=table(omics[,c(1,3)])
+omics1[,2]=omics$Freq[c(1,3,2)]
+omics1[,1]=omics$Freq[c(4,6,5)]
+omics1=omics1[,2:1]
+chisq.test(omics1)
+#X-squared = 19692, df = 2, p-value < 2.2e-16
+fisher.test(rbind(omics1[3,],colSums(omics1[1:2,])),alternative="greater")
+fisher.test(rbind(omics1[2,],colSums(omics1[c(1,3),])),alternative="greater")
+fisher.test(rbind(omics1[1,],colSums(omics1[2:3,])),alternative="less")
+
 coefs1=as.matrix(docus)
 coefs1[mirs,3]="miRNA"
 coefs1[cpgs,3]="CpG"
