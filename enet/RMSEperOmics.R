@@ -1,6 +1,9 @@
 #load needed libraries
 library(data.table)
 library(caret)
+library(gplots)
+library(ggsignif)
+library(gridExtra)
 #load & pimp data
 subtype=fread("Her2")
 names=subtype$V1
@@ -25,26 +28,28 @@ rmse_omic=function(gen,omic){
  obs=testing[,colnames(testing)==gen]
  RMSE(predis,obs)}
 
-#use function
+#repeat per subtype!!!!
 omicsContri=t(pbsapply(pam50$ensembl_gene_id,function(y) 
-              sapply(c("c","E","h","all"),function(x) rmse_omic("Her2",y,x))))
+              sapply(c("c","E","h","all"),function(x) rmse_omic(y,x))))
 rownames(omicsContri)=pam50$ensembl_gene_id
-p.adjust(sapply(1:3,function(x)
-                    wilcox.test(omicsContri[,4],
-                                omicsContri[,x],
-                                paired=T,
-                                alternative="less")$p.val),
-"fdr")
-#[1] 1.358028e-08 2.682722e-05 8.492150e-08
-table(apply(omicsContri,1,which.min))
- 1  2  3  4 
- 7  8  5 30 
-temp=as.numeric(omicsContri)
-temp=as.data.frame(cbind(c(rep("CpGs",50),rep("transcript",50),rep("miRNAs",50),rep("all",50)),temp))
-colnames(temp)=c("predictor","RMSE")
-ggplot(temp,aes(y=as.numeric(as.character(RMSE)),color=predictor))+
-         geom_boxplot()+
-         coord_trans(y="log")+
-         ylab("RMSE")+
-         scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))
-
+#table(apply(omicsContri,1,which.min))
+# 1  2  3  4 
+# 7  8  5 30 
+omicsContri=rbind(lumA,lumB,basal,her2,normal)
+RMSE=as.numeric(unlist(omicsContri))
+predictor=c(rep("CpG",250),rep("transcript",250),rep("miRNA",250),rep("mix",250))
+omicsContri=as.data.frame(cbind(RMSE,predictor),stringsAsFactors=F)
+boxes=ggplot(omicsContri,aes(y=as.numeric(RMSE),color=predictor,x=predictor))+
+      geom_boxplot()+ylab("RMSE")+ylim(0,280000)+
+      scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
+      geom_signif(test="ks.test",
+                  comparisons=list(c("all","CpG"),c("all","miRNA"),c("all","transcript"),c("CpG","miRNA"),c("CpG","transcript")),
+                  map_signif_level=T,y_position=c(185000,215000,265000,190000,245000))
+densi=ggplot(omicsContri,aes(x=as.numeric(RMSE)))+
+      geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+
+      ylab("scaled frequency")+xlab("testing RMSE")+scale_x_continuous(trans='log10')+
+      scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
+      scale_fill_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))
+png("OmicsContrib.png")
+ grid.arrange(boxes,densi,nrow=2)
+dev.off()
