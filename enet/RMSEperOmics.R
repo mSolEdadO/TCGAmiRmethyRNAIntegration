@@ -36,6 +36,13 @@ rownames(omicsContri)=pam50$ensembl_gene_id
 # 1  2  3  4 
 # 7  8  5 30 
 omicsContri=rbind(lumA,lumB,basal,her2,normal)
+ks.test(omicsContri[,1],omicsContri[,2],alternative="less")
+ks.test(omicsContri[,1],omicsContri[,3],alternative="less")
+ks.test(omicsContri[,1],omicsContri[,4],alternative="less")
+ks.test(omicsContri[,4],omicsContri[,1],alternative="greater")
+ks.test(omicsContri[,4],omicsContri[,2],alternative="greater")
+ks.test(omicsContri[,4],omicsContri[,3],alternative="greater")
+
 RMSE=as.numeric(unlist(omicsContri))
 predictor=c(rep("CpG",250),rep("transcript",250),rep("miRNA",250),rep("mix",250))
 omicsContri=as.data.frame(cbind(RMSE,predictor),stringsAsFactors=F)
