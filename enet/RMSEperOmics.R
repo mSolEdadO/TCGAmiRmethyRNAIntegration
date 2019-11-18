@@ -40,7 +40,7 @@ RMSE=as.numeric(unlist(omicsContri))
 predictor=c(rep("CpG",250),rep("transcript",250),rep("miRNA",250),rep("mix",250))
 omicsContri=as.data.frame(cbind(RMSE,predictor),stringsAsFactors=F)
 boxes=ggplot(omicsContri,aes(y=as.numeric(RMSE),color=predictor,x=predictor))+
-      geom_boxplot()+ylab("RMSE")+ylim(0,280000)+
+      geom_boxplot()+ylab("testing RMSE")+ylim(0,280000)+
       scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
       geom_signif(test="ks.test",
                   comparisons=list(c("all","CpG"),c("all","miRNA"),c("all","transcript"),c("CpG","miRNA"),c("CpG","transcript")),
