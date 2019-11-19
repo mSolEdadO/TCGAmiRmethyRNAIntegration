@@ -60,64 +60,18 @@ fisher.test(t(matrix(c(88,552,224,1556),ncol=2,nrow=2)))
 #p-value = 0.4499
 
 ##############################################################################
-########### am I linking genes with their KNOWN regulators?
-##############################################################################
 ########### CpGs
 
-#Input CpG-gene annotation = https://zwdzwd.github.io/InfiniumAnnotation
-methy=fread("../ini/hm450.hg38.manifest.tsv",sep='\t',header=T,fill=T)
-methy=methy[,c(5,21)]
-methy=do.call(rbind,apply(methy,1,function(x) cbind(x[1],unlist(strsplit(x[2],";")))))
+#Input CpG-gene annotation = https://zwdzwd.github.io/InfiniumAnnotationZ<<<<<<<<<--NO
+methy=fread("HumanMethylation450_15017482_v1-2.csv",sep=',',header=T,fill=T)#use Illumina file
+methy=methy[,c(1,22,24)]
+methy=methy[methy[,2]!="",]
+methy=do.call(rbind,apply(methy,1,function(x) 
+	cbind(x[1],unlist(strsplit(x[2],";")),unlist(strsplit(x[3],";")))))
+writr.table(methy,"MapMethy.tsv",sep='\t',quote=F,row.names=F)
 
-#build contingency tables for CpGs
-#testMethyRegul=function(gen,subtype){
-#anotadas=methy[which(methy[,2]==gen),1]
-#seleccionadas=subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^c",subtype$predictor))]
-#a=sum(anotadas%in%seleccionadas)
-#b=sum(!anotadas%in%seleccionadas)
-#c=sum(!seleccionadas%in%anotadas)
-#d=length(unique(methy[,1]))-a-b-c
-#signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
-#I expect an overlap between annotated and selected regulators
-#return(cbind(a,b,c,d,signif))}
-
-#contingenciasMethy=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) testMethyRegul(y,x))))
-
-#sign of the known CpGs 
-nega=interacs[interacs$coef<0,]
-negaCpG=nega[grep("^c",nega$predictor),]
-negCpGanno=lapply(unique(negaCpG$predictor),function(x) sum(negaCpG$pam50[negaCpG$predictor==x]%in%methy[methy[,1]==x,2]))
-table(unlist(negCpGanno))
-#   0    1 
-#4712    8 
-posi=interacs[interacs$coef>0,]
-posCpG=posi[grep("^c",posi$predictor),]
-posCpGanno=lapply(unique(posCpG$predictor),function(x) sum(posCpG$pam50[posCpG$predictor==x]%in%methy[methy[,1]==x,2]))
-table(unlist(posCpGanno))
-#   0 
-#4212 
-fisher.test(matrix(c(8,0,4712,4212),ncol=2,nrow=2))
-#p-value = 0.0085
-
-#as a whole, there is no enrichment for CpGs
-a=length(grep("^c",unique(interacs$predictor)))
-c=384575-a
-b=length(unique(interacs$predictor))-a
-d=16475+433-b
-CpGenri=t(matrix(c(a,c,b,d),ncol=2,nrow=2))
-fisher.test(CpGenri,alternative="greater")$p.val
-#p-value = 1
-
-#there is neither an enrichment for known regulatory CpGs
-cg=interacs[grep("^c",interacs$predictor),]
-#a=sapply(unique(cg$predictor),function(x) sum(cg$pam50[cg$predictor==x]%in%methy[methy[,1]==x,2]))
-#[1] 8
-pam50=read.table("../ini/pam50.tsv",header=T)
-methy[methy[,2]%in%pam50$hgnc_symbol,]
-fisher.test(matrix(c(8,nrow(cg)-8,nrow(methy)-8,384575-nrow(cg)-nrow(methy)+8),ncol=2,nrow=2),alternative="greater")
-#p-value = 1
-fisher.test(matrix(c(8,9583-8,1182-8,384575-9583-1182+8),ncol=2,nrow=2),alternative="less")
-#p-value = 2.447e-06
+withCpG=do.call(rbind,lapply(unique(interacs$pam50Symbol),function(x)
+	interacs[interacs$pam50Symbol==x,c(1,3:5)][which(interacs$predictor[interacs$pam50Symbol==x]%in%methy[methy[,2]==x,1]),]))
 
 ##############################################################################
 ########### miRNAs
@@ -130,64 +84,10 @@ pam50=read.table("../ini/pam50.tsv",header=T)
 miRtargets=get_multimir(target=pam50$ensembl_gene_id,summary=F,table="all",legacy.out=F)
 miRtargetsV=select(miRtargets,keys="validated",columns=columns(miRtargets),keytype="type")
 miRtargetsP=select(miRtargets,keys="predicted",columns=columns(miRtargets),keytype="type")
-#i want miR stem names coz my datset miR names are for stem stage  
-miRtargetsV=cbind(miRtargetsV,sapply(strsplit(miRtargetsV$mature_mirna_id,"-"),function(x) 
-	paste(x[1],x[2],x[3],sep='-')))
-
-#I'm only interested on the interacs I could find with my miR dataset
-load("../ini/porSubti.RData")
-miR=rownames(concatenadas$Her2$mir)
-miRtargetsV=miRtargetsV[miRtargetsV[,14]%in%miR|miRtargetsV$mature_mirna_id%in%miR,]
-
-test.miRegul=function(gen,subtype,annot){
-anotadas=unique(unlist(annot[which(annot$target_symbol==gen),c(3,14)]))
-seleccionadas=subtype$predictor[intersect(which(subtype$'pam50'==gen),grep("^h",subtype$predictor))]
-a=sum(anotadas%in%seleccionadas)
-b=sum(!anotadas%in%seleccionadas)
-c=sum(!seleccionadas%in%anotadas)
-d=length(miR)-a-b-c
-signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
-return(cbind(a,b,c,d,signif))}
-contingencias.miR=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.miRegul(y,x,miRtargetsV))))
-#genes with miRs selected
-sapply(contingencias.miR,function(x) sum(x[,3]>0))
-#    Basal      Her2      LumA      LumB non-tumor 
-#        9         3        12        13         8 
-#interactions with miR selected per subtype
-sapply(contingencias.miR,function(x) sum(x[,3]))
-#    Basal      Her2      LumA      LumB non-tumor 
-#       15         4        20        30        40 
-#models didnt selected regulataroy miR
-sapply(contingencias.miR,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
-#    Basal      Her2      LumA      LumB non-tumor 
-#        0         0         0         0         0 
-
-#predicted miR are neither selected
-miRtargetsP=cbind(miRtargetsP,sapply(strsplit(miRtargetsP$mature_mirna_id,"-"),function(x)
- paste(x[1],x[2],x[3],sep='-')))
-miRtargetsP=miRtargetsP[miRtargetsP[,14]%in%miR|miRtargetsP$mature_mirna_id%in%miR,]
-contingencias.miR=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.miRegul(y,x,miRtargetsP))))
-sapply(contingencias.miR,function(x) sum(x[,5]<0.01)/sum(x[,3]>0))
-#    Basal      Her2      LumA      LumB non-tumor 
-#        0         0         0         0         0 
-
-#but there are very few interactions that I could have found
-dim(miRtargetsP)
-#[1] 89 14
-dim(miRtargetsV)
-#[1] 32 14
-
-#as a whole, there is an enrichment for miRs
-a=length(grep("^h",unique(interacs$predictor)))
-b=length(unique(interacs$predictor))-a
-c=433-a
-d=384575+16475-b
-miRenri=t(matrix(c(a,c,b,d),ncol=2,nrow=2))
-#      slctd NOslctd
-#miR      97     336
-#nomiR 10617  390433
-fisher.test(miRenri,alternative="greater")
-#p-value < 2.2e-16
+miRtargets=unique(rbind(miRtargetsV1[,3:4],miRtargetsP[,3:4]))
+mirIDs=fread(miR.ids.map.tsv)#from mirbase <---------LINK
+withMIR=do.call(rdbind,lapply(unique(interacs$pam50Symbol),function(x) 
+	interacs[interacs$pam50Symbol==x,][interacs$predictor[interacs$pam50Symbol==x]%in%mirIDs$precursor[mirIDs$mature%in%miRtargets$mature_mirna_id[miRtargets$target_symbol==x]],]))
 
 ##############################################################################
 ########### TFs
@@ -217,46 +117,30 @@ myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","external_gene_name
 myannot=myannot[myannot$ensembl_gene_id%in%genes,]
 myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 TFtargets=TFtargets[TFtargets[,1]%in%myannot$hgnc_symbol,]
+write.table(TFtargets,"TFtargets.tsv",sep='\t',quote=F,row.names=F)
 
-#test.TFregul=function(gen,subtype){
-#anotadas=unique(TFtargets[which(TFtargets$'target'==gen),1])
-#seleccionadas=as.character(subtype$predictor[intersect(which(subtype$'pam50'==gen),which(subtype$predictor%in%TFtargets$TF))])
-#a=sum(anotadas%in%seleccionadas)
-#b=sum(!anotadas%in%seleccionadas)
-#c=sum(!seleccionadas%in%anotadas)
-#d=length(unique(TFtargets$TF))-a-b-c
-#signif=fisher.test(matrix(c(a,b,c,d),ncol=2,nrow=2),alternative="greater")$p.val
-#return(cbind(a,b,c,d,signif))}
+withTF=do.call(rbind,lapply(unique(interacs$pam50Symbol),function(x) 
+	interacs[interacs$pam50Symbol==x,][which(interacs$predictorSymbol[interacs$pam50Symbol==x]%in%tfs$TF[tfs$target==x]),]))
 
-#contingencias.ENSG=pblapply(interacs,function(x) t(sapply(unique(x$pam50),function(y) test.TFregul(y,x))))
-#genes with ENSGs selected
-#validatedTFs=do.call(rbind,lapply(c(1,3:5),function(x) 
-#	cbind(names(interacs)[x],as.character(unique(interacs[[x]]$pam50)[contingencias.ENSG[[x]][,1]>0]),contingencias.ENSG[[x]][contingencias.ENSG[[x]][,1]>0,])))
-
-#as a whole, there is an enrichment for TFs
-a=sum(unique(interacs$predictor)%in%TFtargets$TF)
-b=length(unique(interacs$predictor))-a
-c=length(unique(TFtargets$TF))-a
-d=384575+433+16475-length(unique(interacs$predictor))
-TFenri=t(matrix(c(a,c,b,d),ncol=2,nrow=2))
-#     slctd NOslctd
-#TF     268    2011
-#noTF 10446  390769
-fisher.test(TFenri,alternative="greater")
+######################################################################
+#######all 			    
+selected0=table(substr(interacs$predictor,1,1))
+validated=c(nrow(withCpG),nrow(withTF),nrow(withMIR))
+fisher.test(cbind(validated,selected0),alternative="greater")
 #p-value < 2.2e-16
+count=c(selected,validated)
+validated=c(rep("n",3),rep("y",3))
+omics=c("CpG","transcript","miRNA","CpG","transcript","miRNA")
+selected=as.data.frame(cbind(count,validated,omics),stringsAsFactors=F)
+png("ValiOmics.png")
+ggplot(selected,aes(fill=omics,y=as.numeric(count),x=validated))+
+	geom_bar(position="dodge",stat="identity")+ylab("predictions")+
+	scale_y_continuous(trans='log10')+
+	scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
+dev.off()
 
-#there is also an enrichment for known TFs
-tfs=interacs[interacs$predictor%in%TFtargets$TF,]
-tfs=lapply(unique(tfs$subtype),function(x) tfs[tfs$subtype==x,])
-a=lapply(tfs,function(y) sapply(unique(y$predictor),function(x) 
-	sum(y$pam50[y$predictor==x]%in%interesTF$target[interesTF$TF==x])))
-sum(sapply(a,sum))
-#[1] 41
-interesTF=TFtargets[TFtargets$target%in%pam50$hgnc_symbol,]
-fisher.test(matrix(c(41,sum(sapply(tfs,nrow))-41,nrow(interesTF)-41,nrow(TFtargets)-sum(sapply(tfs,nrow))-nrow(interesTF)+41),ncol=2,nrow=2),alternative="greater")
-#p-value < 2.2e-16
-
-#####################################################################
+			    
+######################################################################
 #######how many times terms are comentioned in literature
 #####################################################################
 #both on the same paper
