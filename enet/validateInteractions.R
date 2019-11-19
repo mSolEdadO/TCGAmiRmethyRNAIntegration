@@ -138,8 +138,8 @@ ggplot(selected,aes(fill=omics,y=as.numeric(count),x=validated))+
 	scale_y_continuous(trans='log10')+
 	scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
 dev.off()
-
-			    
+ ggplot(negas,aes(x=predictor,y=abs(as.numeric(V2)),color=predictor))+geom_boxplot()+scale_y_continuous(trans='log10')+geom_signif(test="ks.test",comparisons=split(t(combn(unique(coefs$predictor), 2)),seq(nrow(t(combn(unique(coefs$predictor), 2))))),map_signif_level=T,y_position=c(6,5,3))+ylab("coefficient value")
+ggplot(posi,aes(x=predictor,y=abs(as.numeric(V2)),color=predictor))+geom_boxplot()+scale_y_continuous(trans='log10')+geom_signif(test="ks.test",comparisons=split(t(combn(unique(coefs$predictor), 2)),seq(nrow(t(combn(unique(coefs$predictor), 2))))),map_signif_level=T,y_position=c(6,5,3))+ylab("coefficient value")		    
 ######################################################################
 #######how many times terms are comentioned in literature
 #####################################################################
