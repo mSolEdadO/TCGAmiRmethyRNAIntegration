@@ -56,7 +56,12 @@ densi=ggplot(omicsContri,aes(x=as.numeric(RMSE)))+
       geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+
       ylab("scaled frequency")+xlab("testing RMSE")+scale_x_continuous(trans='log10')+
       scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
-      scale_fill_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))
+      scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
 png("OmicsContrib.png")
  grid.arrange(boxes,densi,nrow=2)
+dev.off()
+
+plots=lapply(c(2,3,1,4,5),function(x) ggplot(omicsContri[[x]],aes(x=as.numeric(as.character(RMSE))))+geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+ylab("scaled frequency")+xlab("testing RMSE")+scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+scale_fill_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+xlim(1,1e+5)+scale_x_continuous(trans='log10',breaks=c(100,1000,10000))+ggtitle(names(omicsContri)[x]))
+png("omicsContrib.png")
+> grid.arrange(plots[[1]],plots[[2]],plots[[3]],plots[[4]],plots[[5]],ncol=2)
 dev.off()
