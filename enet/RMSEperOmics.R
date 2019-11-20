@@ -60,3 +60,10 @@ densi=ggplot(omicsContri,aes(x=as.numeric(RMSE)))+
 png("OmicsContrib.png")
  grid.arrange(boxes,densi,nrow=2)
 dev.off()
+
+lumb=ggplot(subtypes$LumB,aes(x=as.numeric(as.character(x))))+geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+ylab("scaled frequency")+xlab("testing RMSE")+scale_x_continuous(trans='log10')+scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+scale_fill_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))
+ grid.arrange(luma,lumb,her2,basal,ncol=2)
+lapply(subtypes,function(y) ks.test(as.numeric(as.character(y$x[y$predictor=="CpG"])),as.numeric(as.character(y$x[y$predictor=="miRNA"]))))
+#Warning messages:
+#1: In ks.test(as.numeric(as.character(y$x[y$predictor == "CpG"])),  :
+#  cannot compute exact p-value with ties
