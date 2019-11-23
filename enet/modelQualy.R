@@ -123,6 +123,6 @@ heatmap.2(as.matrix(M),col=rev(heat.colors(20)),trace="none",
           dendrogram="none",srtCol=45,lmat = rbind(c(0,4),c(2,1),c(0,3)),lwid=c(0.2,4.8),
           lhei=c(0.2,4.3,0.5),colsep=c(5,10),sepwidth=c(0.1,0.5),
           xlab=c("CpGs                              genes                                   miRNAs"))
- legend("bottomright",fill=brewer.pal(n=4,name="Set2"),legend=levels(pam50$classB),
-        bty="n",border="white",inset=c(-0.09,-0.2),xpd=T)
+ legend("top",fill=brewer.pal(n=4,name="Set2"),legend=levels(pam50$classB),
+        bty="n",border="white",inset=c(-0.09,-0.18),xpd=T,horiz=T)
 dev.off()
