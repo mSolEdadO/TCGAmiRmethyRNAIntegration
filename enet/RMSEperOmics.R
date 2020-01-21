@@ -35,33 +35,18 @@ rownames(omicsContri)=pam50$ensembl_gene_id
 #table(apply(omicsContri,1,which.min))
 # 1  2  3  4 
 # 7  8  5 30 
-omicsContri=rbind(lumA,lumB,basal,her2,normal)
-ks.test(omicsContri[,1],omicsContri[,2],alternative="less")
-ks.test(omicsContri[,1],omicsContri[,3],alternative="less")
-ks.test(omicsContri[,1],omicsContri[,4],alternative="less")
-ks.test(omicsContri[,4],omicsContri[,1],alternative="greater")
-ks.test(omicsContri[,4],omicsContri[,2],alternative="greater")
-ks.test(omicsContri[,4],omicsContri[,3],alternative="greater")
 
-RMSE=as.numeric(unlist(omicsContri))
-predictor=c(rep("CpG",250),rep("transcript",250),rep("miRNA",250),rep("mix",250))
-omicsContri=as.data.frame(cbind(RMSE,predictor),stringsAsFactors=F)
-boxes=ggplot(omicsContri,aes(y=as.numeric(RMSE),color=predictor,x=predictor))+
-      geom_boxplot()+ylab("testing RMSE")+ylim(0,280000)+
-      scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
-      geom_signif(test="ks.test",
-                  comparisons=list(c("all","CpG"),c("all","miRNA"),c("all","transcript"),c("CpG","miRNA"),c("CpG","transcript")),
-                  map_signif_level=T,y_position=c(185000,215000,265000,190000,245000))
-densi=ggplot(omicsContri,aes(x=as.numeric(RMSE)))+
-      geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+
-      ylab("scaled frequency")+xlab("testing RMSE")+scale_x_continuous(trans='log10')+
-      scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
-      scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
-png("OmicsContrib.png")
- grid.arrange(boxes,densi,nrow=2)
-dev.off()
-
-plots=lapply(c(2,3,1,4,5),function(x) ggplot(omicsContri[[x]],aes(x=as.numeric(as.character(RMSE))))+geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+ylab("scaled frequency")+xlab("testing RMSE")+scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+scale_fill_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+xlim(1,1e+5)+scale_x_continuous(trans='log10',breaks=c(100,1000,10000))+ggtitle(names(omicsContri)[x]))
+#plot per subtype
+omicsContri=list(Basal,Her2,LumB,LumA,normal)
+omicsContri=lapply(omicsContri,function(x) 
+ cbind(unlist(x),as.character(sapply(c("CpG","gene","miRNA","all"),rep,50))))
+plots=lapply(c(2,3,1,4,5),function(x) 
+             ggplot(omicsContri[[x]],aes(x=as.numeric(as.character(RMSE))))+
+             geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+
+             ylab("scaled frequency")+xlab("testing RMSE")+
+             scale_color_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+
+             scale_fill_manual(values=c("firebrick1","#999999", "#E69F00", "#56B4E9"))+xlim(1,1e+5)+
+             scale_x_continuous(trans='log10',breaks=c(100,1000,10000))+ggtitle(names(omicsContri)[x]))
 png("omicsContrib.png")
  grid.arrange(plots[[1]],plots[[2]],plots[[3]],plots[[4]],plots[[5]],ncol=2)
 dev.off()
@@ -69,3 +54,17 @@ lapply(subtypes,function(y) ks.test(as.numeric(as.character(y$x[y$predictor=="Cp
 #Warning messages:
 #1: In ks.test(as.numeric(as.character(y$x[y$predictor == "CpG"])),  :
 #  cannot compute exact p-value with ties
+
+#plot per omic
+omics=lapply(unique(omicsContri[[1]][,2]),function(y) 
+ as.data.frame(cbind(as.numeric(sapply(omicsContri,function(x) x[x[,2]==y,1])),
+                     as.character(sapply(c("Basal","Her2","LumB","LumA","normal"),rep,50)))))
+colnames(omics[[1]])=c("RMSE","subtype")
+plots=lapply(1:4,function(x) 
+            ggplot(omics[[x]],aes(x=as.numeric(as.character(RMSE))))+
+            geom_density(aes(group=subtype,color=subtype,fill=subtype,y=..scaled..),alpha=0.3)+
+            ylab("scaled frequency")+xlab("testing RMSE")+
+            scale_x_continuous(trans='log10',breaks=c(100,1000,10000))+ggtitle(names(omics)[x]))
+png("SubtypeOmicsContrib.png")
+ grid.arrange(plots[[1]],plots[[2]],plots[[3]],plots[[4]],ncol=2)
+dev.off()

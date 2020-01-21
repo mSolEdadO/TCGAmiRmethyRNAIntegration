@@ -110,33 +110,19 @@ write.table(docus,"slctdPrdis.tsv",sep='\t',quote=F,row.names=F)
 
 interacs=fread("slctdPrdis.tsv")
 interacs$predictor=substr(interacs$predictor,1,1)
-M=t(table(interacs[interacs$predictor=='c',c(1,5)]))
+CpG=t(table(interacs[interacs$predictor=='c',c(1,5)]))
+transcri=t(table(interacs[interacs$predictor=='E',c(1,5)]))
+miRNA=t(table(interacs[interacs$predictor=='h',c(1,5)]))
+M=cbind(CpG[,c(1,2,4,3,5)]/apply(CpG,1,max),
+        transcri[,c(1,2,4,3,5)]/apply(transcri,1,max),
+        miRNA[,c(1,2,4,3,5)]/apply(miRNA,1,max))
 M=M[order(match(rownames(M),pam50$hgnc_symbol)),]
-png("CpGNum.png")
- heatmap.2(as.matrix(M),col=rev(heat.colors(40)),trace="none",
-           colRow=brewer.pal(n=4,name="Set2")[pam50$class],scale="r",key=F,Colv=F,
-           Rowv=F,dendrogram="none",srtCol=45,main="CpGs",lmat = rbind(c(0,4),c(2,1),c(0,3)),
-           lwid=c(0.5,4.5),lhei=c(0.5,4.0,0.5))
- legend("bottomright",fill=brewer.pal(n=4,name="Set2"),legend=levels(pam50$class),
-        bty="n",border="white",inset=c(-0.08,-0.13),xpd=T)
+png("prediNum.png")
+heatmap.2(as.matrix(M),col=rev(heat.colors(20)),trace="none",
+          colRow=brewer.pal(n=4,name="Set2")[pam50$class],scale="n",key=F,Colv=F,Rowv=F,
+          dendrogram="none",srtCol=45,lmat = rbind(c(0,4),c(2,1),c(0,3)),lwid=c(0.2,4.8),
+          lhei=c(0.2,4.3,0.5),colsep=c(5,10),sepwidth=c(0.1,0.5),
+          xlab=c("CpGs                              genes                                   miRNAs"))
+ legend("top",fill=brewer.pal(n=4,name="Set2"),legend=levels(pam50$classB),
+        bty="n",border="white",inset=c(-0.09,-0.18),xpd=T,horiz=T)
 dev.off()
-M=t(table(interacs[interacs$predictor=='E',c(1,5)]))
-M=M[order(match(rownames(M),pam50$hgnc_symbol)),]
-png("transcriNum.png")
- heatmap.2(as.matrix(M),col=rev(heat.colors(40)),trace="none",
-           colRow=brewer.pal(n=4,name="Set2")[pam50$class],scale="r",key=F,Colv=F,
-           Rowv=F,dendrogram="none",srtCol=45,main="transcripts",
-           lmat = rbind(c(0,4),c(2,1),c(0,3)),lwid=c(0.5,4.5),lhei=c(0.5,4.0,0.5))
- legend("bottomright",fill=brewer.pal(n=4,name="Set2"),legend=levels(pam50$class),
-        bty="n",border="white",inset=c(-0.08,-0.13),xpd=T)
-dev.off()                   
-M=t(table(interacs[interacs$predictor=='h',c(1,5)]))
-M=M[order(match(rownames(M),pam50$hgnc_symbol)),]
-png("miRNum.png")
- heatmap.2(as.matrix(M),col=rev(heat.colors(40)),trace="none",
-           colRow=brewer.pal(n=4,name="Set2")[pam50$class],scale="r",key=F,Colv=F,
-           Rowv=F,dendrogram="none",srtCol=45,main="miRNAs",
-           lmat = rbind(c(0,4),c(2,1),c(0,3)),lwid=c(0.5,4.5),lhei=c(0.5,4.0,0.5))
- legend("bottomright",fill=brewer.pal(n=4,name="Set2"),legend=levels(pam50$class),
-        bty="n",border="white",inset=c(-0.08,-0.13),xpd=T)
-dev.off()                   

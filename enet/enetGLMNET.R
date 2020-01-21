@@ -42,6 +42,7 @@ cv.glmnet(
 
 #base fit
 print("start main fit")
+#seed(123)
 model=cvfit(gen,k)
 
 #choose the lambda with the smallest MSE

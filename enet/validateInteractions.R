@@ -138,23 +138,6 @@ ggplot(selected,aes(fill=omics,y=as.numeric(count),x=validated))+
 	scale_y_continuous(trans='log10')+
 	scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))
 dev.off()
-revlog_trans <- function(base = exp(1)){
-    ## Define the desired transformation.
-    trans <- function(x){
-                 -log(x, base)
-                }
-    ## Define the reverse of the desired transformation
-    inv <- function(x){
-                 base^(-x)
-                }
-    ## Creates the transformation
-    trans_new(paste("revlog-", base, sep = ""),
-              trans, ## The transformation function (can be defined using anonymous functions)
-              inv,  ## The reverse of the transformation
-              log_breaks(base = base), ## default way to define the scale breaks
-              domain = c(1e-100, Inf) ## The domain over which the transformation is valued
-             )
-    }
 
 
 ######################################################################
@@ -206,18 +189,35 @@ write.table(comention,"comention.tsv",sep='\t',quote=F,row.names=F)
 #####################################################################
 ######coherence of regulation
 #####################################################################
-densi=ggplot(negas,aes(x=abs(as.numeric(V2))))+xlab("coefficient")+ylab("scaled frequency")+
-	  geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+
-	  scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))+
-	  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9"))+
-	  scale_x_continuous(trans=revlog_trans(base=10),labels=trans_format("identity",function(x) -x))
-densi1=ggplot(posi,aes(x=as.numeric(V2)))+xlab("coefficient")+ylab("scaled frequency")+
-	  geom_density(aes(group=predictor,color=predictor,fill=predictor,y=..scaled..),alpha=0.3)+
-  	  scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9"))+
-	  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9"))+
-	  scale_x_continuous(trans='log10')
-png("coeffs.png")
- grid.arrange(densi1,densi,nrow=2)
+revlog_trans <- function(base = exp(1)){
+    ## Define the desired transformation.
+    trans <- function(x){
+                 -log(x, base)
+                }
+    ## Define the reverse of the desired transformation
+    inv <- function(x){
+                 base^(-x)
+                }
+    ## Creates the transformation
+    trans_new(paste("revlog-", base, sep = ""),
+              trans, ## The transformation function (can be defined using anonymous functions)
+              inv,  ## The reverse of the transformation
+              log_breaks(base = base), ## default way to define the scale breaks
+              domain = c(1e-100, Inf) ## The domain over which the transformation is valued
+             )
+    }
+plotsN=lapply(unique(interacs$predictor),function(x) 
+	ggplot(negas[negas$predictor==x,],aes(x=abs(as.numeric(coef))))+
+		xlab("coefficient")+ylab("scaled frequency")+
+	 	geom_density(aes(group=subtype,color=subtype,fill=subtype,y=..scaled..),alpha=0.3)+
+	      	scale_x_continuous(trans=revlog_trans(base=10),labels=trans_format("identity",function(x) -x),lim=c(10000,1e-12))+ggtitle(x))
+plotsP=lapply(unique(interacs$predictor),function(x)
+	ggplot(posi[posi$predictor==x,],aes(x=as.numeric(coef)))+xlab("coefficient")+
+	      ylab("scaled frequency")+
+	      geom_density(aes(group=subtype,color=subtype,fill=subtype,y=..scaled..),alpha=0.3)+
+	      scale_x_continuous(trans="log10",lim=c(1e-12,1e6)))
+png("OmicsCoeffs.png")
+grid.arrange(plotsN[[1]],plotsP[[1]],plotsN[[2]],plotsP[[2]],plotsN[[3]],plotsP[[3]])
 dev.off()
 
 #negative coeff CpGs methylation is opposite to target gene expression	     
