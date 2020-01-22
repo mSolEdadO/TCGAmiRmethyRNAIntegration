@@ -27,8 +27,12 @@ names(Y)=levels(concentrations$compound_id)
 Y=lapply(Y,function(x) c(x,x))
 Y=lapply(Y,function(x) x[order(names(x))])
 perturbation=perturbation[order(match(names(perturbation),names(Y)))]
-
-
+perturbation=lapply(perturbation,t)
+cell.line=lapply(perturbation,function(x) 
+	sapply(strsplit(rownames(x),"_"),function(y) y[5]))
+tomodel=lapply(1:32,function(x) 
+	model.matrix(~0+apply(perturbation[[x]],2,function(x) x)+factor(cell.line[[x]])))
+						      
 ridge=function(expression,inhibition){
 	coefGrid <-  expand.grid(lambda=seq (0,50, length =100),#length is usually 100
 			alpha=0)
@@ -47,5 +51,5 @@ ridge=function(expression,inhibition){
 	       standardize=T,
 	       intercept=F)
 	return(model)}
-model=ridge(t(perturbation$cmpd_YM),Y$cmpd_YM)
-coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
+fit=lapply(1:32,function(x) ridge(tomodel[[x]],Y[[x]]))
+#coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
