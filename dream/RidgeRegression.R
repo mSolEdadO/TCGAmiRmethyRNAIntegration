@@ -59,4 +59,11 @@ names(Y)=unique(effects$tx)
 
 ###########################fit a model per tx#####################################
 fit=lapply(1:32,function(x) ridge(X[[x]],Y[[x]]))
-coefs=as.matrix(coef(fit[[1]]$finalModel, fit[[1]]$bestTune$lambda))
+
+###########################get coefficients per gene per tx#######################
+coefs=lapply(fit,function(x) as.matrix(coef(x$finalModel,x$bestTune$lambda)))
+coefs=do.call(cbind,coefs)
+colnames(coefs)=names(X)
+#ignore intercept, which is 0 by definition
+coefs=coefs[2:nrow(coefs),]
+write.table(coefs,"coefficients_z-matrix_tx.tsv",sep='\t',quote=F)
