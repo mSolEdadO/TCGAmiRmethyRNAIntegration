@@ -3,13 +3,6 @@ library(data.table)
 library(caret)
 library(doParallel)
 #registerDoParallel(cores=2)
-#ugly function to read perturbation matrices
-load_pertur=function(file){
- temp=fread(file)
- names=temp$hgnc_symbol
- temp=as.matrix(temp[,2:ncol(temp)])
- rownames(temp)=names
-return(temp)}
 #ridge regression function
 ridge=function(expression,inhibition){
 	#parameters to fit: lambda=penalization chosen by cv, alpha=0 since this is a ridge regression
@@ -19,7 +12,7 @@ ridge=function(expression,inhibition){
 	#cv parameters
 	trainCtrl <- trainControl("repeatedcv",
 			 number = 3, #min number of folds, 3 since n is small 
-			 repeats=10,#the more the better li
+			 repeats=100,#the more the better li
 			 #verboseIter = T,#T if fit fails,
 			 allowParallel=T)
 	set.seed(567)
@@ -34,38 +27,36 @@ ridge=function(expression,inhibition){
 	return(model)}
 
 ###########################data###############################################
-files=list.files("/labs/csbig/DREAMCHALLENGE_CTD2/raw/",full.names=T)
-#load response data per cell line
-response=lapply(files[grep("Response",files)],fread)
-names(response)=sapply(strsplit(sapply(strsplit(files[grep("Response",files)],"/"),
-				function(x) x[7]),"-"),function(y) y[1])
-#load perturbation data per cell line 
-perturbation=lapply(files[grep("RNA",files)],load_pertur)
-perturbation=do.call(cbind,perturbation)
+#perturbations comparable across cell lines
+X=fread("/labs/csbig/DREAMCHALLENGE_CTD2/results/z_matrix.tsv")
+#only these genes matter
+targets=read.csv("/labs/csbig/DREAMCHALLENGE_CTD2/raw/TARGETS/target_list.csv")
+#predicted Y
+effects=fread("/labs/csbig/DREAMCHALLENGE_CTD2/results/predicted_effect.tsv")
+#concentrations=fread("/labs/csbig/DREAMCHALLENGE_CTD2/results/experimentAnnotation_df.tsv")
 
-###########################formating data################################
-#transform the list of perturbations per cell line into a list of perturbation per tx
-tx=unique(sapply(strsplit(colnames(perturbation),"_"),function(x) paste(x[1:2],collapse='_')))
-perturbation=lapply(tx,function(x) perturbation[,grep(x,colnames(perturbation))])
-names(perturbation)=tx
-concentrations=read.table("/labs/csbig/DREAMCHALLENGE_CTD2/results/experimentAnnotation_df.tsv",header=T)
-#get the nearest response to the concetrations tested, this is the Y to be modeled
-Y=lapply(levels(concentrations$compound_id),function(x) sapply(levels(concentrations$cell_line),function(y) response[[y]][[x]][!is.na(response[[y]][[x]])][which.min(unique(concentrations$concentration[concentrations$compound_id==x&concentrations$cell_line==y])-10^response[[y]]$dose_log10_uM[!is.na(response[[y]][[x]])])]))
-names(Y)=levels(concentrations$compound_id)
-#duplicate to account for replicates
-Y=lapply(Y,function(x) c(x,x))
-Y=lapply(Y,function(x) x[order(names(x))])
-#perturbation has the X to model Y
-perturbation=perturbation[order(match(names(perturbation),names(Y)))]
-#features should be in columns
-perturbation=lapply(perturbation,t)
-#get the cell lines
-cell.line=lapply(perturbation,function(x) 
-	sapply(strsplit(rownames(x),"_"),function(y) y[5]))
-#X to model Y taking cell lines as another feature
-tomodel=lapply(1:32,function(x) 
-	model.matrix(~0+apply(perturbation[[x]],2,function(x) x)+factor(cell.line[[x]])))
+###########################formating data#####################################
+names=X$name
+X=as.matrix(X[,2:ncol(X)])
+rownames(X)=names
+#only treatments matter?
+X=X[,grep("(untreated|dmso)",colnames(X),perl=T,invert=T)]
+#perturbation's order should match response order
+X=t(X[,order(sapply(strsplit(colnames(X),"_"),function(x) x[2]))])
+#treatments are
+#sum(substr(rownames(X)[seq(1,704,22)],1,7)%in%effects$tx) 
+#cell lines also are in order
+#sum(sapply(strsplit(rownames(X)[seq(1,nrow(X),2)],"_"),function(x) x[5])%in%effects$cell_line)==nrow(effects)
+#get a matrix per tx
+#only kept drugable genes
+X=X[,colnames(X)%in%targets$target]
+X=lapply(unique(effects$tx),function(x) X[substr(rownames(X),1,7)==x,])
+names(X)=unique(effects$tx)
+#duplicate effects per cell line to account for replicates
+Y=lapply(unique(effects$tx),function(x) as.numeric(sapply(effects$predicted_effect[effects$tx==x],rep,2)))
+names(Y)=unique(effects$tx)
 
-###########################fit a model per tx###########################						      
-fit=lapply(1:32,function(x) ridge(tomodel[[x]],Y[[x]]))
-#coefs=as.matrix(coef(model$finalModel, model$bestTune$lambda))
+
+###########################fit a model per tx#####################################
+fit=lapply(1:32,function(x) ridge(X[[x]],Y[[x]]))
+coefs=as.matrix(coef(fit[[1]]$finalModel, fit[[1]]$bestTune$lambda))
