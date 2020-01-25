@@ -13,7 +13,7 @@ ridge=function(expression,inhibition){
 	trainCtrl <- trainControl("repeatedcv",
 			 number = 3, #min number of folds, 3 since n is small 
 			 repeats=100,#the more the better li
-			 #verboseIter = T,#T if fit fails,
+			 verboseIter = T,#T if fit fails,
 			 allowParallel=T)
 	set.seed(567)
 	#actual fit
