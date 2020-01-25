@@ -49,7 +49,7 @@ X=t(X[,order(sapply(strsplit(colnames(X),"_"),function(x) x[2]))])
 #sum(sapply(strsplit(rownames(X)[seq(1,nrow(X),2)],"_"),function(x) x[5])%in%effects$cell_line)==nrow(effects)
 #get a matrix per tx
 #only kept drugable genes
-X=X[,colnames(X)%in%targets$target]
+#X=X[,colnames(X)%in%targets$target]
 X=lapply(unique(effects$tx),function(x) X[substr(rownames(X),1,7)==x,])
 names(X)=unique(effects$tx)
 #duplicate effects per cell line to account for replicates
@@ -58,7 +58,7 @@ names(Y)=unique(effects$tx)
 
 
 ###########################fit a model per tx#####################################
-fit=lapply(1:32,function(x) ridge(X[[x]],Y[[x]]))
+fitAllGenes=lapply(1:32,function(x) ridge(X[[x]],Y[[x]]))
 
 ###########################get coefficients per gene per tx#######################
 coefs=lapply(fit,function(x) as.matrix(coef(x$finalModel,x$bestTune$lambda)))
@@ -67,3 +67,12 @@ colnames(coefs)=names(X)
 #ignore intercept, which is 0 by definition
 coefs=coefs[2:nrow(coefs),]
 write.table(coefs,"coefficients_z-matrix_tx.tsv",sep='\t',quote=F)
+
+rankAllGenes=apply(coefs,2,function(x) rownames(coefs)[order(abs(x),decreasing=T)])
+apply(rankAllGenes,2,function(x) {
+	a=sum(rownames(coefs)[x[1:1248]]%in%targets$target);
+	b=1248-a;
+	c=1248-a;
+	d=sum(!rownames(coefs)[x[1249:23339]]%in%targets$target);
+	fisher.test(matrix(c(a,b,c,d),ncol=2))$p.val}) 
+#no enrichment
