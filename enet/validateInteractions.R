@@ -84,11 +84,22 @@ pam50=read.table("../ini/pam50.tsv",header=T)
 miRtargets=get_multimir(target=pam50$ensembl_gene_id,summary=F,table="all",legacy.out=F)
 miRtargetsV=select(miRtargets,keys="validated",columns=columns(miRtargets),keytype="type")
 miRtargetsP=select(miRtargets,keys="predicted",columns=columns(miRtargets),keytype="type")
-miRtargets=unique(rbind(miRtargetsV1[,3:4],miRtargetsP[,3:4]))
 mirIDs=fread(miR.ids.map.tsv)#from mirbase <---------LINK
-withMIR=do.call(rdbind,lapply(unique(interacs$pam50Symbol),function(x) 
-	interacs[interacs$pam50Symbol==x,][interacs$predictor[interacs$pam50Symbol==x]%in%mirIDs$precursor[mirIDs$mature%in%miRtargets$mature_mirna_id[miRtargets$target_symbol==x]],]))
-
+withMIRp=apply(interacs,1,function(x) 
+	miRtargetsP[miRtargetsP$mature_mirna_id==mirIDs$mature[mirIDs$precursor==x[3]]&miRtargetsP$target_ensembl==x[2],])
+temp=interacs[sapply(withMIRp,nrow)>0,]
+withMIRp=withMIRp[sapply(withMIRp,nrow)>0]
+withMIRp=do.call(rbind,lapply(1:nrow(temp),function(x) 
+	cbind(temp[x,c(1,5,3)],withMIRp[[x]][,c(3,1,7,9)])))
+colnames(withMIRp)[2]="pam50Symbol"
+i=paste(withMIRp$pam50Symbol,withMIRp$predictor)
+temp=lapply(unique(i),function(x) withMIRp[i==x,])
+withMIRp=do.call(rbind,lapply(temp,function(x)
+	cbind(paste(unique(x$subtype),collapse=', '),x[1,2:4],
+	      paste(unique(x$experiment),collapse=', '),
+	      paste(unique(x$database),collapse=', '),
+	      paste(unique(x$pubmed_id),collapse=', '))))
+#repeat for validated targets
 ##############################################################################
 ########### TFs
 
