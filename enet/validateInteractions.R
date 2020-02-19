@@ -127,17 +127,23 @@ TFtargets$TRED=TFtargets$TRED[order(TFtargets$TRED[,2]),]
 temp=table(TFtargets$TRED[,2])
 ids=unlist(sapply(1:length(temp),function(x) rep(myannot$hgnc_symbol[myannot$entrezgene==names(temp)[x]],temp[x]))
 TFtargets$TRED[,2]=unlist(ids)
-#...
-#only interested on TFs actually present on the input dataset
-genes=rownames(DE.genes$her2_normal)
-myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","external_gene_name"), mart=mart)
-myannot=myannot[myannot$ensembl_gene_id%in%genes,]
-myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
-TFtargets=TFtargets[TFtargets[,1]%in%myannot$hgnc_symbol,]
-write.table(TFtargets,"TFtargets.tsv",sep='\t',quote=F,row.names=F)
+tfs$TRED=cbind("",tfs$TRED)
+tfs=do.call(rbind,lapply(1:6,function(x) cbind(names(tfs)[x],tfs[[x]])))
 
-withTF=do.call(rbind,lapply(unique(interacs$pam50Symbol),function(x) 
-	interacs[interacs$pam50Symbol==x,][which(interacs$predictorSymbol[interacs$pam50Symbol==x]%in%tfs$TF[tfs$target==x]),]))
+interacs=interacs[interacs$predictorSymbol%in%tfs[,3],]
+TFtargets=tfs[tfs[,3]%in%interacs$pam50Symbol,]
+withTF=apply(interacs,1,function(x) 
+	TFtargets[TFtargets[,3]==x[5]&TFtargets[,4]==x[6],])
+interacs=interacs[sapply(withTF,length)>0,]
+withTF=withTF[sapply(withTF,length)>0]
+withTF=sapply(withTF,function(x) matrix(x,ncol=4))
+withTF=lapply(withTF,function(x) 
+	cbind(x[1,1],paste(x[,2],collapse=", "),x[1,3],x[1,4]))
+withTF=cbind(interacs[,1],do.call(rbind,withTF))
+i=paste(withTF$V3,withTF$V4)
+withTF=lapply(unique(i),function(x) withTF[i==x,])
+withTF=t(sapply(withTF,function(x) 
+	cbind(paste(x$subtype,collapse=", "),x$V1[1],x$V2[1],x$V3[1],x$V4[1])))
 
 ######################################################################
 #######all 			    
