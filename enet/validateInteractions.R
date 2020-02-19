@@ -130,10 +130,10 @@ TFtargets$TRED[,2]=unlist(ids)
 tfs$TRED=cbind("",tfs$TRED)
 tfs=do.call(rbind,lapply(1:6,function(x) cbind(names(tfs)[x],tfs[[x]])))
 
+TFtargets=tfs[tfs[,4]%in%pam50$hgnc_symbol,]
 interacs=interacs[interacs$predictorSymbol%in%tfs[,3],]
-TFtargets=tfs[tfs[,3]%in%interacs$pam50Symbol,]
 withTF=apply(interacs,1,function(x) 
-	TFtargets[TFtargets[,3]==x[5]&TFtargets[,4]==x[6],])
+	TFtargets[TFtargets[,3]==x[6]&TFtargets[,4]==x[5],])
 interacs=interacs[sapply(withTF,length)>0,]
 withTF=withTF[sapply(withTF,length)>0]
 withTF=sapply(withTF,function(x) matrix(x,ncol=4))
