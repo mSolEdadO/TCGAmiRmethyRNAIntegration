@@ -104,7 +104,24 @@ withMIRp=do.call(rbind,lapply(temp,function(x)
 ########### TFs
 
 library(tftargets)#https://github.com/slowkow/tftargets
-
+#lists to table for easier management
+tfs=list()
+tfs$TRED=do.call(rbind,lapply(1:length(TRED),function(x) 
+	cbind(names(TRED)[x],TRED[[x]])))
+tfs$ITFP=do.call(rbind,lapply(1:length(ITFP),function(x) 
+	cbind(names(ITFP)[x],ITFP[[x]])))
+tfs$ENCODE=do.call(rbind,lapply(1:length(ENCODE),function(x) 
+	cbind(names(ENCODE)[x],ENCODE[[x]])))
+temp=lapply(1:length(Neph2012),function(x) lapply(1:length(Neph2012[[x]]),function(y) 
+	cbind(names(Neph2012[[x]])[y],Neph2012[[x]][[y]])))
+temp=lapply(temp,function(x) do.call(rbind,x[sapply(x,ncol)==2]))
+tfs$Neph2012=do.call(rbind,sapply(1:length(temp),function(x) cbind(names(Neph2012)[x],temp[[x]]))
+)
+tfs$TRRUST=do.call(rbind,lapply(1:length(TRRUST),function(x) 
+	cbind(names(TRRUST)[x],TRRUST[[x]])))
+tfs$Marbach2016=do.call(rbind,lapply(1:length(Marbach2016),function(x) 
+	cbind(names(Marbach2016)[x],Marbach2016[[x]])))
+				     
 #transform TF target lists to tables easier to work with
 load("TFtargets.RData")
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://jan2019.archive.ensembl.org")
