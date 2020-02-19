@@ -129,9 +129,11 @@ ids=unlist(sapply(1:length(temp),function(x) rep(myannot$hgnc_symbol[myannot$ent
 TFtargets$TRED[,2]=unlist(ids)
 tfs$TRED=cbind("",tfs$TRED)
 tfs=do.call(rbind,lapply(1:6,function(x) cbind(names(tfs)[x],tfs[[x]])))
-
-TFtargets=tfs[tfs[,4]%in%pam50$hgnc_symbol,]
-interacs=interacs[interacs$predictorSymbol%in%tfs[,3],]
+tfs$V3=gsub("E2F-","E2F",tfs$V3)
+tfs$V3=gsub("c-","C",tfs$V3)
+			 
+TFtargets=tfs[tfs$V4%in%pam50$hgnc_symbol,]
+interacs=interacs[interacs$predictorSymbol%in%TFtargets[,3],]
 withTF=apply(interacs,1,function(x) 
 	TFtargets[TFtargets[,3]==x[6]&TFtargets[,4]==x[5],])
 interacs=interacs[sapply(withTF,length)>0,]
