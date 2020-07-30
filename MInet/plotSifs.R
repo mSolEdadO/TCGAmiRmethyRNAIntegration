@@ -37,7 +37,7 @@ table(i[,2:1])
 #########################MI SCATTER PLOTS#########################
 #get dataframe with frequencies of rounded MI 
 i$MI2=round(i$MI,digits=2)
-i=lapply(unique(i$type),function(x) i[i$subtype==x,])
+i=lapply(unique(i$type),function(x) i[i$type==x,])
 names(i)=sapply(i,function(x) x$type[1])
 j=lapply(i,function(y) 
 	do.call(rbind,lapply(names(sif),function(x) 
@@ -45,7 +45,7 @@ j=lapply(i,function(y)
 j=data.frame(do.call(rbind,lapply(1:length(i),function(x) 
 	cbind(names(i)[x],rownames(j[[x]]),j[[x]]))))
 rownames(j)=NULL
-colnames(j)=c("type","MI","subtype","freq")
+colnames(j)=c("type","MI","subtype","frequency")
 j$MI=as.numeric(as.character(j$MI))
 j$freq=as.numeric(as.character(j$freq))
 
