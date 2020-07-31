@@ -18,6 +18,7 @@ j=unique(i$Basal)
 sif=lapply(1:10,function(x) 
 	do.call(rbind,lapply(j,function(y) sif[[x]][which(i[[x]]==y)[1:10000],])))
 #1:10 coz there're 5 sif for CpGs & 5 for miR
+names(sif)=gsub(".sif","",files)
 i=lapply(sif,function(x) paste(substr(x$V1,1,1),substr(x$V3,1,1)))
 j=j[2:4]
 #drop miR-transcript & miR-miR interactions with p-val<10-6
@@ -25,6 +26,7 @@ noMIR=lapply(grep("miR",names(sif),invert=T),function(x)
 	sif[[x]][which(i[[x]]%in%j),])
 #paste top 10k miR-transcript & miR-miR interactions per subtype
 top=lapply(1:5,function(x) rbind(noMIR[[x]],sif[[grep("miR",names(sif))[x]]]))
+names(top)=names(sif)[grep("miR",names(sif),invert=T)]
 
 #########################PLOT FINAL MI#########################
 #get data frame MI per type of interaction per subtype
@@ -66,7 +68,7 @@ dev.off()
 #########################BP OVER-REPRESENTATION#########################
 #BPs to search per subtype
 load("gseaComplete.RData")#results of enrich_GSEA.R
-gseaBP=lapply(gseaBP,function(x) x$pathway)
+gseaBP=lapply(fgseaRes,function(x) Term(x$pathway))
 gseaBP$normal=unique(unlist(gseaBP))
 GS_GO_BP<-GOGeneSets(species="Hs",ontologies=c("BP"))
 names(GS_GO_BP)=Term(names(GS_GO_BP))
@@ -98,6 +100,10 @@ enriquecimientoBP=lapply(1:5,function(x)
  				minGeneSetSize = 15, 
  				pAdjustMethod = "BH")))
 enriquecimientoBP=lapply(enriquecimientoBP,function(x) x[x$Adjusted.Pvalue<0.05,])
+names(enriquecimientoBP)=names(top)
+sapply(enriquecimientoBP,nrow)
+# Basal   Her2   LumA   LumB normal 
+#   109    119     34    123    159 
 
 #BP enriched sub-sifs
 GS_GO_BP=lapply(1:5,function(x) 
