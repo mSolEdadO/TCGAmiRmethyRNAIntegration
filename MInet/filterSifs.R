@@ -26,7 +26,7 @@ noMIR=lapply(grep("miR",names(sif),invert=T),function(x)
 #paste top 10k miR-transcript & miR-miR interactions per subtype
 top=lapply(1:5,function(x) rbind(noMIR[[x]],sif[[grep("miR",names(sif))[x]]]))
 
-#########################PLOT final MI#########################
+#########################PLOT FINAL MI#########################
 #get data frame MI per type of interaction per subtype
 i=lapply(top,function(x) paste(substr(x$V1,1,1),substr(x$V3,1,1)))
 i=lapply(1:5,function(x) cbind(i[[x]],top[[x]]$V2))
@@ -63,7 +63,7 @@ plot2=ggplot(j[j$type%in%i[c(3,5)],],aes(x=MI,y=frequency,color=subtype))+
 png("MIfinal.png",width=650)
  gridExtra::grid.arrange(plot1,plot2)
 dev.off()
-#########################BP over-representation#########################
+#########################BP OVER-REPRESENTATION#########################
 #BPs to search per subtype
 load("gseaComplete.RData")#results of enrich_GSEA.R
 gseaBP=lapply(gseaBP,function(x) x$pathway)
