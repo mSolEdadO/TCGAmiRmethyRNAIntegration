@@ -103,6 +103,20 @@ png("perSubtypeSharing.png")
 dev.off()
 
 #######################REGULATORS SHARED BETWEEN SUTYPES#########################
-#quieres una matriz de regulados vs subtipos por bp
-temp=lapply(regus,function(x) 
-	x[names(x)%in%names(which(table(unlist(lapply(regus,names)))>1))])
+#keep only BP with associated regulators
+temp=lapply(regus,function(x) x[sapply(x,length)>0])
+#get BPs enriched in several nets
+i=names(which(table(unlist(lapply(temp,names)))>1))
+temp=lapply(i,function(x) sapply(regus,function(y) y[names(y)==x]))
+temp=lapply(temp,function(y) y[sapply(y,function(x) length(unlist(x)))>0])
+#make an edgelist of subtype vs regulator per BP
+temp=lapply(1:length(i),function(y) 
+	do.call(rbind,lapply(1:length(temp[[y]]),function(x) 
+		cbind(names(temp[[y]])[x],temp[[y]][[x]][[1]]))))
+names(temp)=i
+#get matrices of subtype vs regulator per BP
+temp=lapply(temp,function(x) 
+	as.matrix(graph.edgelist(x,directed=F)[unique(x[,1]),unique(x[,2])]))
+#how many BPs are shared between subtypes
+temp1=table(sapply(temp,function(x) 
+	paste(sapply(strsplit(rownames(x),".",fixed=T),function(y) y[1]),collapse='+')))
