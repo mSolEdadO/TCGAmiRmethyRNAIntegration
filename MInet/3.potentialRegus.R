@@ -91,20 +91,19 @@ temp$subtype=paste(temp$subtype,temp$omic)
 M=graph.data.frame(temp[,1:2],directed=F)
 E(M)$weight=temp$sum
 M=as.matrix(M[unique(temp[,2]),unique(temp[,1])])
-M[M==0]=NA
 M=lapply(names(top),function(x) M[,grep(x,colnames(M))])
 total=sapply(M,rowSums,na.rm=T)
 #get percentages
 M=do.call(cbind,lapply(1:5,function(x) 100*M[[x]]/total[,x]))
-#order by % of TFs in normal tissue BPs
-M=M[order(M[,14],decreasing=T),]
+#keep just BPs on some subtype
+M=M[rowSums(M[,1:12],na.rm=T)>0,]
 
 pdf("RegusTot.pdf",height=16)
-gplots::heatmap.2(M,Colv=F,Rowv=F,dendrogram='n',scale='n',trace='n',
-	col=rev(heat.colors(100))[5:100],labCol=rep(c("CpG","TF","miRNA"),5),
-	lmat = rbind(c(0,3),c(2,1),c(0,4)),lhei=c(0.2,7,2),lwid=c(0.2,5),key.title="",
-	margins=c(2,25),add.expr=text(x=c(2,5,8,11,14),y=168,xpd=NA,
-	labels=names(top)),key.xlab="%")
+heatmap.2(M,Colv=F,dendrogram='r',scale='n',rowsep=c(29,50,66,90,108,135),
+	sepcolor="gray",col=rev(heat.colors(100)),trace='n',
+	labCol=rep(c("CpG","TF","miRNA"),5),lmat = rbind(c(0,3),c(2,1),c(0,4)),
+	lhei=c(0.2,5,2),lwid=c(2,5),key.title="",margins=c(2,25),
+	add.expr=text(x=c(2,5,8,11,14),y=168,xpd=NA,labels=names(top)),key.xlab="%")
 #xy positions need to be adjusted manually
 dev.off()
 

@@ -72,7 +72,7 @@ temp=lapply(temp,function(x) lapply(x,function(y) y/diag(y)))
 temp=lapply(temp,function(x) lapply(x,function(y) y[upper.tri(y)]))
 temp=lapply(temp,function(x) do.call(rbind,lapply(1:3,function(y) 
 	cbind(c("CpG","TF","miRNA")[y],x[[y]]))))
-temp=data.frame(do.call(rbind,lapply(1:5,function(x)
+withinSubty=data.frame(do.call(rbind,lapply(1:5,function(x)
  cbind(names(temp)[x],temp[[x]]))))
 #include no regulators = genes annotated in the functions
 temp1=lapply(GS_GO_BP,function(x) lapply(x,function(y) 
@@ -92,9 +92,9 @@ names(temp1)=names(regus)
 temp1=data.frame(do.call(rbind,lapply(1:5,function(x)
  cbind(names(temp1)[x],"transcript",temp1[[x]]))))
 #paste all together
-temp=data.frame(rbind(temp,temp1))
-colnames(temp)=c("subtype","omic","shared")
-temp$shared=100*as.numeric(as.character(temp$shared))
+withinSubty=data.frame(rbind(withinSubty,temp1))
+colnames(withinSubty)=c("subtype","omic","shared")
+withinSubty$shared=100*as.numeric(as.character(withinSubty$shared))
 
 png("perSubtypeSharing.png")
  ggplot(temp,aes(x=shared))+
@@ -117,6 +117,42 @@ names(temp)=i
 #get matrices of subtype vs regulator per BP
 temp=lapply(temp,function(x) 
 	as.matrix(graph.edgelist(x,directed=F)[unique(x[,1]),unique(x[,2])]))
+
 #how many BPs are shared between subtypes
 temp1=table(sapply(temp,function(x) 
 	paste(sapply(strsplit(rownames(x),".",fixed=T),function(y) y[1]),collapse='+')))
+#data frame to plot
+temp1=data.frame(cbind(names(temp1),temp1))
+temp1$temp1=as.numeric(as.character(temp1$temp1))
+temp1=temp1[order(temp1$temp1,decreasing=T),]
+temp1$V1=factor(temp1$V1,levels=as.character(temp1$V1))
+
+png("BPonSubt.png")
+ ggplot(temp1,aes(x=temp1,y=V1))+geom_bar(position="dodge", stat="identity")+
+ ylab("")+xlab("count")+theme(text=element_text(size=18))
+dev.off()
+
+#matrix per omic for each BP
+temp=lapply(temp,function(x) lapply(c("c","E","h"),function(y) x[,substr(colnames(x),1,1)==y]))
+temp=lapply(temp,function(x) lapply(x,function(y) y%*%t(y)))
+temp=lapply(temp,function(x) lapply(x,function(y) y/diag(y)))
+#data frame the matrices
+temp=lapply(1:length(temp),function(z) lapply(1:3,function(y) 
+	do.call(rbind,lapply(1:ncol(temp[[z]][[1]]),function(x) 
+		cbind(colnames(temp[[z]][[y]])[x],temp[[z]][[y]][x,-x])))))
+temp=lapply(1:3,function(x) do.call(rbind,lapply(temp1,function(y) y[[x]])))
+#data frame to plot
+acrosSubty=data.frame(do.call(rbind,lapply(1:3,function(x) 
+	cbind(c("CpG","TF","miRNA")[x],temp[[x]]))))
+colnames(acrosSubty)=c("omic","subtype","shared")
+acrosSubty$subtype=sapply(strsplit(as.character(acrosSubty$subtype),".",fixed=T),
+	function(x) x[1])
+acrosSubty$shared=100*as.numeric(as.character(acrosSubty$shared))
+acrosSubty=acrosSubty[!is.na(acrosSubty$shared),]
+acrosSubty$omic=factor(acrosSubty$omic,levels=c("CpG","TF","miRNA"))
+
+png("accrosSubtypeSharing.png")
+ ggplot(acrosSubty,aes(x=shared))+
+ geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)+
+ facet_wrap(~omic,ncol=1)+theme(text=element_text(size=18))
+dev.off()
