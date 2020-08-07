@@ -27,6 +27,7 @@ noMIR=lapply(grep("miR",names(sif),invert=T),function(x)
 #paste top 10k miR-transcript & miR-miR interactions per subtype
 top=lapply(1:5,function(x) rbind(noMIR[[x]],sif[[grep("miR",names(sif))[x]]]))
 names(top)=names(sif)[grep("miR",names(sif),invert=T)]
+top=lapply(top,function(x) x[!is.na(x$V2),])
 
 #########################PLOT FINAL MI#########################
 #get data frame MI per type of interaction per subtype

@@ -1,10 +1,10 @@
 library(data.table)
 library(ggplot2)
 #load sif files obtained with adj2sif
-files=list.files("parallel-aracne",full.names=T)
+files=list.files()
 files=files[grep("sif",files)]
 sif=lapply(files,fread)
-names(sif)=gsub("parallel-aracne/","",gsub(".miR.sif","",files))
+names(sif)=gsub(".sif","",files)
 
 #########################PLOT MI DISTRIBUTION#########################
 #get the data frame to plot

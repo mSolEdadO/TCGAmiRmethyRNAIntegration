@@ -36,7 +36,7 @@ sapply(g,function(x) transitivity(x,type="global"))
 #      Basal        Her2        LumA        LumB      normal 
 #0.016844812 0.007697497 0.014794154 0.017727299 0.003401515 
 
-#degree distributions
+#########################DEGREE#########################
 d=lapply(g,degree)
 d=lapply(d,function(x) x[order(x,decreasing=T)])
 #extract regulators degree
@@ -87,3 +87,6 @@ names(temp)=names(regus)
 temp=temp[sapply(temp,length)>0]
 temp=data.frame(do.call(rbind,lapply(1:4,function(x) 
 	cbind(names(temp)[x],names(temp[[x]]),temp[[x]]))))
+
+#########################BETWEENNESS#########################
+bet=lapply(g,betweenness)
