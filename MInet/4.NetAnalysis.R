@@ -79,38 +79,36 @@ temp=data.frame(do.call(rbind,lapply(1:4,function(x)
 bet=lapply(g,betweenness)
 #all over again
 bet=lapply(bet,function(x) x[order(x,decreasing=T)])
-temp=lapply(1:5,function(x) bet[[x]][names(bet[[x]])%in%unique(unlist(regus[[x]]))])
-temp=lapply(temp,function(x) cbind(substr(names(x),1,1),x))
-names(temp)=names(bet)
-temp=data.frame(do.call(rbind,lapply(1:5,function(x) cbind(names(temp)[x],temp[[x]]))))
-temp$V2=gsub("c","CpG",temp$V2)
-temp$V2=gsub("h","miRNA",temp$V2)
-temp$V2=gsub("E","TF",temp$V2)
-temp1=lapply(1:5,function(x) bet[[x]][!names(bet[[x]])%in%unique(unlist(regus[[x]]))])
-temp1=lapply(temp1,function(x) x[grep("ENSG",names(x))])
-temp1=lapply(temp1,function(x) cbind(substr(names(x),1,1),x))
-names(temp1)=names(bet)
-temp1=data.frame(do.call(rbind,lapply(1:5,function(x) 
-	cbind(names(temp1)[x],temp1[[x]]))))
-temp1$V2=gsub("E","transcript",temp1$V2)
-bet=rbind(temp,temp1)
-colnames(bet)=c("subtype","omic","betweenness")
-bet$omic=factor(bet$omic,levels=c("CpG","TF","miRNA","transcript"))
+bet=data.frame(do.call(rbind,lapply(1:5,function(x) 
+	cbind(names(bet)[x],names(bet[[x]]),bet[[x]]))))
+colnames(bet)=c("subtype","name","betweenness")
+bet$omic=gsub("E","transcript",gsub("c","CpG",gsub("h","miRNA",substr(bet$name,1,1))))
+bet$omic[bet$name%in%unlist(sapply(regus,names))]="bp"
+bet$omic[bet$name%in%myannot$ensembl_gene_id[myannot$hgnc_symbol%in%tfs$V3]]="TF"
+bet$omic=factor(bet$omic,levels=c("CpG","TF","miRNA","transcript","bp"))
 bet$betweenness=as.numeric(as.character(bet$betweenness))
+
+png("BP.betweenness.png")
+ggplot(bet[bet$omic!="bp",],aes(x=betweenness))+
+ geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)+
+ facet_wrap(~omic)+scale_x_continuous(trans="log10")+
+ theme(text=element_text(size=18))
+dev.off()
+
 #extra for alternative plot accounting for all the zeros
 bet$logRounded=round(log(bet$betweenness,base=10),digits=0)
 bet$categories=paste("1e-",bet$logRounded,sep="")
 bet$categories[bet$logRounded<0]="<1"
 bet$categories[bet$logRounded==-Inf]="0"
 temp=lapply(as.character(unique(bet$subtype)),function(x) 
-	sapply(as.character(unique(bet$omic)),function(y) 
+	sapply(as.character(unique(bet$omic)[2:5]),function(y) 
 		cbind(x,y,table(bet$categories[bet$subtype==x&bet$omic==y]))))
 temp=data.frame(do.call(rbind,lapply(temp,function(x) 
 	do.call(rbind,lapply(x,function(y) cbind(rownames(y),y))))))
 colnames(temp)=c("betweenness","subtype","omic","frequency")
 temp$frequency=as.numeric(as.character(temp$frequency))
-temp$betweenness=factor(temp$betweenness,levels=c(0,"<1",
-	levels(temp$value)[3:10]))
+temp$betweenness=factor(temp$betweenness,
+	levels=c(0,"<1",levels(temp$betweenness)[3:10]))
 temp$omic=factor(temp$omic,levels=c("CpG","TF","miRNA","transcript"))
 
 png("BP.betweenness.alt.png")
@@ -120,5 +118,15 @@ png("BP.betweenness.alt.png")
  	axis.text.x=element_text(angle=45))
 dev.off()
 
+lapply(unique(bet$omic),function(z) 
+	matrix(round(p.adjust(sapply(names(g),function(x) sapply(names(g),function(y) 
+		ks.test(bet$betweenness[bet$omic==z&bet$subtype==x],
+			bet$betweenness[bet$omic==z&bet$subtype==y])$p.val)),"fdr"),4),ncol=5))
 
-#
+bet=lapply(names(g),function(x) bet[bet$subtype==x,])
+lapply(bet,function(x) 
+	matrix(round(p.adjust(sapply(unique(x$omic),function(y) 
+		sapply(unique(x$omic),function(z) 
+		ks.test(x$betweenness[x$omic==y],
+			x$betweenness[x$omic==z])$p.val)),"fdr"),4),ncol=5))
+
