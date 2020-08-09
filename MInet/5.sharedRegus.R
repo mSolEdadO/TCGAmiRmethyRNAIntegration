@@ -83,6 +83,7 @@ jaccardI=data.frame(do.call(rbind,lapply(1:3,function(x)
 	cbind(names(jaccardI)[x],jaccardI[[x]]))))
 colnames(jaccardI)=c("regulator","subtype","jaccardIndex")
 jaccardI$jaccardIndex=as.numeric(as.character(jaccardI$jaccardIndex))
+jaccardI$regulator=factor(jaccardI$regulator,levels=c("CpG","TF","miRNA"))
 
 png("perSubtypeSharingP.png")
  ggplot(jaccardI,aes(x=jaccardIndex))+
@@ -130,20 +131,37 @@ temp=lapply(c("c","E","h"),function(z)
 #jaccard index 
 jaccardI=lapply(1:3,function(i) lapply(temp[[i]],function(z) 
 	sapply(1:(length(z)-1),function(x) sapply((x+1):length(z),function(y) 
-		rbind(names(z)[x],
+		rbind(paste(sapply(strsplit(names(z),".",fixed=T),function(a) a[1])[c(x,y)],
+			collapse="-"),
 			length(intersect(z[[x]],z[[y]]))/length(union(z[[x]],z[[y]])))))))
-#all over again
 #data frame to plot
 jaccardI=lapply(jaccardI,function(x) t(matrix(unlist(x),nrow=2)))
 jaccardI=data.frame(do.call(rbind,lapply(1:3,function(x) 
 	cbind(c("CpG","TF","miRNA")[x],jaccardI[[x]]))))
 colnames(jaccardI)=c("regulator","subtype","jaccardIndex")
-jaccardI$subtype=sapply(strsplit(as.character(jaccardI$subtype),".",fixed=T),
-	function(x) x[1])
 jaccardI$jaccardIndex=as.numeric(as.character(jaccardI$jaccardIndex))
+jaccardI$regulator=factor(jaccardI$regulator,levels=c("CpG","TF","miRNA"))
+#duplicate values for each subtype in the pair
+temp1=sapply(strsplit(as.character(jaccardI$subtype),"-"),function(x) x[2])
+jaccardI$subtype=sapply(strsplit(as.character(jaccardI$subtype),"-"),function(x) x[1])
+jaccardI=rbind(jaccardI,jaccardI)
+jaccardI$subtype[(nrow(jaccardI)-length(temp1)+1):nrow(jaccardI)]=temp1
 
 png("accrosSubtypeSharing.png")
  ggplot(jaccardI,aes(x=jaccardIndex))+
  geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)+
  facet_wrap(~regulator,ncol=1)+theme(text=element_text(size=18))+xlab("jaccard index")
 dev.off()
+
+#ks comparison between subtypes per regulator
+lapply(unique(jaccardI$regulator),function(z) 
+	matrix(round(p.adjust(sapply(names(g),function(x) sapply(names(g),function(y) 
+		ks.test(jaccardI$jaccardIndex[jaccardI$regulator==z&jaccardI$subtype==x],
+			jaccardI$jaccardIndex[jaccardI$regulator==z&jaccardI$subtype==y])$p.val)),"fdr"),4),ncol=5))
+#ks comparison between regulators per subtype
+jaccardI=lapply(names(g),function(x) jaccardI[jaccardI$subtype==x,])
+lapply(jaccardI,function(x) 
+	matrix(round(p.adjust(sapply(unique(x$regulator),function(y) 
+		sapply(unique(x$regulator),function(z) 
+		ks.test(x$jaccardIndex[x$regulator==y],
+			x$jaccardIndex[x$regulator==z])$p.val)),"fdr"),4),ncol=3))
