@@ -8,11 +8,11 @@ i=sapply(1:5,function(x) which(BPenriched[[x]]$V1==i[x])[1]-1)
 temp=lapply(1:5,function(x) BPenriched[[x]][1:i[x],])
 #separate each type of interactions
 i=lapply(temp,function(x) paste(substr(x$V1,1,1),substr(x$V3,1,1)))
-cpgs=lapply(1:5,function(x) temp[[x]][i[[x]]=="E c"])
-tfs=lapply(1:5,function(x) temp[[x]][i[[x]]=="E E"])
+cpgs=lapply(1:5,function(x) temp[[x]][i[[x]]=="E c",])
+tfs=lapply(1:5,function(x) temp[[x]][i[[x]]=="E E",])
 #not all transcripts are TFs
 tfs=lapply(tfs,function(x) x[x$V1%in%unlist(regus)|x$V3%in%unlist(regus),])
-mirs=lapply(1:5,function(x) temp[[x]][i[[x]]=="h E"])
+mirs=lapply(1:5,function(x) temp[[x]][i[[x]]=="h E",])
 
 #########################CpGs#########################
 #Illumina file
@@ -27,6 +27,7 @@ methy=data.frame(do.call(rbind,apply(methy,1,function(x)
 		  unlist(strsplit(x[5],";"))))))
 methy=cbind(do.call(rbind,strsplit(as.character(methy$X1),"+",fixed=T)),methy[,2:3])
 colnames(methy)=c("IlmnID","CHR","MAPINFO","UCSC_RefGene_Name","UCSC_RefGene_Group")
+write.table(methy,"MapMethy.tsv",sep='\t',quote=F,row.names=F)
 
 #recover methy lines with cpgs in enriched sifs
 true.cpgs=pblapply(cpgs,function(y) do.call(rbind,apply(y,1,function(x) 
