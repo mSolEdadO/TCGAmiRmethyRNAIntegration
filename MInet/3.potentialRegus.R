@@ -12,12 +12,13 @@ regus=sapply(nodes,function(x) table(substr(x,1,1)))
 #not all transcripts are tfs,so ↓
 regus[2,]=sapply(nodes,function(x) 
 	sum(x%in%myannot$ensembl_gene_id[myannot$hgnc_symbol%in%tfs$V3]))
-regus=data.frame(cbind(rownames(regus),regus))%>%
- pivot_longer(-V1,names_to="subtype",values_to="sum")
+regus=data.frame(cbind(rownames(regus),regus))
+regus=regus%>%pivot_longer(-V1,names_to="subtype",values_to="sum")
 regus$V1=gsub("c","CpG",regus$V1)
 regus$V1=gsub("h","miRNA",regus$V1)
 regus$V1=gsub("E","TF",regus$V1)
 regus$sum=as.numeric(as.character(regus$sum))
+regus$V1=factor(regus$V1,levels=c("CpG","TF","miRNA"))
 
 png("regulatorSum.png")
 ggplot(regus,aes(y=sum,x=V1,fill=subtype))+
