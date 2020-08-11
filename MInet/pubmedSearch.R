@@ -8,48 +8,48 @@ methy=fread("MapMethy.tsv")
 #keep only CpGs per BP per subtype
 cpgs=lapply(regus,function(x) lapply(x,function(y) y[substr(y,1,1)=="c"]))
 #build queries
-queries=lapply(cpgs,function(x) unlist(lapply(1:length(x),function(y) 
+queries=unique(unlist(lapply(cpgs,function(x) lapply(1:length(x),function(y) 
 	    paste(names(x)[y],
 	    	methy$UCSC_RefGene_Name[methy$IlmnID%in%x[[y]]],
 	    	"(CpG methylation OR DNA methylation)",
-	    	sep=" AND "))))
+	    	sep=" AND ")))))
+length(queries)
+
 #search db
-comention=pblapply(queries,function(x) sapply(x,function(y) {
+comention=pblapply(queries,function(x) {
 		  request=entrez_search(db = "pubmed", term = y);
-		  Sys.sleep(0.1);
-		  return(request)}))
-#get index of succesful queries
-count=lapply(comention,function(x) apply(x,2,function(y) y$count))
-#keep succesful queries
-cpgs=lapply(1:5,function(x) cbind(queries[[x]][count[[x]]>0],
-							count[[x]][count[[x]]>0]))
+		  Sys.sleep(0.01);
+		  return(request)})
+#get succesful queries
+tfs=unlist(comention[2,unlist(comention[2,])>0])
 
 #########################TFs#########################
 #all over again
 tfs=lapply(regus,function(x) lapply(x,function(y) y[substr(y,1,1)=="E"]))
-queries=lapply(tfs,function(x) unlist(lapply(1:length(x),function(y) 
+queries=unique(unlist(lapply(tfs,function(x) lapply(1:length(x),function(y) 
 	    paste(names(x)[y],
-	    	myannot$hgnc_symbol[myannot$ensembl_gene_idx[[y]]],
-	    	sep=" AND "))))
-comention=pblapply(queries,function(x) sapply(x,function(y) {
-		  request=entrez_search(db = "pubmed", term = y);
-		  Sys.sleep(0.1);
-		  return(request)}))
-count=lapply(comention,function(x) apply(x,2,function(y) y$count))
-tfs=lapply(1:5,function(x) cbind(queries[[x]][count[[x]]>0],
-							count[[x]][count[[x]]>0]))
+	    	myannot$hgnc_symbol[myannot$ensembl_gene_id%in%x[[y]]],
+	    	sep=" AND ")))))
+length(queries)
+#[1] 15683
+comention=pbsapply(queries,function(x) {
+		  request=entrez_search(db = "pubmed", term = x);
+		  Sys.sleep(0.01);
+		  return(request)})
+tfs=unlist(comention[2,unlist(comention[2,])>0])
+length(tfs)
 
 #########################miRNAs#########################
 #all over again
 mirs=lapply(regus,function(x) lapply(x,function(y) y[substr(y,1,1)=="h"]))
-queries=lapply(mirs,function(x) unlist(lapply(1:length(x),function(y) 
-	    paste(names(x)[y],x[[y]],sep=" AND "))))
-#attemp to accelerate
-allQ=unique(unlist(queries))
-comention=pbsapply(allQ,function(x) {
+queries=unique(unlist(lapply(mirs,function(x) lapply(1:length(x),function(y) 
+	    paste(names(x)[y],x[[y]],sep=" AND ")))))
+length(queries)
+#[1] 22935
+comention=pbsapply(queries,function(x) {
 		  request=entrez_search(db = "pubmed", term = x);
-		  Sys.sleep(0.1);
+		  Sys.sleep(0.01);
 		  return(request)})
-count=lapply(comention,function(x) apply(x,2,function(y) y$count))
-mirs=lapply(1:5,function(x) cbind(queries[[x]][count[[x]]>0],
-							count[[x]][count[[x]]>0]))
+mirs=unlist(comention[2,unlist(comention[2,])>0])
+length(mirs)
+#[1] 2165
