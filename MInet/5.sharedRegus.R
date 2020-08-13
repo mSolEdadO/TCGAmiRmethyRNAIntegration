@@ -5,7 +5,7 @@ temp=lapply(regus,function(x) table(unlist(x)))
 #data frame to plot
 temp=lapply(temp,function(x) cbind(names(x),x))
 temp=data.frame(do.call(rbind,lapply(1:5,function(x) 
- cbind(names(temp)[x],temp[[x]]))))
+ cbind(names(temp)[x],temp[[x]]))),stringsAsFactors=T)
 colnames(temp)=c("subtype","name","bp")
 temp$regulator=gsub("E","TF",gsub("h","miRNA",gsub("c","CpG",substr(temp$name,1,1))))
 temp$regulator=factor(temp$regulator,levels=c("CpG","TF","miRNA"))
@@ -24,9 +24,9 @@ temp$exclu=gsub(TRUE,"exclusive",temp$exclu)
 temp$exclu=gsub(FALSE,"shared",temp$exclu)
 
 png("regulatorShared.png")
- ggplot(temp,aes(y=bp,fill=regulator,x=subtype))+
+ ggplot(temp1,aes(y=proportion,fill=regulator,x=subtype))+
  geom_bar(position="fill", stat="identity")+
- facet_wrap(~exclu)+xlab("")+ylab("proportion")+
+ facet_wrap(~exclusivity)+xlab("")+ylab("proportion")+
  theme(text=element_text(size=18),axis.text.x=element_text(angle=45))+
  scale_fill_manual(values=gray.colors(5))
 dev.off()
@@ -165,3 +165,20 @@ lapply(jaccardI,function(x)
 		sapply(unique(x$regulator),function(z) 
 		ks.test(x$jaccardIndex[x$regulator==y],
 			x$jaccardIndex[x$regulator==z])$p.val)),"fdr"),4),ncol=3))
+
+#######################OVER/SUB REPRESENTATION#########################
+#BPs with/without CpGs
+temp=rbind(sapply(regus,function(x) 
+	sum(sapply(x,function(y) sum(substr(y,1,1)=="c"))==0)),
+	sapply(regus,function(x) sum(sapply(x,function(y) sum(substr(y,1,1)=="c"))>0)))
+#test enrichment
+fisher.test(cbind(temp[,5],rowSums(temp[,1:4])),alternative="g")
+
+#subrepresentation of miRNAs in BrCa BPs
+temp=sapply(regus,function(x) 
+	table(unlist(sapply(x,function(y) substr(y,1,1)=="h"))))
+#      Basal  Her2 LumA  LumB normal
+#FALSE  9097 13970 3292 14370  10790
+#TRUE   6134  6708 2018  7731   7957
+fisher.test(cbind(rowSums(temp[,1:4]),temp[,5]),alternative="g")
+#there are more non-miRNAs in subtypes
