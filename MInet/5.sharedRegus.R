@@ -1,4 +1,5 @@
 library(ggplot2)
+library(gridExtra)
 #######################REGULATORS SHARED WITHIN SUTYPES#########################
 #regulators shared by BP
 temp=lapply(regus,function(x) table(unlist(x)))
@@ -130,27 +131,51 @@ temp=lapply(c("c","E","h"),function(z)
 	 unlist(x)[substr(unlist(x),1,1)==z])))
 #jaccard index 
 jaccardI=lapply(1:3,function(i) lapply(temp[[i]],function(z) 
-	sapply(1:(length(z)-1),function(x) sapply((x+1):length(z),function(y) 
+	lapply(1:(length(z)-1),function(x) lapply((x+1):length(z),function(y) 
 		rbind(paste(sapply(strsplit(names(z),".",fixed=T),function(a) a[1])[c(x,y)],
 			collapse="-"),
 			length(intersect(z[[x]],z[[y]]))/length(union(z[[x]],z[[y]])))))))
 #data frame to plot
-jaccardI=lapply(jaccardI,function(x) t(matrix(unlist(x),nrow=2)))
+jaccardI=lapply(1:3,function(z) lapply(1:length(i),function(y) 
+	lapply(jaccardI[[z]][[y]],function(x) rbind(i[y],x))))
+jaccardI=lapply(jaccardI,function(x) t(matrix(unlist(x),nrow=3)))
 jaccardI=data.frame(do.call(rbind,lapply(1:3,function(x) 
 	cbind(c("CpG","TF","miRNA")[x],jaccardI[[x]]))))
-colnames(jaccardI)=c("regulator","subtype","jaccardIndex")
+colnames(jaccardI)=c("regulator","bp","pair","jaccardIndex")
 jaccardI$jaccardIndex=as.numeric(as.character(jaccardI$jaccardIndex))
+#NA arise from comparing 2 empty sets
+jaccardI=jaccardI[!is.na(jaccardI$jaccardIndex),]
 jaccardI$regulator=factor(jaccardI$regulator,levels=c("CpG","TF","miRNA"))
-#duplicate values for each subtype in the pair
-temp1=sapply(strsplit(as.character(jaccardI$subtype),"-"),function(x) x[2])
-jaccardI$subtype=sapply(strsplit(as.character(jaccardI$subtype),"-"),function(x) x[1])
-jaccardI=rbind(jaccardI,jaccardI)
-jaccardI$subtype[(nrow(jaccardI)-length(temp1)+1):nrow(jaccardI)]=temp1
+#trick to plot
+jaccardI$pos=1
+jaccardI$pos[jaccardI$regulator=="CpG"]=1:sum(jaccardI$regulator=="CpG")
+jaccardI$pos[jaccardI$regulator=="TF"]=1:sum(jaccardI$regulator=="TF")
+jaccardI$pos[jaccardI$regulator=="miRNA"]=1:sum(jaccardI$regulator=="miRNA")
 
-png("accrosSubtypeSharing.png")
- ggplot(jaccardI,aes(x=jaccardIndex))+
- geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)+
- facet_wrap(~regulator,ncol=1)+theme(text=element_text(size=18))+xlab("jaccard index")
+cols=c("red4","red3","red2","coral","darkolivegreen4","darkolivegreen3",
+	"darkkhaki","green","green3","deepskyblue")
+#taken from http://www.sthda.com/english/wiki/wiki.php?id_contents=7930
+get_legend<-function(myggplot){
+   tmp <- ggplot_gtable(ggplot_build(myggplot))
+   leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+   legend <- tmp$grobs[[leg]]
+   return(legend)}
+#p=ggplot...legend.position="bottom"
+legend=get_legend(p)
+plots=lapply(levels(temp$regulator),function(x)
+	ggplot(temp[temp$regulator==x,],aes(x=pos,y=jaccardIndex,labels=bp))+
+ 	 geom_point(aes(color=pair))+geom_text(aes(
+ 	 	label=ifelse(jaccardIndex[regulator==x]>quantile(jaccardIndex[regulator==x],
+ 	 		.99),as.character(bp),'')),check_overlap=T,hjust=-0.01)+
+ 	 ggtitle(x)+xlab("biological process")+ylab("Jaccard Index")+
+ 	 theme(text=element_text(size=18),axis.text.x=element_blank(),
+ 	 	axis.ticks.x=element_blank(),legend.position='n',
+ 	 	legend.title=element_blank())+
+ 	 scale_color_manual(values=cols))
+png("accrossSubtyBP.png",width=1500)
+grid.arrange(plots[[1]],plots[[2]],plots[[3]],legend,
+	ncol=3,nrow=2,layout_matrix=rbind(c(1,2,3),c(4,4)),
+	widths=c(3,3,3),heights=c(5,0.4))
 dev.off()
 
 #ks comparison between subtypes per regulator
