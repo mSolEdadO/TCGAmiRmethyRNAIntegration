@@ -3,9 +3,9 @@ library(ggplot2)
 library(data.table)
 
 #########################DEGREE#########################
-topG=lapply(top,function(x) graph.data.frame(x[,c(1,3)],directed=F))
+bpG=lapply(BPenriched,function(x) graph.data.frame(x[,c(1,3)],directed=F))
 
-d=lapply(topG,degree)
+d=lapply(bpG,degree)
 d=lapply(d,function(x) x[order(x,decreasing=T)])
 #data frame to plot
 d=data.frame(do.call(rbind,lapply(1:5,function(x) 
@@ -37,7 +37,7 @@ lapply(d,function(x)
 		ks.test(x$degree[x$omic==y],x$degree[x$omic==z])$p.val)),"fdr"),4),ncol=4))
 
 #########################BETWEENNESS#########################
-bet=lapply(topG,betweenness)
+bet=lapply(bpG,betweenness)
 #all over again
 bet=lapply(bet,function(x) x[order(x,decreasing=T)])
 bet=data.frame(do.call(rbind,lapply(1:5,function(x) 
@@ -49,7 +49,7 @@ bet$omic=factor(bet$omic,levels=c("CpG","TF","miRNA","transcript"))
 bet$betweenness=as.numeric(as.character(bet$betweenness))
 
 png("BP.betweenness.png")
-ggplot(bet[bet$omic!="bp",],aes(x=betweenness))+
+ggplot(bet,aes(x=betweenness))+
  geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)+
  facet_wrap(~omic)+scale_x_continuous(trans="log10")+
  theme(text=element_text(size=18))

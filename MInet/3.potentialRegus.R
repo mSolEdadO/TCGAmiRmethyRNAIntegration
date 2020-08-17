@@ -66,7 +66,7 @@ png("regulatorsCombo.png")
  geom_bar(position="stack", stat="identity")+
  ylab("biological processes")+xlab("")+
  theme(text=element_text(size=18))+
- scale_fill_manual("regulators",values=gray.colors(5))
+ scale_fill_manual("regulators",values=c("thistle4","thistle3","skyblue3"))
 dev.off()
 #colors have to be adjusted
 
@@ -101,6 +101,22 @@ gplots::heatmap.2(M,Colv=F,dendrogram='r',scale='n',sepcolor="gray",
 #xy positions need to be adjusted manually
 dev.off()
 
+#average %
+temp1=colMeans(M)
+#data frame to plot
+temp1=data.frame(cbind(do.call(rbind,strsplit(names(temp1)," ")),temp1))
+colnames(temp1)=c("subtype","regulator","mean")
+temp1$mean=as.numeric(as.character(temp1$mean))
+temp1$regulator=gsub("E","TF",gsub("h","miRNA",gsub("c","CpG",temp1$regulator)))
+temp1$regulator=factor(temp1$regulator,levels=c("CpG","TF","miRNA"))
+
+png("AveragePercent.png")
+ ggplot(temp1,aes(y=mean,x=subtype,fill=regulator))+
+ geom_bar(position="dodge", stat="identity")+
+ scale_fill_manual(values=gray.colors(5))+ylab("average %")+xlab("")+
+ theme(text=element_text(size=18))
+dev.off()
+
 #regulators per BP
 temp$subtype=sapply(strsplit(temp$subtype," "),function(x) x[1])
 temp$omic=gsub("c","CpG",temp$omic)
@@ -114,6 +130,7 @@ png("perBPdistris.png")
  theme(text=element_text(size=18),axis.text.x=element_blank())+xlab("")
 dev.off()
 #Removed 1 rows containing non-finite values (stat_boxplot). 
+
 #test distributions
 temp=lapply(unique(temp$omic),function(x) temp[temp$omic==x,])
 names(temp)=sapply(temp,function(x) x$omic[1])
@@ -121,4 +138,31 @@ lapply(temp,function(z)
 	matrix(round(p.adjust(sapply(names(top),function(x) sapply(names(top),
 		function(y) ks.test(z$sum[z$subtype==x],z$sum[z$subtype==y])$p.val)),
 					"fdr"),4),ncol=5))
-#mir=fread("miR.ids.map.tsv",skip=1)
+
+#total of regulators per subtype adding all BPs
+temp=do.call(rbind,temp)
+temp1=sapply(unique(temp$subtype),function(x) sapply(levels(temp$omic),function(y)
+	sum(temp$sum[temp$subtype==x&temp$omic==y])))
+#data frama to plot
+temp=data.frame(cbind(rownames(temp1),temp1))
+temp=temp%>%pivot_longer(-V1,names_to="subtype",values_to="proportion")
+temp$sum=as.numeric(as.character(temp$proportion))
+colnames(temp)[1]="regulator"
+temp$regulator=factor(temp$regulator,levels=c("CpG","TF","miRNA"))
+
+png("RegusEnrich.png")
+ ggplot(temp2,aes(y=proportion,x=subtype,fill=regulator))+
+ geom_bar(position="fill", stat="identity")+
+ theme(text=element_text(size=18))+xlab("")+
+ scale_fill_manual(values=gray.colors(5))
+dev.off()
+
+#test enrichment
+temp1=cbind(rowSums(temp1[,1:4]),temp1[,5])
+temp1=lapply(1:3,function(x) rbind(temp1[x,],colSums(temp1[-x,])))
+#subtypes are enriched for CpGs
+sapply(temp1,function(x) fisher.test(x,alternative="g")$p.value)
+#[1] 6.825154e-148  1.000000e+00  1.000000e+00
+#subtypes are subrepresented of miRNAs & TFs
+sapply(temp1,function(x) fisher.test(x,alternative="l")$p.value)
+#[1] 1.000000e+00 2.919389e-23 3.986178e-63
