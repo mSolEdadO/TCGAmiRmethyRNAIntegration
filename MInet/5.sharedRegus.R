@@ -147,23 +147,26 @@ jaccardI$jaccardIndex=as.numeric(as.character(jaccardI$jaccardIndex))
 jaccardI=jaccardI[!is.na(jaccardI$jaccardIndex),]
 jaccardI$regulator=factor(jaccardI$regulator,levels=c("CpG","TF","miRNA"))
 #trick to plot
+jaccardI=jaccardI[order(jaccardI$jaccardIndex,decreasing=T),]
 jaccardI$pos=1
 jaccardI$pos[jaccardI$regulator=="CpG"]=1:sum(jaccardI$regulator=="CpG")
 jaccardI$pos[jaccardI$regulator=="TF"]=1:sum(jaccardI$regulator=="TF")
 jaccardI$pos[jaccardI$regulator=="miRNA"]=1:sum(jaccardI$regulator=="miRNA")
 
-cols=c("red4","red3","red2","coral","darkolivegreen4","darkolivegreen3",
-	"darkkhaki","green","green3","deepskyblue")
+cols=c("red4","red2","coral","magenta","darkolivegreen4","darkkhaki","magenta3",
+	"green","magenta4","deepskyblue")
 #taken from http://www.sthda.com/english/wiki/wiki.php?id_contents=7930
 get_legend<-function(myggplot){
    tmp <- ggplot_gtable(ggplot_build(myggplot))
    leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
    legend <- tmp$grobs[[leg]]
    return(legend)}
-#p=ggplot...legend.position="bottom"
+p=ggplot(jaccardI,aes(x=pos,y=jaccardIndex,labels=bp))+
+ 	 geom_point(aes(color=pair))+scale_color_manual(values=cols)+
+ 	 theme(legend.title = element_blank(),legend.position='bottom')
 legend=get_legend(p)
-plots=lapply(levels(temp$regulator),function(x)
-	ggplot(temp[temp$regulator==x,],aes(x=pos,y=jaccardIndex,labels=bp))+
+plots=lapply(levels(jaccardI$regulator),function(x)
+	ggplot(jaccardI[jaccardI$regulator==x,],aes(x=pos,y=jaccardIndex,labels=bp))+
  	 geom_point(aes(color=pair))+geom_text(aes(
  	 	label=ifelse(jaccardIndex[regulator==x]>quantile(jaccardIndex[regulator==x],
  	 		.99),as.character(bp),'')),check_overlap=T,hjust=-0.01)+
@@ -177,6 +180,13 @@ grid.arrange(plots[[1]],plots[[2]],plots[[3]],legend,
 	ncol=3,nrow=2,layout_matrix=rbind(c(1,2,3),c(4,4)),
 	widths=c(3,3,3),heights=c(5,0.4))
 dev.off()
+
+#duplicate values for each subtype in the pair	
+temp=sapply(strsplit(as.character(jaccardI$pair),"-"),function(x) x[2])	
+jaccardI$subtype=sapply(strsplit(as.character(jaccardI$pair),"-"),
+	function(x) x[1])
+jaccardI=rbind(jaccardI,jaccardI)
+jaccardI$subtype[(nrow(jaccardI)-length(temp)+1):nrow(jaccardI)]=temp
 
 #ks comparison between subtypes per regulator
 lapply(unique(jaccardI$regulator),function(z) 
