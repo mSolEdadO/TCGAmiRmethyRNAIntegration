@@ -34,7 +34,36 @@ png("topBetweenness.png")
  	axis.text.x=element_text(angle=45))
 dev.off()
 
-lapply(names(top),function(x) 
-	sapply(c("CpG","TF","miRNA"),function(y) 
+sapply(names(top),function(x) 
+	p.adjust(sapply(c("CpG","TF","miRNA","transcript"),function(y) 
 		ks.test(bet$betweenness[bet$subtype==x&bet$omic==y],
-			btnss$betweenness[btnss$subtype==x&btnss$omic==y])$p.val))
+			bet$betweenness[bet$subtype==x&bet$omic==y])$p.val),"fdr"))
+#                  Basal       Her2         LumA         LumB       normal
+#CpG        6.585645e-08 0.71782310 1.027461e-02 9.997277e-01 0.000000e+00
+#TF         5.278981e-03 0.00217164 2.316408e-03 1.006540e-04 4.576154e-02
+#miRNA      0.000000e+00 0.00000000 0.000000e+00 0.000000e+00 0.000000e+00
+#transcript 2.456743e-07 0.00000000 1.312284e-13 5.395684e-14 2.979314e-05
+
+grado=lapply(topG,degree)
+grado=lapply(grado,function(x) x[order(x,decreasing=T)])
+#data frame to plot
+grado=data.frame(do.call(rbind,lapply(1:5,function(x) 
+	cbind(names(grado)[x],names(grado[[x]]),grado[[x]]))))
+colnames(grado)=c("subtype","name","degree")
+#make omics explicit
+grado$omic=gsub("E","transcript",gsub("c","CpG",gsub("h","miRNA",substr(grado$name,1,1))))
+grado$omic[grado$name%in%myannot$ensembl_gene_id[myannot$hgnc_symbol%in%tfs$V3]]="TF"
+grado$omic=factor(grado$omic,levels=c("CpG","TF","miRNA","transcript"))
+grado$degree=as.numeric(as.character(grado$degree))
+
+png("TotalDegree.png")
+ggplot(grado,aes(x=degree))+
+ geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)+
+ facet_wrap(~omic)+scale_x_continuous(trans="log10")+
+ theme(text=element_text(size=18))
+dev.off()
+
+matrix(p.adjust(sapply(names(top),function(x) 
+	sapply(c("CpG","TF","miRNA","transcript"),function(y) 
+		ks.test(d$degree[d$subtype==x&d$omic==y],
+			grado$degree[grado$subtype==x&grado$omic==y])$p.val)),"fdr"),nrow=4)

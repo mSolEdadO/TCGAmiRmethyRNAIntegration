@@ -84,7 +84,7 @@ lapply(unique(bet$omic),function(z)
 		ks.test(bet$betweenness[bet$omic==z&bet$subtype==x],
 			bet$betweenness[bet$omic==z&bet$subtype==y])$p.val)),"fdr"),4),ncol=5))
 
-bet=lapply(names(g),function(x) bet[bet$subtype==x,])
+bet=lapply(names(top),function(x) bet[bet$subtype==x,])
 lapply(bet,function(x) 
 	matrix(round(p.adjust(sapply(unique(x$omic),function(y) 
 		sapply(unique(x$omic),function(z) 

@@ -18,7 +18,7 @@ mirs=lapply(1:5,function(x) temp[[x]][i[[x]]=="h E",])
 #Illumina file
 methy=fread("HumanMethylation450_15017482_v1-2.csv",sep=',',header=T,fill=T,skip=7)
 #only keep those with position and gene info
-methy=methy[!is.na(methy$MAPINFO),,c(1,12,13,22,24)]
+methy=methy[!is.na(methy$MAPINFO),c(1,12,13,22,24)]
 methy=methy[methy$UCSC_RefGene_Name!="",]
 #1 line per gene
 methy=data.frame(do.call(rbind,apply(methy,1,function(x) 
