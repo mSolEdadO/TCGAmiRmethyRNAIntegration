@@ -105,15 +105,27 @@ lapply(jaccardI,function(x)
 		ks.test(x$jaccardIndex[x$regulator==y],
 			x$jaccardIndex[x$regulator==z])$p.val)),"fdr"),4),ncol=3))
 
-#######################REGULATORS SHARED BETWEEN SUTYPES#########################
+#######################REGULATOR EDGES SHARED BETWEEN SUTYPES#########################
+#get node IDs for all BP transcripts in a subtype net
+temp=lapply(1:5,function(y) lapply(GS_GO_BP[[y]],function(x) 
+	which(V(g[[y]])$name%in%myannot$ensembl_gene_id[myannot$entrezgene%in%x])))
+#only keep normal enriched BPs also present in a subtype
+names(temp)=names(top)
+temp$normal=temp$normal[names(temp$normal)%in%names(regus$normal)]
+temp$normal=temp$normal[order(match(names(temp$normal),names(regus$normal)))]
+#get node IDs for associated regulators and BP
+temp=lapply(1:5,function(x) lapply(1:length(regus[[x]]),function(y)
+ c(temp[[x]][[y]],
+   which(V(g[[x]])$name%in%c(regus[[x]][[y]],
+   names(regus[[x]])[y])))))
+#get subgraphs for these nodes
+temp=lapply(1:5,function(x) lapply(temp[[x]],function(y) induced_subgraph(g[[x]],y)))
 #get BPs enriched in several nets
 i=names(which(table(unlist(lapply(regus,names)))>1))
-temp=lapply(i,function(x) sapply(regus,function(y) y[names(y)==x]))
-#filter out subtypes with no regulator for the BP
-temp=lapply(temp,function(y) y[sapply(y,function(x) length(unlist(x)))>0])
+
 #how many BPs are shared between subtypes
-temp1=table(sapply(temp,function(x) 
-	paste(sapply(strsplit(names(x),".",fixed=T),function(y) y[1]),collapse='&')))
+temp1=table(sapply(i,function(x) paste(names(regus)[sapply(regus,function(y) 
+	sum(names(y)==x))>0],collapse='&')))
 #data frame to plot
 temp1=data.frame(cbind(names(temp1),temp1))
 temp1$temp1=as.numeric(as.character(temp1$temp1))
@@ -124,6 +136,11 @@ png("BPonSubt.png")
  ggplot(temp1,aes(x=temp1,y=V1))+geom_bar(position="dodge", stat="identity")+
  ylab("")+xlab("count")+theme(text=element_text(size=18))
 dev.off()
+
+#group subgraphs by repeated BP
+temp=lapply(i,function(y) sapply(1:5,function(x) temp[[x]][names(regus[[x]])==y]))
+names(temp)=i
+
 
 #separate per omic
 temp=lapply(c("c","E","h"),function(z) 
