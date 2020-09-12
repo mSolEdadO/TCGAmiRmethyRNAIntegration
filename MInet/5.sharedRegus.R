@@ -1,5 +1,8 @@
 library(ggplot2)
 library(gridExtra)
+library(pbapply)
+library(ggrepel)
+
 #######################REGULATORS SHARED WITHIN SUTYPES#########################
 #regulators shared by BP
 temp=lapply(regus,function(x) table(unlist(x)))
@@ -106,22 +109,26 @@ lapply(jaccardI,function(x)
 			x$jaccardIndex[x$regulator==z])$p.val)),"fdr"),4),ncol=3))
 
 #######################REGULATOR EDGES SHARED BETWEEN SUTYPES#########################
-#get node IDs for all BP transcripts in a subtype net
-temp=lapply(1:5,function(y) lapply(GS_GO_BP[[y]],function(x) 
-	which(V(g[[y]])$name%in%myannot$ensembl_gene_id[myannot$entrezgene%in%x])))
 #only keep normal enriched BPs also present in a subtype
+temp=lapply(1:5,function(x) GS_GO_BP[[x]][names(GS_GO_BP[[x]])%in%names(regus[[x]])])
 names(temp)=names(top)
 temp$normal=temp$normal[names(temp$normal)%in%names(regus$normal)]
 temp$normal=temp$normal[order(match(names(temp$normal),names(regus$normal)))]
-#get node IDs for associated regulators and BP
-temp=lapply(1:5,function(x) lapply(1:length(regus[[x]]),function(y)
- c(temp[[x]][[y]],
-   which(V(g[[x]])$name%in%c(regus[[x]][[y]],
-   names(regus[[x]])[y])))))
+#get node IDs involved in a BP in a subtype net
+temp=lapply(1:5,function(y) lapply(1:length(temp[[y]]),function(x) 
+	which(V(g[[y]])$name%in%c(myannot$ensembl_gene_id[myannot$entrezgene%in%temp[[y]][[x]]],
+		regus[[y]][[x]]))))
 #get subgraphs for these nodes
 temp=lapply(1:5,function(x) lapply(temp[[x]],function(y) induced_subgraph(g[[x]],y)))
+#recover BP names so every element of the lists is identified
+names(temp)=names(top)
+names(temp$Basal)=names(regus$Basal)
+names(temp$Her2)=names(regus$Her2)
+names(temp$LumA)=names(regus$LumA)
+names(temp$LumB)=names(regus$LumB)
+names(temp$normal)=names(regus$normal)
 #get BPs enriched in several nets
-i=names(which(table(unlist(lapply(regus,names)))>1))
+i=names(which(table(unlist(lapply(temp,names)))>1))
 
 #how many BPs are shared between subtypes
 temp1=table(sapply(i,function(x) paste(names(regus)[sapply(regus,function(y) 
@@ -138,37 +145,48 @@ png("BPonSubt.png")
 dev.off()
 
 #group subgraphs by repeated BP
-temp=lapply(i,function(y) sapply(1:5,function(x) temp[[x]][names(regus[[x]])==y]))
+temp=lapply(i,function(y) lapply(temp,function(x) x[names(x)==y]))
+#filter subtypes without the BP
+temp=lapply(temp,function(x) x[sapply(x,length)>0])
 names(temp)=i
-
-
-#separate per omic
-temp=lapply(c("c","E","h"),function(z) 
-	lapply(temp,function(y) lapply(y,function(x)
-	 unlist(x)[substr(unlist(x),1,1)==z])))
-#jaccard index 
-jaccardI=lapply(1:3,function(i) lapply(temp[[i]],function(z) 
-	lapply(1:(length(z)-1),function(x) lapply((x+1):length(z),function(y) 
-		rbind(paste(sapply(strsplit(names(z),".",fixed=T),function(a) a[1])[c(x,y)],
-			collapse="-"),
-			length(intersect(z[[x]],z[[y]]))/length(union(z[[x]],z[[y]])))))))
+intersectionCounts=function(subty1,subty2){
+	u=ecount(graph.union(subty1,subty2))
+	#repeated edges
+	edges=get.edgelist(graph.intersection(subty1,subty2))
+	#repeated nodes
+	nodes=as.character(edges)#not unique(nodes)
+	#a regulator linked to two transcripts should be counted twice
+	#only count regulatory nodes
+	nodes=nodes[nodes%in%unlist(regus)]
+	#if no regulatory nodes shared
+	if(length(nodes)==0){return(cbind(u,"all",0))}
+	#counts per omic
+	counts=table(substr(nodes,1,1))
+return(cbind(u,names(counts),counts))}
+#get jaccardIndex input
+acrossSubty=pblapply(temp,function(z) 
+	do.call(rbind,lapply(1:(length(z)-1),function(x) 
+ 		do.call(rbind,lapply((x+1):length(z),function(y) 
+			cbind(names(z)[x],names(z)[y],
+ 				intersectionCounts(z[[x]][[1]],z[[y]][[1]])))))))
+#slooow
 #data frame to plot
-jaccardI=lapply(1:3,function(z) lapply(1:length(i),function(y) 
-	lapply(jaccardI[[z]][[y]],function(x) rbind(i[y],x))))
-jaccardI=lapply(jaccardI,function(x) t(matrix(unlist(x),nrow=3)))
-jaccardI=data.frame(do.call(rbind,lapply(1:3,function(x) 
-	cbind(c("CpG","TF","miRNA")[x],jaccardI[[x]]))))
-colnames(jaccardI)=c("regulator","bp","pair","jaccardIndex")
-jaccardI$jaccardIndex=as.numeric(as.character(jaccardI$jaccardIndex))
-#NA arise from comparing 2 empty sets
-jaccardI=jaccardI[!is.na(jaccardI$jaccardIndex),]
-jaccardI$regulator=factor(jaccardI$regulator,levels=c("CpG","TF","miRNA"))
+acrossSubty=data.frame(do.call(rbind,lapply(1:length(temp1),function(x)
+ cbind(names(temp1)[x],temp1[[x]]))))
+colnames(acrossSubty)=c("BP","subtype1","subtype2","Eunion","regulator","Eintersection")
+acrossSubty$Eunion=as.numeric(as.character(acrossSubty$Eunion))
+acrossSubty$Eintersection=as.numeric(as.character(acrossSubty$Eintersection))
+acrossSubty$JaccardIndex=acrossSubty$Eintersection/acrossSubty$Eunion
+acrossSubty$regulator=gsub("E","TF",gsub("c","CpG",gsub("h","miRNA",
+	acrossSubty$regulator)))
+acrossSubty$regulator=factor(acrossSubty$regulator,levels=c("CpG","TF","miRNA","all"))
 #trick to plot
-jaccardI=jaccardI[order(jaccardI$jaccardIndex,decreasing=T),]
-jaccardI$pos=1
-jaccardI$pos[jaccardI$regulator=="CpG"]=1:sum(jaccardI$regulator=="CpG")
-jaccardI$pos[jaccardI$regulator=="TF"]=1:sum(jaccardI$regulator=="TF")
-jaccardI$pos[jaccardI$regulator=="miRNA"]=1:sum(jaccardI$regulator=="miRNA")
+acrossSubty=acrossSubty[order(acrossSubty$JaccardIndex,decreasing=T),]
+acrossSubty$pos=1
+acrossSubty$pos[acrossSubty$regulator=="CpG"]=1:sum(acrossSubty$regulator=="CpG")
+acrossSubty$pos[acrossSubty$regulator=="TF"]=1:sum(acrossSubty$regulator=="TF")
+acrossSubty$pos[acrossSubty$regulator=="miRNA"]=1:sum(acrossSubty$regulator=="miRNA")
+acrossSubty$pair=paste(acrossSubty$subtype1,acrossSubty$subtype2,sep='-')
 
 cols=c("red4","red2","coral","magenta","darkolivegreen4","darkkhaki","magenta3",
 	"green","magenta4","deepskyblue")
@@ -178,27 +196,36 @@ get_legend<-function(myggplot){
    leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
    legend <- tmp$grobs[[leg]]
    return(legend)}
-p=ggplot(jaccardI,aes(x=pos,y=jaccardIndex,labels=bp))+
+p=ggplot(acrossSubty,aes(x=pos,y=JaccardIndex,labels=BP))+
  	 geom_point(aes(color=pair))+scale_color_manual(values=cols)+
  	 theme(legend.title = element_blank(),legend.position='bottom')
 legend=get_legend(p)
-plots=lapply(levels(jaccardI$regulator),function(x)
-	ggplot(jaccardI[jaccardI$regulator==x,],aes(x=pos,y=jaccardIndex,labels=bp))+
- 	 geom_point(aes(color=pair))+geom_text(aes(
- 	 	label=ifelse(jaccardIndex[regulator==x]>quantile(jaccardIndex[regulator==x],
- 	 		.99),as.character(bp),'')),check_overlap=T,hjust=-0.01)+
- 	 ggtitle(x)+xlab("biological process")+ylab("Jaccard Index")+
+plots=lapply(c("CpG","TF","miRNA"),function(x) {
+	l=max(acrossSubty$pos[acrossSubty$regulator==x]);
+	acrossSubty$pos[acrossSubty$regulator=="all"]=(l+1):
+				  (l+sum(acrossSubty$regulator=="all"));
+	ggplot(acrossSubty[acrossSubty$regulator%in%c(x,"all"),],
+		aes(x=pos,y=JaccardIndex,labels=BP))+
+ 	 geom_point(aes(color=pair))+geom_text_repel(aes(
+ 	 	label=ifelse(JaccardIndex>JaccardIndex[regulator==x][6],
+ 	 		as.character(BP),'')),hjust=-0.02)+ggtitle(x)+
+ 	 xlab("biological process")+ylab("Jaccard Index")+
  	 theme(text=element_text(size=18),axis.text.x=element_blank(),
  	 	axis.ticks.x=element_blank(),legend.position='n',
  	 	legend.title=element_blank())+
- 	 scale_color_manual(values=cols))
-png("accrossSubtyBP.png",width=1500)
+ 	 scale_color_manual(values=cols)})
+
+png("accrossSubtyBP.png",width=1300,height=600)
 grid.arrange(plots[[1]],plots[[2]],plots[[3]],legend,
 	ncol=3,nrow=2,layout_matrix=rbind(c(1,2,3),c(4,4)),
 	widths=c(3,3,3),heights=c(5,0.4))
 dev.off()
 
-#duplicate values for each subtype in the pair	
+
+
+
+#mising<-------------------------!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 temp=sapply(strsplit(as.character(jaccardI$pair),"-"),function(x) x[2])	
 jaccardI$subtype=sapply(strsplit(as.character(jaccardI$pair),"-"),
 	function(x) x[1])
