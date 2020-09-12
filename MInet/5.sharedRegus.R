@@ -221,12 +221,16 @@ grid.arrange(plots[[1]],plots[[2]],plots[[3]],legend,
 	widths=c(3,3,3),heights=c(5,0.4))
 dev.off()
 
-
+#one row per subtype
 temp=acrossSubty
 temp$subtype2=NULL
 temp1=acrossSubty
 temp1$subtype1=NULL
 temp=data.frame(rbind(as.matrix(temp),as.matrix(temp1)))
+#one row per regulator
+temp1=temp[rep(which(temp$regulator=="all"),3),]
+temp1$regulator=as.character(sapply(c("CpG","TF","miRNA"),function(x) rep(x,sum(temp$regulator=="all"))))
+temp=rbind(temp[temp$regulator!="all",],temp1)
 
 #ks comparison between subtypes per regulator
 lapply(c("CpG","TF","miRNA"),function(z) 
@@ -240,7 +244,7 @@ lapply(temp,function(x)
 	matrix(round(p.adjust(sapply(unique(x$regulator),function(y) 
 		sapply(unique(x$regulator),function(z) 
 		ks.test(x$JaccardIndex[x$regulator==y],
-			x$JaccardIndex[x$regulator==z])$p.val)),"fdr"),4),ncol=4))
+			x$JaccardIndex[x$regulator==z])$p.val)),"fdr"),4),ncol=3))
 
 #######################OVER/SUB REPRESENTATION#########################
 #BPs with/without CpGs
