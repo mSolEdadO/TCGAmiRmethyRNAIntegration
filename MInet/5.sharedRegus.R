@@ -222,28 +222,25 @@ grid.arrange(plots[[1]],plots[[2]],plots[[3]],legend,
 dev.off()
 
 
-
-
-#mising<-------------------------!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-temp=sapply(strsplit(as.character(jaccardI$pair),"-"),function(x) x[2])	
-jaccardI$subtype=sapply(strsplit(as.character(jaccardI$pair),"-"),
-	function(x) x[1])
-jaccardI=rbind(jaccardI,jaccardI)
-jaccardI$subtype[(nrow(jaccardI)-length(temp)+1):nrow(jaccardI)]=temp
+temp=acrossSubty
+temp$subtype2=NULL
+temp1=acrossSubty
+temp1$subtype1=NULL
+temp=data.frame(rbind(as.matrix(temp),as.matrix(temp1)))
 
 #ks comparison between subtypes per regulator
-lapply(unique(jaccardI$regulator),function(z) 
-	matrix(round(p.adjust(sapply(names(g),function(x) sapply(names(g),function(y) 
-		ks.test(jaccardI$jaccardIndex[jaccardI$regulator==z&jaccardI$subtype==x],
-			jaccardI$jaccardIndex[jaccardI$regulator==z&jaccardI$subtype==y])$p.val)),"fdr"),4),ncol=5))
+lapply(c("CpG","TF","miRNA"),function(z) 
+	matrix(round(p.adjust(sapply(names(top),function(x) 
+		sapply(names(top),function(y) 
+		ks.test(temp$JaccardIndex[temp$regulator==z&temp$subtype1==x],
+			temp$JaccardIndex[temp$regulator==z&temp$subtype1==y])$p.val)),"fdr"),4),ncol=5))
 #ks comparison between regulators per subtype
-jaccardI=lapply(names(g),function(x) jaccardI[jaccardI$subtype==x,])
-lapply(jaccardI,function(x) 
+temp=lapply(names(top),function(x) temp[temp$subtype1==x,])
+lapply(temp,function(x) 
 	matrix(round(p.adjust(sapply(unique(x$regulator),function(y) 
 		sapply(unique(x$regulator),function(z) 
-		ks.test(x$jaccardIndex[x$regulator==y],
-			x$jaccardIndex[x$regulator==z])$p.val)),"fdr"),4),ncol=3))
+		ks.test(x$JaccardIndex[x$regulator==y],
+			x$JaccardIndex[x$regulator==z])$p.val)),"fdr"),4),ncol=4))
 
 #######################OVER/SUB REPRESENTATION#########################
 #BPs with/without CpGs
