@@ -1,27 +1,37 @@
 library(igraph)
 library(ggplot2)
 library(data.table)
-
+library(gridExtra)
 #########################DEGREE#########################
 bpG=lapply(BPenriched,function(x) graph.data.frame(x[,c(1,3)],directed=F))
 
 d=lapply(bpG,degree)
-d=lapply(d,function(x) x[order(x,decreasing=T)])
-#data frame to plot
+#get data frame
 d=data.frame(do.call(rbind,lapply(1:5,function(x) 
 	cbind(names(d)[x],names(d[[x]]),d[[x]]))))
 colnames(d)=c("subtype","name","degree")
 #make omics explicit
 d$omic=gsub("E","transcript",gsub("c","CpG",gsub("h","miRNA",substr(d$name,1,1))))
 d$omic[d$name%in%myannot$ensembl_gene_id[myannot$hgnc_symbol%in%tfs$V3]]="TF"
-d$omic=factor(d$omic,levels=c("CpG","TF","miRNA","transcript"))
-d$degree=as.numeric(as.character(d$degree))
+
+#data to plot
+#get frequencies
+temp=lapply(unique(d$omic),function(y) lapply(names(top),function(x) 
+	as.data.frame(table(d$degree[d$subtype==x&d$omic==y]))))
+#explicit subtype
+temp=lapply(temp,function(x) do.call(rbind,lapply(1:5,function(y) 
+	cbind(names(top)[y],x[[y]]))))
+#explicit omic
+temp=data.frame(do.call(rbind,lapply(1:4,function(x) 
+	cbind(unique(d$omic)[x],temp[[x]]))))
+temp$Freq=as.numeric(as.character(temp$Freq))
+temp$Var1=as.numeric(as.character(temp$Var1))
+colnames(temp)[1:2]=c("omic","subtype")
 
 png("BP.degree.png")
-ggplot(d,aes(x=degree))+
- geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)+
- facet_wrap(~omic)+scale_x_continuous(trans="log10")+
- theme(text=element_text(size=18))
+	ggplot(temp,aes(x=Var1,y=Freq,col=subtype))+geom_point()+facet_wrap(~omic)+
+	xlab("degree")+ylab("frequency")+scale_x_continuous(trans="log10")+
+	scale_y_continuous(trans="log10")+theme(text=element_text(size=18))
 dev.off()
 
 #ks comparison between subtypes per regulator
@@ -36,48 +46,28 @@ lapply(d,function(x)
 		sapply(unique(x$omic),function(z) 
 		ks.test(x$degree[x$omic==y],x$degree[x$omic==z])$p.val)),"fdr"),4),ncol=4))
 
-#########################BETWEENNESS#########################
-bet=lapply(bpG,betweenness)
+#########################TRANSITIVITY#########################
+cc=lapply(bpG,transitivity,"local")
+
 #all over again
-bet=lapply(bet,function(x) x[order(x,decreasing=T)])
-bet=data.frame(do.call(rbind,lapply(1:5,function(x) 
-	cbind(names(bet)[x],names(bet[[x]]),bet[[x]]))))
-colnames(bet)=c("subtype","name","betweenness")
-bet$omic=gsub("E","transcript",gsub("c","CpG",gsub("h","miRNA",substr(bet$name,1,1))))
-bet$omic[bet$name%in%myannot$ensembl_gene_id[myannot$hgnc_symbol%in%tfs$V3]]="TF"
-bet$omic=factor(bet$omic,levels=c("CpG","TF","miRNA","transcript"))
-bet$betweenness=as.numeric(as.character(bet$betweenness))
+cc=data.frame(do.call(rbind,lapply(1:5,function(x) cbind(names(top)[x],V(g[[x]])$name,cc[[x]]))))
+colnames(cc)=c("subtype","name","transitivity")
+cc$omic=substr(cc$name,1,1)
+cc$omic=gsub("E","transcript",gsub("c","CpG",gsub("h","miRNA",substr(cc$name,1,1))))
+cc$omic[cc$name%in%myannot$ensembl_gene_id[myannot$hgnc_symbol%in%tfs$V3]]="TF"
+cc$transitivity=as.numeric(as.character(cc$transitivity))
 
-png("BP.betweenness.png")
-ggplot(bet,aes(x=betweenness))+
- geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)+
- facet_wrap(~omic)+scale_x_continuous(trans="log10")+
- theme(text=element_text(size=18))
-dev.off()
+temp=lapply(unique(cc$omic),function(y) lapply(names(top),function(x) 
+	as.data.frame(table(cc$transitivity[cc$subtype==x&cc$omic==y]))))
+#explicit subtype
+temp=lapply(temp,function(x) do.call(rbind,lapply(1:5,function(y) 
+	cbind(names(top)[y],x[[y]]))))
+#explicit omic
+temp=data.frame(do.call(rbind,lapply(1:4,function(x) 
+	cbind(unique(cc$omic)[x],temp[[x]]))))
+temp$Freq=as.numeric(as.character(temp$Freq))
+colnames(temp)[1:2]=c("omic","subtype")
 
-#extra for alternative plot accounting for all the zeros
-bet$logRounded=round(log(bet$betweenness,base=10),digits=0)
-bet$categories=paste("1e-",bet$logRounded,sep="")
-bet$categories[bet$logRounded<0]="<1"
-bet$categories[bet$logRounded==-Inf]="0"
-
-temp=lapply(as.character(unique(bet$subtype)),function(x) 
-	sapply(as.character(unique(bet$omic)),function(y) 
-		cbind(x,y,table(bet$categories[bet$subtype==x&bet$omic==y]))))
-temp=data.frame(do.call(rbind,lapply(temp,function(x) 
-	do.call(rbind,lapply(x,function(y) cbind(rownames(y),y))))))
-colnames(temp)=c("betweenness","subtype","omic","frequency")
-temp$frequency=as.numeric(as.character(temp$frequency))
-temp$betweenness=factor(temp$betweenness,
-	levels=c(0,"<1",levels(temp$betweenness)[3:11]))
-temp$omic=factor(temp$omic,levels=c("CpG","TF","miRNA","transcript"))
-
-png("BP.betweenness.alt.png")
- ggplot(temp,aes(x=betweenness,y=frequency,fill=subtype))+
- geom_bar(position="dodge", stat="identity")+scale_y_continuous(trans="log10")+
- facet_wrap(~omic)+theme(text=element_text(size=18),
- 	axis.text.x=element_text(angle=45))
-dev.off()
 
 lapply(unique(bet$omic),function(z) 
 	matrix(round(p.adjust(sapply(names(g),function(x) sapply(names(g),function(y) 
