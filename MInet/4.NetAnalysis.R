@@ -57,22 +57,21 @@ cc$omic=gsub("E","transcript",gsub("c","CpG",gsub("h","miRNA",substr(cc$name,1,1
 cc$omic[cc$name%in%myannot$ensembl_gene_id[myannot$hgnc_symbol%in%tfs$V3]]="TF"
 cc$transitivity=as.numeric(as.character(cc$transitivity))
 
-temp=lapply(unique(cc$omic),function(y) lapply(names(top),function(x) 
-	as.data.frame(table(cc$transitivity[cc$subtype==x&cc$omic==y]))))
-#explicit subtype
-temp=lapply(temp,function(x) do.call(rbind,lapply(1:5,function(y) 
-	cbind(names(top)[y],x[[y]]))))
-#explicit omic
-temp=data.frame(do.call(rbind,lapply(1:4,function(x) 
-	cbind(unique(cc$omic)[x],temp[[x]]))))
-temp$Freq=as.numeric(as.character(temp$Freq))
-colnames(temp)[1:2]=c("omic","subtype")
+i=paste(d$subtype,d$name)
+j=paste(cc$subtype,cc$name)
+cc=cc[order(match(j,i)),]
+d=cbind(d,cc$transitivity)
+colnames(d)[5]="transitivity"
 
+png("transitivity.png")
+ ggplot(d,aes(x=degree,y=transitivity,col=subtype))+geom_point()+facet_wrap(~omic)+
+ scale_x_continuous(trans="log10")+theme(text=element_text(size=18))
+dev.off()
 
-lapply(unique(bet$omic),function(z) 
+lapply(unique(cc$omic),function(z) 
 	matrix(round(p.adjust(sapply(names(g),function(x) sapply(names(g),function(y) 
-		ks.test(bet$betweenness[bet$omic==z&bet$subtype==x],
-			bet$betweenness[bet$omic==z&bet$subtype==y])$p.val)),"fdr"),4),ncol=5))
+		ks.test(cc$transitivity[cc$omic==z&cc$subtype==x],
+			cc$transitivity[cc$omic==z&cc$subtype==y])$p.val)),"fdr"),4),ncol=5))
 
 bet=lapply(names(top),function(x) bet[bet$subtype==x,])
 lapply(bet,function(x) 
