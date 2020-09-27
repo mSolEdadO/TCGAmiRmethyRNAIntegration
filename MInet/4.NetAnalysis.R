@@ -15,9 +15,11 @@ d$omic=gsub("E","transcript",gsub("c","CpG",gsub("h","miRNA",substr(d$name,1,1))
 d$omic[d$name%in%myannot$ensembl_gene_id[myannot$hgnc_symbol%in%tfs$V3]]="TF"
 
 #data to plot
-#get frequencies
+#get counts
 temp=lapply(unique(d$omic),function(y) lapply(names(top),function(x) 
 	as.data.frame(table(d$degree[d$subtype==x&d$omic==y]))))
+#get frequencies
+propor=lapply(temp,function(x) lapply(x,function(y) y$Freq/sum(y$Freq)))
 #explicit subtype
 temp=lapply(temp,function(x) do.call(rbind,lapply(1:5,function(y) 
 	cbind(names(top)[y],x[[y]]))))
@@ -27,9 +29,10 @@ temp=data.frame(do.call(rbind,lapply(1:4,function(x)
 temp$Freq=as.numeric(as.character(temp$Freq))
 temp$Var1=as.numeric(as.character(temp$Var1))
 colnames(temp)[1:2]=c("omic","subtype")
+temp$propor=unlist(propor)
 
 png("BP.degree.png")
-	ggplot(temp,aes(x=Var1,y=Freq,col=subtype))+geom_point()+facet_wrap(~omic)+
+	ggplot(temp,aes(x=Var1,y=propor,col=subtype))+geom_point()+facet_wrap(~omic)+
 	xlab("degree")+ylab("frequency")+scale_x_continuous(trans="log10")+
 	scale_y_continuous(trans="log10")+theme(text=element_text(size=18))
 dev.off()
@@ -63,24 +66,55 @@ cc=cc[order(match(j,i)),]
 d=cbind(d,cc$transitivity)
 colnames(d)[5]="transitivity"
 
-png("transitivity.png")
- ggplot(d,aes(x=degree,y=transitivity,col=subtype))+geom_point()+facet_wrap(~omic)+
- scale_x_continuous(trans="log10")+theme(text=element_text(size=18))
+#########################PATH LENGTH#########################
+#get all shortest paths
+l=lapply(g,distances)
+targets=lapply(1:5,function(x) 
+	BPenriched[[x]]$V3[BPenriched[[x]]$V1%in%names(regus[[x]])])
+#keep only paths to functional transcripts
+l=lapply(1:5,function(x) l[[x]][,colnames(l[[x]])%in%targets[[x]]])
+#separate regulators from non-regulators
+lr=lapply(1:5,function(x) l[[x]][rownames(l[[x]])%in%unlist(regus[[x]]),])
+l=lapply(1:5,function(x) l[[x]][!rownames(l[[x]])%in%unlist(regus[[x]]),])
+#driven by INF?????????????????????????
+#test distribution's simmilarity across omics
+lapply(lr,function(x) sapply(c("c","E","h"),function(y) 
+	sapply(c("c","E","h"),function(z) 
+		ks.test(x[substr(rownames(x),1,1)==y,],
+			x[substr(rownames(x),1,1)==z,])$p.val)))
+#test distribution's simmilarity across subtypes
+lapply(c("c","E","h"),function(x) sapply(1:5,function(y) sapply(1:5,function(z) 
+	ks.test(as.numeric(lr[[y]][substr(rownames(lr[[y]]),1,1)==x,]),
+		as.numeric(lr[[z]][substr(rownames(lr[[z]]),1,1)==x,]))$p.val)))
+
+
+#data.frame to plot p1
+lr=lapply(lr,function(x) do.call(rbind,lapply(c("c","E","h"),function(y) 
+	cbind(y,data.frame(table(as.numeric(x[substr(rownames(x),1,1)==y,])))))))
+lr=data.frame(do.call(rbind,lapply(1:5,function(x) cbind(names(top)[x],lr[[x]]))))
+colnames(lr)[1:2]=c("subtype","omic")
+lr$omic=gsub("c","CpG",gsub("h","miRNA",gsub("E","TF",lr$omic)))
+#data.frame to plot p2
+l=lapply(l,function(x) data.frame(table(as.numeric(x))))
+l=data.frame(do.call(rbind,lapply(1:5,function(x) cbind(names(top)[x],l[[x]]))))
+colnames(l)[1]="subtype"
+l$omic="transcript"
+l=l[,c(1,4,2,3)]
+#bind both
+l=rbind(lr,l)
+
+#calc frequency
+i=paste(l$subtype,l$omic)
+l=lapply(unique(i),function(x) l[i==x,])
+propor=unlist(sapply(l,function(x) x$Freq/sum(x$Freq)))
+l$propor=propor
+l$omic=factor(l$omic,levels=c("CpG","TF","miRNA","transcript"))
+
+png("BP.l.png") 
+ ggplot(l,aes(x=Var1,y=propor,col=subtype))+geom_line()+geom_point()+
+ facet_wrap(~omic)+xlab("shortest path length")+ylab("frequency")+
+ theme(text=element_text(size=18))
 dev.off()
-
-lapply(unique(cc$omic),function(z) 
-	matrix(round(p.adjust(sapply(names(g),function(x) sapply(names(g),function(y) 
-		ks.test(cc$transitivity[cc$omic==z&cc$subtype==x],
-			cc$transitivity[cc$omic==z&cc$subtype==y])$p.val)),"fdr"),4),ncol=5))
-
-bet=lapply(names(top),function(x) bet[bet$subtype==x,])
-lapply(bet,function(x) 
-	matrix(round(p.adjust(sapply(unique(x$omic),function(y) 
-		sapply(unique(x$omic),function(z) 
-		ks.test(x$betweenness[x$omic==y],
-			x$betweenness[x$omic==z])$p.val)),"fdr"),4),ncol=4))
-
-
 #########################ADD BP NODES#########################
 #change entrez per ensembl IDs
 temp=lapply(GS_GO_BP,function(x) lapply(x,function(y) 
