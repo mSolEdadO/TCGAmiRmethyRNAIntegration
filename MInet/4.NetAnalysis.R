@@ -73,20 +73,23 @@ targets=lapply(1:5,function(x)
 	BPenriched[[x]]$V3[BPenriched[[x]]$V1%in%names(regus[[x]])])
 #keep only paths to functional transcripts
 l=lapply(1:5,function(x) l[[x]][,colnames(l[[x]])%in%targets[[x]]])
+
+#test distribution's simmilarity across subtypes
+ps=lapply(1:3,function(z) sapply(1:5,function(x) sapply(1:5,function(y) 
+	wilcox.test(as.numeric(l[[x]][rownames(l[[x]])%in%r1[[x]][[z]],]),
+		as.numeric(l[[y]][rownames(l[[y]])%in%r1[[y]][[z]],]),paired=F)$p.val)))
+lapply(ps,function(x) matrix(p.adjust(x,"fdr"),ncol=5))
+ps=lapply(1:5,function(z) sapply(1:3,function(x) sapply(1:3,function(y) 
+	wilcox.test(as.numeric(l[[z]][rownames(l[[z]])%in%r1[[z]][[x]],]),
+		as.numeric(l[[z]][rownames(l[[z]])%in%r1[[z]][[y]],]),paired=F)$p.val)))
+lapply(ps,function(x) matrix(p.adjust(x,"fdr"),ncol=3))
+temp=lapply(l,function(x) x[grep("ENSG",rownames(x)),])
+p.adjust(sapply(1:5,function(x) 
+	wilcox.test(as.numeric(temp[[x]][rownames(temp[[x]])%in%r1[[x]][[2]],]),
+		as.numeric(temp[[x]][!rownames(temp[[x]])%in%r1[[x]][[2]],]))),"fdr")
 #separate regulators from non-regulators
 lr=lapply(1:5,function(x) l[[x]][rownames(l[[x]])%in%unlist(regus[[x]]),])
 l=lapply(1:5,function(x) l[[x]][!rownames(l[[x]])%in%unlist(regus[[x]]),])
-#driven by INF?????????????????????????
-#test distribution's simmilarity across omics
-lapply(lr,function(x) sapply(c("c","E","h"),function(y) 
-	sapply(c("c","E","h"),function(z) 
-		ks.test(x[substr(rownames(x),1,1)==y,],
-			x[substr(rownames(x),1,1)==z,])$p.val)))
-#test distribution's simmilarity across subtypes
-lapply(c("c","E","h"),function(x) sapply(1:5,function(y) sapply(1:5,function(z) 
-	ks.test(as.numeric(lr[[y]][substr(rownames(lr[[y]]),1,1)==x,]),
-		as.numeric(lr[[z]][substr(rownames(lr[[z]]),1,1)==x,]))$p.val)))
-
 
 #data.frame to plot p1
 lr=lapply(lr,function(x) do.call(rbind,lapply(c("c","E","h"),function(y) 
@@ -107,14 +110,32 @@ l=rbind(lr,l)
 i=paste(l$subtype,l$omic)
 l=lapply(unique(i),function(x) l[i==x,])
 propor=unlist(sapply(l,function(x) x$Freq/sum(x$Freq)))
+l=do.call(rbind,l)
 l$propor=propor
 l$omic=factor(l$omic,levels=c("CpG","TF","miRNA","transcript"))
 
 png("BP.l.png") 
- ggplot(l,aes(x=Var1,y=propor,col=subtype))+geom_line()+geom_point()+
- facet_wrap(~omic)+xlab("shortest path length")+ylab("frequency")+
- theme(text=element_text(size=18))
+ ggplot(l,aes(x=Var1,y=propor,col=subtype))+geom_line()+facet_wrap(~omic)+
+ xlab("shortest path length")+ylab("frequency")+theme(text=element_text(size=18))
 dev.off()
+
+#driven by INF?????????????????????????
+#test distribution's simmilarity across omics
+lapply(names(top),function(s) sapply(levels(l$omic),function(o) 
+ sapply(levels(l$omic),function(p) 
+ 	ks.test(as.numeric(unlist(apply(l[l$subtype==s&l$omic==o,],1,function(x) 
+ 				rep(x[3],x[4])))),
+ 			as.numeric(unlist(apply(l[l$subtype==s&l$omic==p,],1,function(x) 
+ 			rep(x[3],x[4])))))$p.val)))
+#test distribution's simmilarity across subtypes
+lapply(levels(l$omic),function(o) sapply(names(top),function(s) 
+ sapply(names(top),function(s1) 
+ 	ks.test(as.numeric(unlist(apply(l[l$subtype==s&l$omic==o,],1,function(x) 
+ 				rep(x[3],x[4])))),
+ 			as.numeric(unlist(apply(l[l$subtype==s1&l$omic==o,],1,function(x) 
+ 			rep(x[3],x[4])))))$p.val)))
+#same for Kruskall-Wallis but sampling x values from apply...
+lapply(names(top),function(s) sapply(unique(l$omic),function(y) sapply(unique(l$omic),function(z) kruskal.test(sample(as.numeric(unlist(apply(l[l$subtype==s&l$omic==y,],1,function(x) rep(x[3],x[4])))),100000),sample(as.numeric(unlist(apply(l[l$subtype==s&l$omic==z,],1,function(x) rep(x[3],x[4])))),100000))
 #########################ADD BP NODES#########################
 #change entrez per ensembl IDs
 temp=lapply(GS_GO_BP,function(x) lapply(x,function(y) 
