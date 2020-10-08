@@ -37,17 +37,17 @@ png("BP.degree.png")
 	scale_y_continuous(trans="log10")+theme(text=element_text(size=18))
 dev.off()
 
-#ks comparison between subtypes per regulator
+#comparison between subtypes per regulator
 lapply(unique(d$omic),function(z) 
-	matrix(round(p.adjust(sapply(names(g),function(x) sapply(names(g),function(y) 
-		ks.test(d$degree[d$omic==z&d$subtype==x],
-			d$degree[d$omic==z&d$subtype==y])$p.val)),"fdr"),4),ncol=5))
-#ks comparison between regulators per subtype
-d=lapply(names(g),function(x) d[d$subtype==x,])
+	matrix(round(p.adjust(sapply(names(top),function(x) sapply(names(top),function(y) 
+		wilcox.test(d$degree[d$omic==z&d$subtype==x],
+			d$degree[d$omic==z&d$subtype==y],paired=F)$p.val)),"fdr"),4),ncol=5))
+#comparison between regulators per subtype
+d=lapply(names(top),function(x) d[d$subtype==x,])
 lapply(d,function(x) 
-	matrix(round(p.adjust(sapply(unique(x$omic),function(y) 
+	matrix(p.adjust(sapply(unique(x$omic),function(y) 
 		sapply(unique(x$omic),function(z) 
-		ks.test(x$degree[x$omic==y],x$degree[x$omic==z])$p.val)),"fdr"),4),ncol=4))
+		wilcox.test(x$degree[x$omic==y],x$degree[x$omic==z],paired=F)$p.val)),"fdr"),ncol=4))
 
 #########################TRANSITIVITY#########################
 cc=lapply(bpG,transitivity,"local")
@@ -75,18 +75,18 @@ targets=lapply(1:5,function(x)
 l=lapply(1:5,function(x) l[[x]][,colnames(l[[x]])%in%targets[[x]]])
 
 #test distribution's simmilarity across subtypes
-ps=lapply(1:3,function(z) sapply(1:5,function(x) sapply(1:5,function(y) 
-	wilcox.test(as.numeric(l[[x]][rownames(l[[x]])%in%r1[[x]][[z]],]),
-		as.numeric(l[[y]][rownames(l[[y]])%in%r1[[y]][[z]],]),paired=F)$p.val)))
-lapply(ps,function(x) matrix(p.adjust(x,"fdr"),ncol=5))
-ps=lapply(1:5,function(z) sapply(1:3,function(x) sapply(1:3,function(y) 
-	wilcox.test(as.numeric(l[[z]][rownames(l[[z]])%in%r1[[z]][[x]],]),
-		as.numeric(l[[z]][rownames(l[[z]])%in%r1[[z]][[y]],]),paired=F)$p.val)))
-lapply(ps,function(x) matrix(p.adjust(x,"fdr"),ncol=3))
+sapply(c("c","E","h"),function(z) sapply(1:4,function(x)  
+	p.adjust(wilcox.test(as.numeric(l[[x]][substr(rownames(l[[x]]),1,1)==z,]),
+		as.numeric(l[[5]][substr(rownames(l[[5]]),1,1)==z,]),paired=F)$p.val,"fdr")))
+#test distribution's simmilarity across omics
+lapply(1:5,function(z) matrix(p.adjust(sapply(c("c","E","h"),function(x) sapply(c("c","E","h"),function(y) 
+	wilcox.test(as.numeric(l[[z]][substr(rownames(l[[z]]),1,1)==x,]),
+		as.numeric(l[[z]][substr(rownames(l[[z]]),1,1)==y,]),paired=F)$p.val)),"fdr"),ncol=3))
+#compare TF vs transcript
 temp=lapply(l,function(x) x[grep("ENSG",rownames(x)),])
 p.adjust(sapply(1:5,function(x) 
-	wilcox.test(as.numeric(temp[[x]][rownames(temp[[x]])%in%r1[[x]][[2]],]),
-		as.numeric(temp[[x]][!rownames(temp[[x]])%in%r1[[x]][[2]],]))),"fdr")
+	wilcox.test(as.numeric(temp[[x]][rownames(temp[[x]])%in%unlist(regus[[x]]),]),
+		as.numeric(temp[[x]][!rownames(temp[[x]])%in%unlist(regus[[x]]),]))$p.val),"fdr")
 #separate regulators from non-regulators
 lr=lapply(1:5,function(x) l[[x]][rownames(l[[x]])%in%unlist(regus[[x]]),])
 l=lapply(1:5,function(x) l[[x]][!rownames(l[[x]])%in%unlist(regus[[x]]),])
@@ -115,27 +115,10 @@ l$propor=propor
 l$omic=factor(l$omic,levels=c("CpG","TF","miRNA","transcript"))
 
 png("BP.l.png") 
- ggplot(l,aes(x=Var1,y=propor,col=subtype))+geom_line()+facet_wrap(~omic)+
+ ggplot(l[!is.na(l$Var1),],aes(x=Var1,y=propor,col=subtype))+geom_line()+facet_wrap(~omic)+
  xlab("shortest path length")+ylab("frequency")+theme(text=element_text(size=18))
 dev.off()
 
-#driven by INF?????????????????????????
-#test distribution's simmilarity across omics
-lapply(names(top),function(s) sapply(levels(l$omic),function(o) 
- sapply(levels(l$omic),function(p) 
- 	ks.test(as.numeric(unlist(apply(l[l$subtype==s&l$omic==o,],1,function(x) 
- 				rep(x[3],x[4])))),
- 			as.numeric(unlist(apply(l[l$subtype==s&l$omic==p,],1,function(x) 
- 			rep(x[3],x[4])))))$p.val)))
-#test distribution's simmilarity across subtypes
-lapply(levels(l$omic),function(o) sapply(names(top),function(s) 
- sapply(names(top),function(s1) 
- 	ks.test(as.numeric(unlist(apply(l[l$subtype==s&l$omic==o,],1,function(x) 
- 				rep(x[3],x[4])))),
- 			as.numeric(unlist(apply(l[l$subtype==s1&l$omic==o,],1,function(x) 
- 			rep(x[3],x[4])))))$p.val)))
-#same for Kruskall-Wallis but sampling x values from apply...
-lapply(names(top),function(s) sapply(unique(l$omic),function(y) sapply(unique(l$omic),function(z) kruskal.test(sample(as.numeric(unlist(apply(l[l$subtype==s&l$omic==y,],1,function(x) rep(x[3],x[4])))),100000),sample(as.numeric(unlist(apply(l[l$subtype==s&l$omic==z,],1,function(x) rep(x[3],x[4])))),100000))
 #########################ADD BP NODES#########################
 #change entrez per ensembl IDs
 temp=lapply(GS_GO_BP,function(x) lapply(x,function(y) 
