@@ -43,7 +43,7 @@ temp1=lapply(c("CpG","TF","miRNA"),function(x)
 names(temp1)=c("CpG","TF","miRNA")
 #display p.adjusted values in a table subtype vs regulator
 matrix(p.adjust(sapply(temp1,function(x) sapply(x,function(y)
- fisher.test(y,alternative="g")$p.val)),"fdr"),ncol=3)#                          CpG          TF      miRNA
+ fisher.test(y,alternative="g")$p.val)),"fdr"),ncol=3)
 matrix(p.adjust(sapply(temp1,function(x) sapply(x,function(y)
  fisher.test(y,alternative="l")$p.val)),"fdr"),ncol=3)
 
@@ -198,7 +198,8 @@ get_legend<-function(myggplot){
    return(legend)}
 p=ggplot(acrossSubty,aes(x=pos,y=JaccardIndex,labels=BP))+
  	 geom_point(aes(color=pair))+scale_color_manual(values=cols)+
- 	 theme(legend.title = element_blank(),legend.position='bottom')
+ 	 theme(legend.title = element_blank(),legend.position='bottom',text=element_text(size=18))+
+ 	 guides(colour = guide_legend(override.aes = list(size=3)))
 legend=get_legend(p)
 plots=lapply(c("CpG","TF","miRNA"),function(x) {
 	l=max(acrossSubty$pos[acrossSubty$regulator==x]);
@@ -208,14 +209,14 @@ plots=lapply(c("CpG","TF","miRNA"),function(x) {
 		aes(x=pos,y=JaccardIndex,labels=BP))+
  	 geom_point(aes(color=pair))+geom_text_repel(aes(
  	 	label=ifelse(JaccardIndex>JaccardIndex[regulator==x][6],
- 	 		as.character(BP),'')),hjust=-0.02)+ggtitle(x)+
+ 	 		as.character(BP),'')),hjust=-0.02,size=5)+ggtitle(x)+
  	 xlab("biological process")+ylab("Jaccard Index")+
  	 theme(text=element_text(size=18),axis.text.x=element_blank(),
  	 	axis.ticks.x=element_blank(),legend.position='n',
  	 	legend.title=element_blank())+
  	 scale_color_manual(values=cols)})
 
-png("accrossSubtyBP.png",width=1300,height=600)
+png("accrossSubtyBP.png",width=1600,height=600)
 grid.arrange(plots[[1]],plots[[2]],plots[[3]],legend,
 	ncol=3,nrow=2,layout_matrix=rbind(c(1,2,3),c(4,4)),
 	widths=c(3,3,3),heights=c(5,0.4))
