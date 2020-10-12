@@ -69,6 +69,21 @@ dev.off()
 #########################BP OVER-REPRESENTATION#########################
 #BPs to search per subtype
 load("gseaComplete.RData")#results of enrich_GSEA.R
+
+#NES heatmap
+library(igraph)
+temp=lapply(fgseaRes,function(x) x[,c(1,5)])
+temp=do.call(rbind,lapply(1:4,function(x) cbind(names(top)[x],temp[[x]])))
+temp[,2]=Term(temp[,2])
+g=graph.data.frame(temp[,1:2],direct=F)temp[,2]=Term(temp[,2])
+E(g)$weight=temp[,3]
+temp=t(as.matrix(g[unique(temp[,1]),unique(temp[,2])]))
+pdf("NES.pdf",height=15)
+heatmap.2(temp,Colv=F,scale='n',trace='n',dendrogram='r',col=greenred(100),keysize=0.25,
+	key.title="",key.xlab="NES",density.info='n',lmat = rbind(c(0,4),c(2,1),c(0,3)),
+	lhei=c(0.5,5,0.2),lwid=c(1,6),srtCol=0,adjCol = c(0.5,1),margins=c(2,25))
+dev.off()
+
 gseaBP=lapply(fgseaRes,function(x) Term(x$pathway))
 gseaBP$normal=unique(unlist(gseaBP))
 GS_GO_BP<-GOGeneSets(species="Hs",ontologies=c("BP"))
