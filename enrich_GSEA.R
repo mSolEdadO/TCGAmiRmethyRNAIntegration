@@ -43,3 +43,10 @@ fgseaRes=lapply(fgseaRes,function(x) x[x$padj<0.01,])
 sapply(fgseaRes,nrow)
 #basal_normal  her2_normal  luma_normal  lumb_normal       normal 
 #         182          165           95          217          270 
+#keep only parent ones
+leading=lapply(1:4,function(x) 
+	collapsePathways(fgseaRes[[x]],GS_GO_BP,ranks[[x]]))
+fgseaRes=lapply(1:4,function(x) 
+	fgseaRes[[x]][fgseaRes[[x]]$pathway%in%leading[[x]]$mainPathways,])
+sapply(fgseaRes,nrow)
+#[1] 143 116  73 163
