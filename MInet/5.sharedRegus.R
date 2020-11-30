@@ -28,9 +28,9 @@ temp$exclu=gsub(TRUE,"exclusive",temp$exclu)
 temp$exclu=gsub(FALSE,"shared",temp$exclu)
 
 png("regulatorShared.png")
- ggplot(temp1,aes(y=proportion,fill=regulator,x=subtype))+
+ ggplot(temp,aes(y=bp,fill=regulator,x=subtype))+
  geom_bar(position="fill", stat="identity")+
- facet_wrap(~exclusivity)+xlab("")+ylab("proportion")+
+ facet_wrap(~exclu)+xlab("")+ylab("proportion")+
  theme(text=element_text(size=18),axis.text.x=element_text(angle=45))+
  scale_fill_manual(values=gray.colors(5))
 dev.off()

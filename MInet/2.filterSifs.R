@@ -74,8 +74,8 @@ load("gseaComplete.RData")#results of enrich_GSEA.R
 library(igraph)
 temp=lapply(fgseaRes,function(x) x[,c(1,5)])
 temp=do.call(rbind,lapply(1:4,function(x) cbind(names(top)[x],temp[[x]])))
-temp[,2]=Term(temp[,2])
-g=graph.data.frame(temp[,1:2],direct=F)temp[,2]=Term(temp[,2])
+temp$pathway=Term(temp$pathway)
+g=graph.data.frame(temp[,1:2],direct=F)
 E(g)$weight=temp[,3]
 temp=t(as.matrix(g[unique(temp[,1]),unique(temp[,2])]))
 pdf("NES.pdf",height=15)
