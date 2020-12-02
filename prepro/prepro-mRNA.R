@@ -20,7 +20,8 @@ expre=assay(expre)
 #keep only samples with metadata
 expre=expre[,which(colnames(expre)%in%subtype$samples)]
 subtype=subtype[subtype$samples%in%colnames(expre),]
-subtype=subtype[order(match(subtype$samples,colnames(expre))),]
+subtype=subtype[order(subtype$patients),]
+expre=expre[,order(match(colnames(expre),subtype$samples))]
 #there are duplicated measures for 16 patients 
 sum(table(subtype[,c(2,4)])>1)
 #[1] 16
@@ -43,7 +44,7 @@ myannot=getBM(attributes = c("ensembl_gene_id",
   "start_position","end_position","hgnc_id","hgnc_symbol"),
   filters = "ensembl_gene_id", 
   values=rownames(expre),mart=mart)
-myannot$lenght=abs(myannot$end_position-myannot$start_position)
+myannot$length=abs(myannot$end_position-myannot$start_position)
 
 #filter transcripts withouth annotation
 myannot=myannot[myannot$gene_biotype=="protein_coding"&
@@ -59,7 +60,7 @@ myannot[myannot$hgnc_id==
 #      ensembl_gene_id percentage_gene_gc_content   gene_biotype start_position
 #19876 ENSG00000204510                      50.06 protein_coding       12916610
 #55271 ENSG00000279195                      50.06 protein_coding       12916610
-#      end_position    hgnc_id hgnc_symbol lenght
+#      end_position    hgnc_id hgnc_symbol length
 #19876     12920482 HGNC:28415     PRAMEF7   3872
 #55271     12920482 HGNC:28415     PRAMEF7   3872
 which(rownames(exprots_hgnc)=="ENSG00000279195")
@@ -72,12 +73,7 @@ myannot=myannot[myannot$ensembl_gene_id%in%rownames(exprots_hgnc),]
 
 ##################CHECK BIASES########################################################
 library(NOISeq)
-#library(edgeR)
-#library(cqn)
-#library(DESeq2)
-#library(pbcmc)
-#library("BiocParallel")
-#library(sva)
+library(edgeR)
 
 #format data for noiseq
 noiseqData = readData(data = exprots_hgnc, gc = myannot[,1:2],
@@ -88,184 +84,96 @@ mycountsbio = dat(noiseqData, type = "countsbio", factor = NULL)
 #patients with repeated measures
 i=colnames(table(subtype[,c(2,4)]))[which(table(subtype[,c(2,4)])>1,
   arr.ind=T)[,2]]
-pdf("CountsOri.pdf",height = 12)
+png("CountsOri.png")
 explo.plot(mycountsbio, plottype = "boxplot",
- samples = which(colnames(exprots_hgnc)%in%i))
+ samples = which(designExp$patients%in%i))
 dev.off()
 #2)check for low count genes
 myCounts = dat(noiseqData, type = "countsbio", factor = NULL)
-pdf("noiseqPlot_distribution_lowcounts.pdf", width = 7, height = 7)
-explo.plot(myCounts, plottype = "barplot", samples = sample(1:ncol(expr),200))
+png("lowcountsOri.png")
+explo.plot(myCounts, plottype = "barplot", 
+  samples = which(designExp$patients%in%i))
 dev.off()
-pdf("lowCountThres.pdf")
+png("lowCountThres.png")
 hist(rowMeans(cpm(exprots_hgnc,log=T)),ylab="genes",
   xlab="mean of log CPM",col="gray")
 abline(v=0,col="red")
 dev.off()
 
 #3)check for transcript composition bias
-#each sample s is compared to the reference sample r (which can be arbitrarily chosen).
-#by computing M values=log2(countss = countsr). Confidence intervals for the M median is
-#computed by bootstrapping. If the median of M values for each comparison is not in the CI
-# it means that the deviation of the sample is statistically significant. Therefore, a
-# normalization procedure should be used 
+#each sample s is compared to a reference r (which can be arbitrarily chosen).
+#by computing M values=log2(countss = countsr). 
+#Confidence intervals for the M median is computed by bootstrapping.
+#If the median of M values for each comparison is not in the CI, the deviation
+# of the sample is significant, therefore, normalization is needed 
 mycd = dat(noiseqData, type = "cd", norm = FALSE) #slooooow
-#[1] "Warning: 739 features with 0 counts in all samples are to be removed for this analysis."
-#[1] "Diagnostic test: FAILED. Normalization is required to correct this bias."
+#[1] "Warning: 103 features with 0 counts in all samples are to be removed for this analysis."
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#1081    133 
+#   761    105 
 #explo.plot(mycd,samples=sample(1:ncol(expr),10))
 
 #4)check for length & GC bias
 #A cubic spline regression model is fitted. Both the model p-value and the coefficient
 # of determination (R2) are shown. If the model p-value is significant and R2 value is
 # high (more than 70%), the expression depends on the feature
-myGCcontent <- dat(noiseqData, k = 0, type = "GCbias", factor = "definition")
-pdf("GCbias.pdf")
+myGCcontent <- dat(noiseqData, k = 0, type = "GCbias", factor = "center")
+png("GCbiasOri.png")
   explo.plot(myGCcontent, samples = NULL)
- dev.off()
+dev.off()
 #The GC-content of each gene does not change from sample to sample, so it can be expected to
 #have little effect on differential expression analyses to a first approximation
-mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", factor = "definition")
-pdf("lengthbias.pdf")
+mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", factor = "center")
+png("lengthbiasOri.png")
   explo.plot(mylenBias, samples =NULL)
 dev.off()
 #BUT, since the gene has the same length in all your samples, there is no need to divide by the gene length
 
 #5) check for batch effect
 myPCA = dat(noiseqData, type = "PCA", norm = FALSE, logtransf = FALSE)
-pdf("noiseqPlot_PCA_before_normalization.pdf", width = 5*2, height = 5)
-par(mfrow = c(1,2))
-explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "definition")
-explo.plot(myPCA, samples = c(1,3), plottype = "scores", factor = "definition")
+png("PCA_Ori.png")
+explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "subtype")
 dev.off()
 
 #################SOLVE BIASES######################################################
-#1) filter low count genes with the threshold found in BIASES(2): The CPM are used because the size 
-#of the library per sample affects the power of the experiment. CPM=(counts/fragments
-# sequenced)*one million. Filtering those genes with average CPM below 1, would be different
+#library(cqn)
+#library(DESeq2)
+#library(pbcmc)
+#library("BiocParallel")
+#library(sva)
+library(EDASeq)
+
+#1) filter low count genes.
+#CPM=(counts/fragments sequenced)*one million.
+#Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
 #####sigo lo de Diana porque proportion.test, cpm >1 pierde a MIA
-countMatrixFiltered = exprots_hgnc[rowMeans(exprots_hgnc)>10,]
-#17568 features 
+countMatrixFiltered = filtered.data(mycountsbio, factor = subtype, norm = FALSE,
+ depth = NULL, method = 1, cpm = 0, p.adj = "fdr")
+#17806 features are to be kept for differential expression analysis with filtering method 1
 
-#2)normaliza RNA composition and then GC content coz the 1st needs raw counts
-#and gives you scaling factors that can be exported to the 2nd
-#factorsTMM=calcNormFactors(countMatrixFiltered)
-#normTMM=cqn(countMatrixFiltered,lengths=myannot$lenght[
-#  myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-#  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-#  sizeFactors=factorsTMM,verbose=T)
-#normalisedTMMatrix=normTMM$y+normTMM$offset
-#noiseqData = readData(data = normalisedTMMatrix, factors=designExp, gc = myannot[,c(1,2)])
-#mycdTMM = dat(noiseqData, type = "cd", norm = T)
-#"Diagnostic test: FAILED. Normalization is required to correct this bias."
-#factorsUQUA=calcNormFactors(countMatrixFiltered, method="upperquartile")
-#normUQUA=cqn(countMatrixFiltered,lengths=myannot$lenght[
-#  myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-#  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-#  sizeFactors=factorsUQUA,verbose=T)
-#normalisedUQUAatrix=normUQUA$y+normUQUA$offset
-#noiseqData = readData(data = normalisedUQUAatrix, factors=designExp, gc = myannot[,c(1,2)])
-#mycdUQUA = dat(noiseqData, type = "cd", norm = T)
-#table(mycdUQUA@dat$DiagnosticTest[,  "Diagnostic Test"])
-#rownames(designExp)=designExp$cases
-#myDESEQ=DESeqDataSetFromMatrix(countData=countMatrixFiltered,colData=designExp,design=~definition)
-#deseqFactors=estimateSizeFactors(myDESEQ)
-#normDESEQ=cqn(countMatrixFiltered,lengths=myannot$lenght[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-#  x=myannot$percentage_gene_gc_content[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered)],
-#  sizeFactors=sizeFactors(deseqFactors),verbose=T)
-#myDESEQ=normDESEQ$y+normDESEQ$offset
-#noiseqData = readData(data = myDESEQ, factors=designExp,gc = myannot[,c(1,2)])
-#mycdDESEQ = dat(noiseqData, type = "cd", norm = T)
-#table(mycdDESEQ@dat$DiagnosticTest[,  "Diagnostic Test"])
-#TMM.TP=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="TP"]]
-#TMM.NT=normalisedTMMatrix[,colnames(normalisedTMMatrix)%in%designExp$barcode[designExp$shortLetterCode=="NT"]]
-#pdf("sampleBias.pdf")
-#temp=sample(1:ncol(expr),10)
-#explo.plot(mycd,samples=temp)
-#explo.plot(mycdTMM,samples=temp)
-#dev.off()
-
-#sigo lo de Diana para normalizar porque cqn aplana demasiado la varinza
-#nombro las columnas de myannot y design de acuerdo a la sig función
-mydataM10EDA <- EDASeq::newSeqExpressionSet(counts=as.matrix(countFilt),featureData=annot,phenoData=tissue)
-lFull <- withinLaneNormalization(mydataM10EDA, "length", which = "full")
-gcFull <- withinLaneNormalization(lFull, "percentage_gene_gc_content", which = "full")
-fullfullTMM <-tmm(gcFull, long = 1000, lc = 0, k = 0)
- 
-#######################subtipification is no longer needed since TCGA is providing it now########################################################
-#subannot=getBM(attributes = c("ensembl_gene_id","external_gene_name","entrezgene"),values=rownames(TMM.TP), mart=mart)
-#colnames(subannot)=c("probe","NCBI.gene.symbol","EntrezGene.ID")#this colnames are needed
-#subannot=subannot[subannot$probe%in%rownames(TMM.TP),]
-#subannot=subannot[!duplicated(subannot$probe),]
-#subannot=subannot[order(match(subannot$probe,rownames(TMM.TP))),]
-
-#49/50 probes are used for clustering
-#subtypes=molecular.subtyping(sbt.model="pam50",data=t(log2(TMM.TP)),annot=subannot,do.mapping=T)
-subtipos=TCGA_MolecularSubtype(colnames(fullfullTMM))#https://bioconductor.org/packages/devel/bioc/vignettes/TCGAbiolinks/inst/doc/extension.html#tcga_molecularsubtype:_query_subtypes_for_cancer_data:
-#table(subtipos$gender)
-#female   male 
-# 1201     13 
-subtipos=subtipos$subtypes[,c(2,4)]
-subtipos=subtipos[!is.na(subtipos$subtype),]
-#temp=cbind(colnames(TMM.TP)[!colnames(TMM.TP)%in%subtipos$barcodes],NA)
-#colnames(temp)=colnames(subtipos)
-#subtipos=rbind(subtipos,temp)
-#subtipos=cbind(subtipos,subtypes$subtype[order(match(names(subtypes$subtype),subtipos$barcode))])
-#table(subtipos[,2:3],useNA="ifany") 
-#                  X
-#subtype_PAM50.mRNA Basal Her2 LumB LumA Normal
-#     Basal-like       97    0    2    2      0    0
-#     HER2-enriched     1   52    5    0      0    0
-#     Luminal A         2    6   42  180      2    0
-#     Luminal B         1    8  112    4      0    0
-#     Normal-like       4    0    2    0      2    0
-#     <NA>            100   55  152  251     20    0
-temp=designExp[designExp$definition=="normal",]
-subtipos=as.data.frame(rbind(as.matrix(temp),cbind(rownames(subtipos),as.character(subtipos$subtype))))
-table(subtipos$definition)
- #BRCA.Basal   BRCA.Her2   BRCA.LumA   BRCA.LumB BRCA.Normal      normal 
-#        187          82         561         215          40         113 
+#2)sigo lo de Diana porque cqn aplana demasiado la varianza
+mydataEDA <- newSeqExpressionSet(
+  counts=as.matrix(countMatrixFiltered),
+  featureData=data.frame(myannot,row.names=myannot$ensembl_gene_id),
+  phenoData=data.frame(designExp,row.names=designExp$samples))
+lFull <- withinLaneNormalization(mydataEDA, "length", which = "full")
+gcFull <- withinLaneNormalization(lFull, 
+  "percentage_gene_gc_content", which = "full")
+fullfullTMM <-tmm(normCounts(gcFull), long = 1000, lc = 0, k = 0)
 
 #############################solve batch effect#######################################################
-fullfullTMM=fullfullTMM[,colnames(fullfullTMM)%in%subtipos$barcode]
-fullfullTMM=fullfullTMM[,order(match(colnames(fullfullTMM),subtipos$barcode))]
-
-noiseqData = readData(data = fullfullTMM, factors=subtipos)
+noiseqData = readData(data = fullfullTMM, factors=subtype)
 myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = T)
-TMMARSyn=ARSyNseq(noiseqData, factor = "definition", batch = F, norm = "n",  logtransf = T)
-myPCA1 = dat(TMMARSyn, type = "PCA", norm = T,logtransf = F)
+ffTMMARSyn=ARSyNseq(noiseqData, factor = "subtype", batch = F, norm = "n",  logtransf = T)
+myPCA1 = dat(ffTMMARSyn, type = "PCA", norm = T,logtransf = F)
 pdf("prepostArsynPCA.pdf")
 par(mfrow=c(2,2))
-explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "definition")
-explo.plot(myPCA, samples = c(1,3), plottype = "scores", factor = "definition")
-explo.plot(myPCA1, samples = c(1,2), plottype = "scores", factor = "definition")
-explo.plot(myPCA1, samples = c(1,3), plottype = "scores", factor = "definition")
+explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "subtype")
+explo.plot(myPCA1, samples = c(1,2), plottype = "scores", factor = "subtype")
 dev.off()
-##############final classification based on genefu's alredy classified samples##########################
-#rownames(subannot)=subannot$probe
-#obje<-PAM50(exprs=log2(TMMArsyn.TP),annotation=subannot)
-#obje=filtrate(obje,verbose=T)
-#obje=classify(obje,verbose=T,std="scale")
-#obje=permutate(obje,verbose=T,keep=T,nPerm=10000, pCutoff=0.01, where="fdr",corCutoff=0.1,seed=1234567890,
-#  BPPARAM=MulticoreParam(progressbar=TRUE))
-#49/50 probes are used for clustering
-#temp=permutation(obje)$subtype
-#subtipos[subtipos[,3]!="normal",5]=temp$Subtype[order(match(rownames(temp),subtipos[,1]))]
-#table(subtipos[,c(2,5)],useNA="always")
-#               pbcmc2
-#tcga            Ambiguous Basal Her2 LumA LumB Normal <NA>
-#  Basal-like            0    97    0    2    1      0    1
-#  HER2-enriched         0     1   52    0    5      0    0
-#  Luminal A             1     2    6  180   37      2    4
-#  Luminal B             2     1    8    4   93      0   17
-#  Normal-like           0     4    0    0    2      2    0
-#  <NA>                  6   100   54  250  131     19   18
 
-
-#final transcript composition bias
+#############################final quality check#######################################################
 noiseqData = readData(data = exprs(TMMARSyn), factors=subtipos)
 mycdnoBatch=dat(noiseqData,type="cd",norm=T)
 table(mycdnoBatch@dat$DiagnosticTest[,  "Diagnostic Test"])
