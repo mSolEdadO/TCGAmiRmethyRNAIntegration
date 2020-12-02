@@ -10,105 +10,96 @@
 
 library(SummarizedExperiment)
 library(TCGAbiolinks)
-#library(Venn.Diagram)
 library(biomaRt)  
-library(NOISeq)
-library(edgeR)
-library(cqn)
-#library(DESeq2)
-library(pbcmc)
-library("BiocParallel")
-library(sva)
 
 #get the data
-xprssn <- GDCquery(project = "TCGA-BRCA",
-  data.category = "Transcriptome Profiling",
-  data.type = "Gene Expression Quantification",
-  sample.type = "Primary solid Tumor",
-  workflow.type = "HTSeq - Counts")
-#GDCdownload(xprssn)
+GDCdownload(xprssn)
 expr=GDCprepare(xprssn)
-xprssN <- GDCquery(project = "TCGA-BRCA",
-  data.category = "Transcriptome Profiling",
-  data.type = "Gene Expression Quantification",
-  sample.type = c("Solid Tissue Normal"),
-  workflow.type = "HTSeq - Counts")
-#GDCdownload(xprssN)
-normal=GDCprepare(xprssN)
-duplicados=colData(expr)$patient[duplicated(colData(expr)$patient)]
+expre=assay(expre)
+
+#keep only samples with metadata
+expre=expre[,which(colnames(expre)%in%subtype$samples)]
+subtype=subtype[subtype$samples%in%colnames(expre),]
+subtype=subtype[order(match(subtype$samples,colnames(expre))),]
+#there are duplicated measures for 16 patients 
+sum(table(subtype[,c(2,4)])>1)
+#[1] 16
+#keep only transcript id not version numbers
+rownames(expre)=sapply(strsplit(rownames(expre),".",fixed=T),
+  function(x) x[1])
 
 #table to check for batch effects
-designExp=colData(expr)
-designExp=rbind(designExp,colData(normal))
-#expression matrix: transcripts per sample with the transcript count in each cell
-expr=assay(expr)
-expr=cbind(expr,assay(normal))
-
-
-#check the intersection between normal & tumor samples
-venn.diagram(x = list(A=designExp$patient[designExp$definition=="Primary solid Tumor"],
-  B=designExp$patient[designExp$definition=="Solid Tissue Normal"]), filename = "Venn.tiff",
-col = "transparent", fill = c("cornflowerblue","green"), 
-alpha = 0.50,cex = 1.5, fontface = "bold", label.col="black", 
-cat.cex = 1.5,margin = 0.1,category.names=c("tumor","normal"))
+designExp=data.frame(cbind(subtype,t(sapply(strsplit(subtype$samples,"-"),function(x) cbind(x)))))
+designExp=cbind(designExp,substr(designExp$X4,1,2),
+  substr(designExp$X4,3,3))
+designExp$X1=designExp$X4=NULL
+colnames(designExp)[5:11]=c("TSS","participant","portion_analyte",
+  "plate","center","sample","vial")
 
 #annnotate GC content, length & biotype per transcript
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-myannot=getBM(attributes = c("ensembl_gene_id", "percentage_gene_gc_content", "gene_biotype",
-  "start_position","end_position","hgnc_id","hgnc_symbol"),filters = "ensembl_gene_id", 
-  values=rownames(expr), mart=mart)
+myannot=getBM(attributes = c("ensembl_gene_id", 
+  "percentage_gene_gc_content", "gene_biotype",
+  "start_position","end_position","hgnc_id","hgnc_symbol"),
+  filters = "ensembl_gene_id", 
+  values=rownames(expre),mart=mart)
 myannot$lenght=abs(myannot$end_position-myannot$start_position)
 
 #filter transcripts withouth annotation
-myannot=myannot[myannot$gene_biotype=="protein_coding"&myannot$hgnc_symbol!="",]
+myannot=myannot[myannot$gene_biotype=="protein_coding"&
+  myannot$hgnc_symbol!="",]
 myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
-exprots_hgnc=expr[rownames(expr)%in%myannot$ensembl_gene_id,]
-#19172 transcripts
+exprots_hgnc=expre[rownames(expre)%in%myannot$ensembl_gene_id,]
+dim(exprots_hgnc)
+#[1] 19218   867
 
-#sum duplicated probes = 2 probes mapping to the same hgnc_id
-myannot$hgnc_id[duplicated(myannot$hgnc_id)]
-#[1] "HGNC:30046"
-myannot[myannot$hgnc_id=="HGNC:30046",]
+#sum duplicated probes
+myannot[myannot$hgnc_id==
+  myannot$hgnc_id[duplicated(myannot$hgnc_id)],]
 #      ensembl_gene_id percentage_gene_gc_content   gene_biotype start_position
-#41743 ENSG00000254093                      43.17 protein_coding       10764963
-#44594 ENSG00000258724                      43.86 protein_coding       10725399
+#19876 ENSG00000204510                      50.06 protein_coding       12916610
+#55271 ENSG00000279195                      50.06 protein_coding       12916610
 #      end_position    hgnc_id hgnc_symbol lenght
-#41743     10839884 HGNC:30046       PINX1  74921
-#44594     10839847 HGNC:30046       PINX1 114448
-exprots_hgnc[rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"],][1,]=colSums(exprots_hgnc[rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"],])
-exprots_hgnc=exprots_hgnc[c(1:(which(rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"])[2]-1),(which(rownames(exprots_hgnc)%in%myannot$ensembl_gene_id[myannot$hgnc_id=="HGNC:30046"])[2]+1):nrow(exprots_hgnc)),]
+#19876     12920482 HGNC:28415     PRAMEF7   3872
+#55271     12920482 HGNC:28415     PRAMEF7   3872
+which(rownames(exprots_hgnc)=="ENSG00000279195")
+#[1] 19192
+exprots_hgnc[rownames(exprots_hgnc)=="ENSG00000204510",]=
+  exprots_hgnc[rownames(exprots_hgnc)=="ENSG00000204510",]+
+  exprots_hgnc[19192,]
+exprots_hgnc=exprots_hgnc[c(1:19191,19193:nrow(exprots_hgnc)),]
+myannot=myannot[myannot$ensembl_gene_id%in%rownames(exprots_hgnc),]
 
 ##################CHECK BIASES########################################################
+library(NOISeq)
+#library(edgeR)
+#library(cqn)
+#library(DESeq2)
+#library(pbcmc)
+#library("BiocParallel")
+#library(sva)
+
 #format data for noiseq
-noiseqData = readData(data = exprots_hgnc, gc = myannot[,1:2], biotype = myannot[,c(1,3)],
-	factor=designExp, length=myannot[,c(1,8)])
+noiseqData = readData(data = exprots_hgnc, gc = myannot[,1:2],
+ biotype = myannot[,c(1,3)],factor=designExp,
+ length=myannot[,c(1,8)])
 #1)check expression bias per sample
 mycountsbio = dat(noiseqData, type = "countsbio", factor = NULL)
-pdf("noiseqPlot_count_distribution_global.pdf", width = 15, height = 7)
-explo.plot(mycountsbio, plottype = "boxplot", samples = sample(1:ncol(expr),200),Colv=NA)
+#patients with repeated measures
+i=colnames(table(subtype[,c(2,4)]))[which(table(subtype[,c(2,4)])>1,
+  arr.ind=T)[,2]]
+pdf("CountsOri.pdf",height = 12)
+explo.plot(mycountsbio, plottype = "boxplot",
+ samples = which(colnames(exprots_hgnc)%in%i))
 dev.off()
-#pdf("noiseqPlot_count_distribution_protein_coding.pdf", width = 15, height = 7)
-#explo.plot(mycountsbio, plottype = "boxplot", samples = sample(1:889,200),toplot="protein_coding")
-#dev.off()
-## Biodetection plot
-#mybiodetection <- dat(noiseqData, type="biodetection", factor=NULL)
-#pdf("mybiodetection.pdf", width = 15, height = 7)
-#explo.plot(mybiodetection)
-#dev.off()
-#saturation plot
-mysaturation <- dat(noiseqData, k = 0, ndepth = 7, type = "saturation")
-pdf("mysaturation", width = 15, height = 7)
-explo.plot(mysaturation, toplot="protein_coding", 
-    samples = c(1,12), yleftlim = NULL, yrightlim = NULL)
-dev.off()
-
 #2)check for low count genes
 myCounts = dat(noiseqData, type = "countsbio", factor = NULL)
 pdf("noiseqPlot_distribution_lowcounts.pdf", width = 7, height = 7)
 explo.plot(myCounts, plottype = "barplot", samples = sample(1:ncol(expr),200))
 dev.off()
 pdf("lowCountThres.pdf")
-hist(rowMeans(cpm(exprots_hgnc,log=T)),ylab="genes",xlab="mean of log CPM",col="gray")
+hist(rowMeans(cpm(exprots_hgnc,log=T)),ylab="genes",
+  xlab="mean of log CPM",col="gray")
 abline(v=0,col="red")
 dev.off()
 
