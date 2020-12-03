@@ -155,18 +155,24 @@ mydataEDA <- newSeqExpressionSet(
   counts=as.matrix(countMatrixFiltered),
   featureData=data.frame(myannot,row.names=myannot$ensembl_gene_id),
   phenoData=data.frame(designExp,row.names=designExp$samples))
-lFull <- withinLaneNormalization(mydataEDA, "length", which = "full")#check another? u didn't corrected it
+lFull <- withinLaneNormalization(mydataEDA, "length", which = "full")#corrects length bias
 gcFull <- withinLaneNormalization(lFull, 
-  "percentage_gene_gc_content", which = "full")
+  "percentage_gene_gc_content", which = "full")#corrects GC bias & recover length bias
 fullfullTMM <-tmm(normCounts(gcFull), long = 1000, lc = 0, k = 0)
 
-#############################solve batch effect#######################################################
+#############################SOLVE BATCH EFFECT#######################################################
 noiseqData = readData(data = fullfullTMM, factors=subtype)
 myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = F)
 png("preArsyn.png")
 explo.plot(myPCA, samples = c(1,2), plottype = "scores",
  factor = "subtype")
 dev.off()
+#has to preceed ARSyN or won't work
+mycd=dat(noiseqData,type="cd",norm=T,logtransf=T,refColumn=1)
+table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
+#FAILED PASSED 
+#    87    779 
+
 ffTMMARSyn=ARSyNseq(noiseqData, factor = "subtype", batch = F,
  norm = "n",  logtransf = T)
 myPCA1 = dat(ffTMMARSyn, type = "PCA", norm = T,logtransf = T)
@@ -174,9 +180,8 @@ png("postArsyn.png")
 explo.plot(myPCA1, samples = c(1,2), plottype = "scores", 
   factor = "subtype")
 dev.off()
-write.table(exprs(ffTMMARSyn),"expreNormi.tsv",sep='\t',quote=F)
 
-#############################final quality check#######################################################
+#############################FINAL QUALITY CHECK#######################################################
 noiseqData = readData(data = exprs(ffTMMARSyn), gc = myannot[,1:2],
  biotype = myannot[,c(1,3)],factor=designExp,
  length=myannot[,c(1,8)])
@@ -197,17 +202,53 @@ png("lengthbiasFinal.png",width=1000)
 par(mfrow=c(1,5))
 sapply(1:5,function(x) explo.plot(mylenBias, samples = x))
 dev.off()
-mycd=dat(noiseqData,type="cd",norm=T,logtransf=T,refColumn=1)
-table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
-#FAILED PASSED 
-#
-#y los duplicados apa?
-#y los subtipos?
 
-############################--------------------FIN--------------##########################
-
-#library(cqn)
-#library(DESeq2)
-#library(pbcmc)
-#library("BiocParallel")
-#library(sva)
+#############################RESOLVE DUPLICATES & SAVE##################################################
+#get duplicated patients
+i=colnames(table(subtype[,c(2,4)]))[
+  which(table(subtype[,c(2,4)])>1,arr.ind=T)[,2]]
+#get sample ids per patient
+i=lapply(i,function(x) subtype[subtype$patients==x,])
+#patients with subtype and normal samples are NOT duplicated
+which(sapply(1:length(i),function(x) 
+  length(table(i[[x]]$subtype)))>1)
+#[1]  5  9 12
+#correct that manually
+i[[5]]
+i[[5]]=i[[5]][1:2,]
+i[[9]]
+i[[9]]=i[[9]][1:2,]
+i[[12]]
+i[[12]]=i[[12]][1:2,]
+#separate duplicates
+final=exprs(ffTMMARSyn)
+duplis=final[,colnames(final)%in%as.character(sapply(i,function(x)
+ x$samples))]
+prefi=final[,!colnames(final)%in%as.character(sapply(i,function(x) 
+ x$samples))]
+#average duplicates
+temp=do.call(cbind,lapply(i,function(x) 
+  rowMeans(duplis[,colnames(duplis)%in%x$samples])))
+#identify duplicates with subtype-patient 
+colnames(temp)=sapply(i,function(x) 
+  paste(unique(x[,c(2,4)]),collapse="-"))
+#joint matrices
+final=cbind(prefi,temp)
+dim(final)
+#[1] 17806   851
+write.table(final,"expreNormi.tsv",sep='\t',quote=F)
+#fix subtype table
+prefi=subtype[subtype$samples%in%colnames(final),]
+prefi$color=NULL
+temp=cbind(colnames(final)[!colnames(final)%in%subtype$samples],
+  sapply(strsplit(colnames(final)[!
+    colnames(final)%in%subtype$samples],"-"),function(x) x[1]),
+  sapply(strsplit(colnames(final)[!
+    colnames(final)%in%subtype$samples],"-"),function(x) 
+      paste(x[-1],collapse='-')))
+colnames(temp)=colnames(prefi)
+subFi=rbind(prefi,temp)
+colnames(subFi)[1]="RNA_ID"
+dim(subFi)
+#[1] 851   3
+write.table(subFi,"subtypes.tsv",sep='\t',quote=F,row.names=F)
