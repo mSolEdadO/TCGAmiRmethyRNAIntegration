@@ -16,6 +16,7 @@ library(biomaRt)
 GDCdownload(xprssn)
 expr=GDCprepare(xprssn)
 expre=assay(expre)
+write.table(expre,"expre.tsv",sep='\t',quote=F)
 
 #keep only samples with metadata
 expre=expre[,which(colnames(expre)%in%subtype$samples)]
@@ -36,6 +37,7 @@ designExp=cbind(designExp,substr(designExp$X4,1,2),
 designExp$X1=designExp$X4=NULL
 colnames(designExp)[5:11]=c("TSS","participant","portion_analyte",
   "plate","center","sample","vial")
+designExp$subtype=factor(designExp$subtype)#else noiseq wont work
 
 #annnotate GC content, length & biotype per transcript
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
@@ -79,20 +81,15 @@ library(edgeR)
 noiseqData = readData(data = exprots_hgnc, gc = myannot[,1:2],
  biotype = myannot[,c(1,3)],factor=designExp,
  length=myannot[,c(1,8)])
-#1)check expression bias per sample
-mycountsbio = dat(noiseqData, type = "countsbio", factor = NULL)
+#1)check expression bias per subtype
+mycountsbio = dat(noiseqData, type = "countsbio", factor = "subtype")
 #patients with repeated measures
-i=colnames(table(subtype[,c(2,4)]))[which(table(subtype[,c(2,4)])>1,
-  arr.ind=T)[,2]]
 png("CountsOri.png")
-explo.plot(mycountsbio, plottype = "boxplot",
- samples = which(designExp$patients%in%i))
+explo.plot(mycountsbio, plottype = "boxplot",samples = 1:5)
 dev.off()
 #2)check for low count genes
-myCounts = dat(noiseqData, type = "countsbio", factor = NULL)
 png("lowcountsOri.png")
-explo.plot(myCounts, plottype = "barplot", 
-  samples = which(designExp$patients%in%i))
+explo.plot(mycountsbio, plottype = "barplot", samples = 1:5)
 dev.off()
 png("lowCountThres.png")
 hist(rowMeans(cpm(exprots_hgnc,log=T)),ylab="genes",
@@ -117,30 +114,30 @@ table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #A cubic spline regression model is fitted. Both the model p-value and the coefficient
 # of determination (R2) are shown. If the model p-value is significant and R2 value is
 # high (more than 70%), the expression depends on the feature
-myGCcontent <- dat(noiseqData, k = 0, type = "GCbias", factor = "center")
-png("GCbiasOri.png")
-  explo.plot(myGCcontent, samples = NULL)
+myGCcontent <- dat(noiseqData, k = 0, type = "GCbias",
+ factor = "subtype")
+png("GCbiasOri.png",width=1000)
+par(mfrow=c(1,5))
+ sapply(1:5,function(x) explo.plot(myGCcontent, samples = x))
 dev.off()
 #The GC-content of each gene does not change from sample to sample, so it can be expected to
 #have little effect on differential expression analyses to a first approximation
-mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", factor = "center")
-png("lengthbiasOri.png")
-  explo.plot(mylenBias, samples =NULL)
+mylenBias <- dat(noiseqData, k = 0, type = "lengthbias",
+ factor = "subtype")
+png("lengthbiasOri.png",width=1000)
+par(mfrow=c(1,5))
+sapply(1:5,function(x) explo.plot(mylenBias, samples = x))
 dev.off()
 #BUT, since the gene has the same length in all your samples, there is no need to divide by the gene length
 
 #5) check for batch effect
-myPCA = dat(noiseqData, type = "PCA", norm = FALSE, logtransf = FALSE)
+myPCA = dat(noiseqData, type = "PCA", norm = F, logtransf = F)
 png("PCA_Ori.png")
-explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "subtype")
+explo.plot(myPCA, samples = c(1,2), plottype = "scores",
+ factor = "subtype")
 dev.off()
 
 #################SOLVE BIASES######################################################
-#library(cqn)
-#library(DESeq2)
-#library(pbcmc)
-#library("BiocParallel")
-#library(sva)
 library(EDASeq)
 
 #1) filter low count genes.
@@ -148,57 +145,69 @@ library(EDASeq)
 #Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
 #####sigo lo de Diana porque proportion.test, cpm >1 pierde a MIA
-countMatrixFiltered = filtered.data(mycountsbio, factor = subtype, norm = FALSE,
- depth = NULL, method = 1, cpm = 0, p.adj = "fdr")
+countMatrixFiltered = filtered.data(mycountsbio, factor = subtype,
+ norm = FALSE, depth = NULL, method = 1, cpm = 0, p.adj = "fdr")
 #17806 features are to be kept for differential expression analysis with filtering method 1
 
 #2)sigo lo de Diana porque cqn aplana demasiado la varianza
+#all names must match
 mydataEDA <- newSeqExpressionSet(
   counts=as.matrix(countMatrixFiltered),
   featureData=data.frame(myannot,row.names=myannot$ensembl_gene_id),
   phenoData=data.frame(designExp,row.names=designExp$samples))
-lFull <- withinLaneNormalization(mydataEDA, "length", which = "full")
+lFull <- withinLaneNormalization(mydataEDA, "length", which = "full")#check another? u didn't corrected it
 gcFull <- withinLaneNormalization(lFull, 
   "percentage_gene_gc_content", which = "full")
 fullfullTMM <-tmm(normCounts(gcFull), long = 1000, lc = 0, k = 0)
 
 #############################solve batch effect#######################################################
 noiseqData = readData(data = fullfullTMM, factors=subtype)
-myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = T)
-ffTMMARSyn=ARSyNseq(noiseqData, factor = "subtype", batch = F, norm = "n",  logtransf = T)
-myPCA1 = dat(ffTMMARSyn, type = "PCA", norm = T,logtransf = F)
-pdf("prepostArsynPCA.pdf")
-par(mfrow=c(2,2))
-explo.plot(myPCA, samples = c(1,2), plottype = "scores", factor = "subtype")
-explo.plot(myPCA1, samples = c(1,2), plottype = "scores", factor = "subtype")
+myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = F)
+png("preArsyn.png")
+explo.plot(myPCA, samples = c(1,2), plottype = "scores",
+ factor = "subtype")
 dev.off()
+ffTMMARSyn=ARSyNseq(noiseqData, factor = "subtype", batch = F,
+ norm = "n",  logtransf = T)
+myPCA1 = dat(ffTMMARSyn, type = "PCA", norm = T,logtransf = T)
+png("postArsyn.png")
+explo.plot(myPCA1, samples = c(1,2), plottype = "scores", 
+  factor = "subtype")
+dev.off()
+write.table(exprs(ffTMMARSyn),"expreNormi.tsv",sep='\t',quote=F)
 
 #############################final quality check#######################################################
-noiseqData = readData(data = exprs(TMMARSyn), factors=subtipos)
-mycdnoBatch=dat(noiseqData,type="cd",norm=T)
-table(mycdnoBatch@dat$DiagnosticTest[,  "Diagnostic Test"])
+noiseqData = readData(data = exprs(ffTMMARSyn), gc = myannot[,1:2],
+ biotype = myannot[,c(1,3)],factor=designExp,
+ length=myannot[,c(1,8)])
+mycountsbio = dat(noiseqData, type = "countsbio", factor = "subtype",
+  norm=T)
+png("CountsFinal.png")
+explo.plot(mycountsbio, plottype = "boxplot",samples=1:5)
+dev.off()
+myGCcontent <- dat(noiseqData, k = 0, type = "GCbias", 
+  factor = "subtype",norm=T)
+png("GCbiasFinal.png",width=1000)
+par(mfrow=c(1,5))
+sapply(1:5,function(x) explo.plot(myGCcontent, samples = x))
+dev.off()
+mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", 
+  factor = "subtype",norm=T)
+png("lengthbiasFinal.png",width=1000)
+par(mfrow=c(1,5))
+sapply(1:5,function(x) explo.plot(mylenBias, samples = x))
+dev.off()
+mycd=dat(noiseqData,type="cd",norm=T,logtransf=T,refColumn=1)
+table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#   496    605 
-
-#final expression dataset
-subtipos=subtipos[subtipos$definition!="BRCA.Normal",]
-subtipos=as.data.frame(as.matrix(subtipos))
-finalData=exprs(TMMARSyn)
-finalData=finalData[,colnames(finalData)%in%subtipos$barcode]
-save(TMMArsyn,subtipos,file="subtiTMMArsyn.RData")
+#
+#y los duplicados apa?
+#y los subtipos?
 
 ############################--------------------FIN--------------##########################
 
-#check biotype bias per tissue
-#mybiodetection <- dat(noiseqData, k = 0, type = "biodetection", factor = "tissue.definition")
-#pdf("ProteinCodingComparison.pdf",height=7,width=7)
-#par(oma=c(5,1,1,1))
-#explo.plot(mybiodetection,samples=c(1,2),toplot="protein_coding",plottype="comparison")
-#[1] "Percentage of protein_coding biotype in each sample:"
-#Primary solid Tumor Solid Tissue Normal 
-#            35.4141             35.5303 
-#[1] "Confidence interval at 95% for the difference of percentages: Primary solid Tumor - Solid Tissue Normal"
-#[1] -0.6746  0.4421
-#[1] "The percentage of this biotype is NOT significantly different for these two samples (p-value = 0.6868 )."
-
-
+#library(cqn)
+#library(DESeq2)
+#library(pbcmc)
+#library("BiocParallel")
+#library(sva)
