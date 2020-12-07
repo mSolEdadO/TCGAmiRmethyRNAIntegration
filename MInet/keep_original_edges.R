@@ -6,7 +6,7 @@ files=commandArgs(trailingOnly=TRUE)
 ori=fread(files[1])
 data=fread(files[2])
 #print(nrow(data))
-#data$index=1:nrow(data)
+data$index=1:nrow(data)
 #get indexes
 o=paste(ori$V1,ori$V3)
 o1=paste(ori$V3,ori$V1)
