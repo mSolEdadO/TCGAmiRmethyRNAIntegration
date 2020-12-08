@@ -6,7 +6,13 @@ files=commandArgs(trailingOnly=TRUE)
 ori=fread(files[1])
 data=fread(files[2])
 #print(nrow(data))
-data$index=1:nrow(data)
+#separate per interaction type
+wmiR=data[substr(data$V2,1,1)=='h',]
+nmiR=data[substr(data$V2,1,1)!='h',]
+wmiR$index=1:nrow(wmiR)
+nmiR$index=1:nrow(nmiR)
+data=rbind(wmiR,nmiR)
+
 #get indexes
 o=paste(ori$V1,ori$V3)
 o1=paste(ori$V3,ori$V1)
