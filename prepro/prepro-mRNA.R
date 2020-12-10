@@ -11,33 +11,34 @@
 library(SummarizedExperiment)
 library(TCGAbiolinks)
 library(biomaRt)  
+subtype=read.table("subtype.tsv",header=T)
 
 #get the data
+xprssn <- GDCquery(project = "TCGA-BRCA",
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  workflow.type = "HTSeq - Counts",
+  barcode=subtype$barcode)
 GDCdownload(xprssn)
-expr=GDCprepare(xprssn)
-expre=assay(expre)
+expre=GDCprepare(xprssn,summarizedExperiment=F)#fails if T
+temp=as.matrix(expre[,2:ncol(expre)])
+rownames(temp)=expre$X1
+expre=temp
 write.table(expre,"expre.tsv",sep='\t',quote=F)
 
-#keep only samples with metadata
-expre=expre[,which(colnames(expre)%in%subtype$samples)]
-subtype=subtype[subtype$samples%in%colnames(expre),]
-subtype=subtype[order(subtype$patients),]
-expre=expre[,order(match(colnames(expre),subtype$samples))]
-#there are duplicated measures for 16 patients 
-sum(table(subtype[,c(2,4)])>1)
-#[1] 16
+#subtype to duplicates
+i=substr(colnames(expre),1,19)
+j=i[duplicated(i)]
+designExp=as.matrix(subtype[c(which(!subtype$barcode%in%j),
+  as.numeric(sapply(which(subtype$barcode%in%j),rep,2))),])
+designExp[designExp[,4]%in%j,1]=colnames(expre)[which(i%in%j)]
+designExp=as.data.frame(designExp)
+expre=expre[,order(match(colnames(expre),designExp$samples))]
+#check all matches
+
 #keep only transcript id not version numbers
 rownames(expre)=sapply(strsplit(rownames(expre),".",fixed=T),
   function(x) x[1])
-
-#table to check for batch effects
-designExp=data.frame(cbind(subtype,t(sapply(strsplit(subtype$samples,"-"),function(x) cbind(x)))))
-designExp=cbind(designExp,substr(designExp$X4,1,2),
-  substr(designExp$X4,3,3))
-designExp$X1=designExp$X4=NULL
-colnames(designExp)[5:11]=c("TSS","participant","portion_analyte",
-  "plate","center","sample","vial")
-designExp$subtype=factor(designExp$subtype)#else noiseq wont work
 
 #annnotate GC content, length & biotype per transcript
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
@@ -54,7 +55,7 @@ myannot=myannot[myannot$gene_biotype=="protein_coding"&
 myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 exprots_hgnc=expre[rownames(expre)%in%myannot$ensembl_gene_id,]
 dim(exprots_hgnc)
-#[1] 19218   867
+#[1] 19218   846
 
 #sum duplicated probes
 myannot[myannot$hgnc_id==
@@ -71,6 +72,8 @@ exprots_hgnc[rownames(exprots_hgnc)=="ENSG00000204510",]=
   exprots_hgnc[rownames(exprots_hgnc)=="ENSG00000204510",]+
   exprots_hgnc[19192,]
 exprots_hgnc=exprots_hgnc[c(1:19191,19193:nrow(exprots_hgnc)),]
+dim(exprots_hgnc)
+#[1] 19217   846
 myannot=myannot[myannot$ensembl_gene_id%in%rownames(exprots_hgnc),]
 
 ##################CHECK BIASES########################################################
@@ -107,7 +110,7 @@ mycd = dat(noiseqData, type = "cd", norm = FALSE) #slooooow
 #[1] "Warning: 103 features with 0 counts in all samples are to be removed for this analysis."
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#   761    105 
+#   747     98 
 #explo.plot(mycd,samples=sample(1:ncol(expr),10))
 
 #4)check for length & GC bias
@@ -145,39 +148,43 @@ library(EDASeq)
 #Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
 #####sigo lo de Diana porque proportion.test, cpm >1 pierde a MIA
-countMatrixFiltered = filtered.data(mycountsbio, factor = subtype,
+countMatrixFiltered = filtered.data(exprots_hgnc, factor = "subtype",
  norm = FALSE, depth = NULL, method = 1, cpm = 0, p.adj = "fdr")
-#17806 features are to be kept for differential expression analysis with filtering method 1
+#17359 features are to be kept for differential expression analysis with filtering method 1
+myannot=myannot[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered),]
 
-#2)sigo lo de Diana porque cqn aplana demasiado la varianza
 #all names must match
 mydataEDA <- newSeqExpressionSet(
-  counts=as.matrix(countMatrixFiltered),
+  counts=countMatrixFiltered,
   featureData=data.frame(myannot,row.names=myannot$ensembl_gene_id),
   phenoData=data.frame(designExp,row.names=designExp$samples))
 lFull <- withinLaneNormalization(mydataEDA, "length", which = "full")#corrects length bias
 gcFull <- withinLaneNormalization(lFull, 
   "percentage_gene_gc_content", which = "full")#corrects GC bias & recover length bias
-fullfullTMM <-tmm(normCounts(gcFull), long = 1000, lc = 0, k = 0)
+#fullfullTMM <-tmm(normCounts(gcFull), long = 1000, lc = 0, k = 0)
+norm.counts <- betweenLaneNormalization(normCounts(gcFull),
+ which = "full", offset = FALSE)
+#lfull→gcfull→ttm=719 failed
+#gcfull→lfull→ttm=731 failed
 
 #############################SOLVE BATCH EFFECT#######################################################
-noiseqData = readData(data = fullfullTMM, factors=subtype)
+noiseqData = NOISeq::readData(data = norm.counts, factors=designExp)
+#has to preceed ARSyN or won't work
+mycd=NOISeq::dat(noiseqData,type="cd",norm=TRUE)
+table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
+#FAILED PASSED 
+#   200    645 
+
 myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = F)
 png("preArsyn.png")
 explo.plot(myPCA, samples = c(1,2), plottype = "scores",
  factor = "subtype")
 dev.off()
-#has to preceed ARSyN or won't work
-mycd=dat(noiseqData,type="cd",norm=T,logtransf=T,refColumn=1)
-table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
-#FAILED PASSED 
-#    87    779 
-
 ffTMMARSyn=ARSyNseq(noiseqData, factor = "subtype", batch = F,
  norm = "n",  logtransf = T)
-myPCA1 = dat(ffTMMARSyn, type = "PCA", norm = T,logtransf = T)
+myPCA = dat(ffTMMARSyn, type = "PCA", norm = T,logtransf = T)
 png("postArsyn.png")
-explo.plot(myPCA1, samples = c(1,2), plottype = "scores", 
+explo.plot(myPCA, samples = c(1,2), plottype = "scores", 
   factor = "subtype")
 dev.off()
 
@@ -198,57 +205,31 @@ sapply(1:5,function(x) explo.plot(myGCcontent, samples = x))
 dev.off()
 mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", 
   factor = "subtype",norm=T)
-png("lengthbiasFinal.png",width=1000)
+png("Desktop/prepro/lengthbiasFinal.png",width=1000)
 par(mfrow=c(1,5))
 sapply(1:5,function(x) explo.plot(mylenBias, samples = x))
 dev.off()
 
 #############################RESOLVE DUPLICATES & SAVE##################################################
-#get duplicated patients
-i=colnames(table(subtype[,c(2,4)]))[
-  which(table(subtype[,c(2,4)])>1,arr.ind=T)[,2]]
-#get sample ids per patient
-i=lapply(i,function(x) subtype[subtype$patients==x,])
-#patients with subtype and normal samples are NOT duplicated
-which(sapply(1:length(i),function(x) 
-  length(table(i[[x]]$subtype)))>1)
-#[1]  5  9 12
-#correct that manually
-i[[5]]
-i[[5]]=i[[5]][1:2,]
-i[[9]]
-i[[9]]=i[[9]][1:2,]
-i[[12]]
-i[[12]]=i[[12]][1:2,]
+#get duplicated index
+i=designExp$samples[designExp$barcode%in%
+  designExp$barcode[duplicated(designExp$barcode)]]
+#get sample ids per barcode
+i=lapply(designExp$barcode[duplicated(designExp$barcode)],
+  function(x) i[substr(i,1,19)%in%x])
 #separate duplicates
 final=exprs(ffTMMARSyn)
-duplis=final[,colnames(final)%in%as.character(sapply(i,function(x)
- x$samples))]
-prefi=final[,!colnames(final)%in%as.character(sapply(i,function(x) 
- x$samples))]
+duplis=final[,colnames(final)%in%unlist(i)]
+prefi=final[,!colnames(final)%in%unlist(i)]
 #average duplicates
 temp=do.call(cbind,lapply(i,function(x) 
-  rowMeans(duplis[,colnames(duplis)%in%x$samples])))
-#identify duplicates with subtype-patient 
-colnames(temp)=sapply(i,function(x) 
-  paste(unique(x[,c(2,4)]),collapse="-"))
+  rowMeans(duplis[,colnames(duplis)%in%x])))
+#identify samples with barcode 
+colnames(temp)=designExp$barcode[duplicated(designExp$barcode)]
+colnames(prefi)=substr(colnames(prefi),1,19)
 #joint matrices
 final=cbind(prefi,temp)
 dim(final)
-#[1] 17806   851
+#[1] 17359   842
+final=final[,order(match(colnames(final),subtype$barcode))]
 write.table(final,"expreNormi.tsv",sep='\t',quote=F)
-#fix subtype table
-prefi=subtype[subtype$samples%in%colnames(final),]
-prefi$color=NULL
-temp=cbind(colnames(final)[!colnames(final)%in%subtype$samples],
-  sapply(strsplit(colnames(final)[!
-    colnames(final)%in%subtype$samples],"-"),function(x) x[1]),
-  sapply(strsplit(colnames(final)[!
-    colnames(final)%in%subtype$samples],"-"),function(x) 
-      paste(x[-1],collapse='-')))
-colnames(temp)=colnames(prefi)
-subFi=rbind(prefi,temp)
-colnames(subFi)[1]="RNA_ID"
-dim(subFi)
-#[1] 851   3
-write.table(subFi,"subtypes.tsv",sep='\t',quote=F,row.names=F)
