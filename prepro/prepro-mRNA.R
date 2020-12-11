@@ -166,15 +166,14 @@ norm.counts <- betweenLaneNormalization(normCounts(gcFull),
  which = "full", offset = FALSE)
 #lfull→gcfull→ttm=719 failed
 #gcfull→lfull→ttm=731 failed
-
-#############################SOLVE BATCH EFFECT#######################################################
 noiseqData = NOISeq::readData(data = norm.counts, factors=designExp)
-#has to preceed ARSyN or won't work
+#cd has to preceed ARSyN or won't work
 mycd=NOISeq::dat(noiseqData,type="cd",norm=TRUE)
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #   200    645 
 
+#############################SOLVE BATCH EFFECT#######################################################
 myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = F)
 png("preArsyn.png")
 explo.plot(myPCA, samples = c(1,2), plottype = "scores",
@@ -205,7 +204,7 @@ sapply(1:5,function(x) explo.plot(myGCcontent, samples = x))
 dev.off()
 mylenBias <- dat(noiseqData, k = 0, type = "lengthbias", 
   factor = "subtype",norm=T)
-png("Desktop/prepro/lengthbiasFinal.png",width=1000)
+png("lengthbiasFinal.png",width=1000)
 par(mfrow=c(1,5))
 sapply(1:5,function(x) explo.plot(mylenBias, samples = x))
 dev.off()
