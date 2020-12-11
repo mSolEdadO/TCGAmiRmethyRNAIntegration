@@ -1,4 +1,67 @@
 library(limma)
+library(data.table)
+library(TCGbiolinks)
+
+#################RNA######################################################
+subtype=read.table("Desktop/prepro/subtype.tsv",header=T)
+expre=fread("Desktop/prepro/expreNormi.tsv")
+expre=as.matrix(expre[,2:ncol(expre)],rownames=expre$V1)
+
+#get covariates
+clinical <- GDCquery_clinic(project="TCGA-BRCA",
+							type="clinical")
+#keep ingo of patients in data matrix
+clinical=as.data.frame(t(sapply(subtype$patients,function(x)
+ clinical[clinical$bcr_patient_barcode==x,])))
+subtype=cbind(subtype,clinical[,2:59])#drop repeated categories
+subtype=subtype[,colSums(is.na(subtype))<ncol(expre)]#drop full NA
+#fix format
+subtype=apply(subtype,2,function(x) unlist(x))
+subtype=as.data.frame(subtype,stringsAsFactors=T)
+subtype$ajcc_pathologic_stage=NULL#same as tumor_stage
+write.table(subtype,"subtype.tsv",quote=F,
+	row.names=F,sep='\t')
+
+#set comparisons
+#~0 gives a model where each coefficient corresponds to a group mean
+design=model.matrix(~0+subtype$subtype+subtype$tumor_stage+
+	subtype$treatment_or_therapy+subtype$race+
+	subtype$ajcc_pathologic_t+subtype$primary_diagnosis+
+	subtype$age_at_index+subtype$ajcc_pathologic_m)
+#fix names
+colnames(design)=gsub("subtype.","",colnames(design))
+colnames(design)=gsub(",","",gsub(" ","_",colnames(design)))
+contr.mtrx=makeContrasts(
+	basal_normal=Basal-Normal,
+	her2_normal=Her2-Normal,
+	luma_normal=LumA-Normal,
+	lumb_normal=LumB-Normal,
+levels=design)
+
+fit=lmFit(expre,design)#fit a linear model using weighted least squares for each gene
+fitSubtype = contrasts.fit(fit, contr.mtrx)
+
+#play with lfc!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#fc+p.val thresholding increases false positives, treat overpasses this
+#lfc=log2(1.2)or log2(1.5)will usually cause most differentially expressed genes to fc => 2-fold,
+# depending on the sample size and precision of the experiment
+DE.genes=lapply(1:4,function(x) 
+	topTreat(tfitSubtype,coef=x,n=nrow(expre)))
+names(DE.genes)=c("Basal_Normal","Her2_Normal",
+	"LumA_Normal","LumB_Normal")
+sapply(1:4,function(x) sum(DE.genes[[x]]$adj.P.Val<0.01))
+#[1] 4904 4357 3452 4722
+pdf("DEgenes.pdf")
+par(mfrow=c(2,2))
+sapply(1:4,function(x) plotMA(fitSubtype,coef=x))
+sapply(1:4,function(x) {
+	volcanoplot(tfitSubtype,coef=x)
+	abline(h=-log2(0.01),col="red")
+})
+dev.off()
+
+
+
 #library(sva)
 library(missMethyl)
 load("porSubti.RData")
@@ -20,44 +83,17 @@ load("subtiTMMArsyn.RData")
 gender=sapply(as.character(design$patient),function(x) unique(subtipos$gender[as.character(subtipos$patient)==x]))
 design=cbind(design,gender)
 
-#set comparisons
-DE.design=model.matrix(~0+design$subtype)#a model where each coefficient corresponds to a group mean
-colnames(DE.design)=gsub("design.","",colnames(DE.design))
-contr.mtrx=makeContrasts(
-	basal_normal=subtypeBasal-subtypenormal,
-	her2_normal=subtypeHer2-subtypenormal,
-	luma_normal=subtypeLumA-subtypenormal,
-	lumb_normal=subtypeLumB-subtypenormal,
-levels=DE.design)
 
 #mRNA DE
 rna=do.call(cbind,sapply(concatenadas,function(x) x[[3]]))
 v=voom(rna,DE.design,plot=T,save.plot=T)#ideally count&variance are indi, but a smooth fitted curve is good enough to discard voom 
 #counts are more variable at lower expression, voom address this by making the data “normal enough”
 #rna variance~[0.1,0.3]
-fit=lmFit(rna,DE.design)#fit a linear model using weighted least squares for each gene
-fitSubtype = contrasts.fit(fit, contr.mtrx)
 
 
 #esta bien usar t-test? no sabes si la expresión tiene distro normal, pero seguro no
 #tampoco esperas homogeneity no?
 
-
-tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#fc+p.val thresholding increases false positives, treat overpasses this
-#lfc=log2(1.2)or log2(1.5)will usually cause most differentially expressed genes to fc => 2-fold,
-# depending on the sample size and precision of the experiment
-DE.genes=lapply(1:4,function(x) topTreat(tfitSubtype,coef=x,n=nrow(rna)))
-names(DE.genes)=c("basal_normal","her2_normal","luma_normal","lumb_normal")
-sapply(1:4,function(x) sum(DE.genes[[x]]$adj.P.Val<0.01))
-#[1] 4904 4357 3452 4722
-pdf("DEgenes.pdf")
-par(mfrow=c(2,2))
-sapply(1:4,function(x) plotMA(fitSubtype,coef=x))
-sapply(1:4,function(x) {
-	volcanoplot(tfitSubtype,coef=x)
-	abline(h=-log2(0.01),col="red")
-})
-dev.off()
 
 #miR DE
 mirna=do.call(cbind,sapply(concatenadas,function(x) x[[1]]))
