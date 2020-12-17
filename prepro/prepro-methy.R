@@ -1,11 +1,28 @@
 library(TCGAbiolinks)
 library(SummarizedExperiment)
-library(Venn.Diagram)
 library(doParallel)
+library(data.table)
 
-#######prepare the data########################################
-#reference data
-mthyltN=GDCprepare(mthyltN)
+subtype=read.table("subtype.tsv",header=T,sep='\t')
+mthyltn <-  GDCquery(project = "TCGA-BRCA",
+	data.category = "DNA Methylation",
+	platform="Illumina Human Methylation 450",
+	barcode=subtype$barcode)
+GDCdownload(mthyltn)
+#GDCdownload will download 844 files. A total of 119.236093 GB
+####mthyltn=GDCprepare(mthyltn) dies
+#build matrix
+files=list.files()
+files=sapply(files,function(x) paste(x,"/",list.files(x),sep=""))
+methy=do.call(cbind,pbapply::pbsapply(files,function(x) 
+	fread(x,select=2,stringsAsFactors=F)))#2 has beta values
+colnames(methy)=sapply(strsplit(files,".",fixed=T),
+	function(x) x[6])#barcodes
+rownames(methy)=fread(files[1],select=1,skip=1)$V1
+write.table(methy,"methy.tsv",sep='\t',quote=F)
+
+
+
 temp=cbind(colnames(mthyltN),"Illumina Human Methylation 450",substr(colnames(mthyltN),1,12),"normal")
 methyDesign=rbind(methyDesign,temp)
 mthyltN=unlist(assays(mthyltN))

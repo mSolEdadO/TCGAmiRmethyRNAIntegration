@@ -2,7 +2,7 @@ library(limma)
 library(data.table)
 library(TCGbiolinks)
 
-#################RNA######################################################
+#################RNA###########################################
 subtype=read.table("Desktop/prepro/subtype.tsv",header=T)
 expre=fread("Desktop/prepro/expreNormi.tsv")
 expre=as.matrix(expre[,2:ncol(expre)],rownames=expre$V1)
@@ -23,6 +23,7 @@ write.table(subtype,"subtype.tsv",quote=F,
 	row.names=F,sep='\t')
 
 #set comparisons
+subtype$subtype=gsub("BRCA","",subtype$subtype)
 #~0 gives a model where each coefficient corresponds to a group mean
 design=model.matrix(~0+subtype$subtype+subtype$tumor_stage+
 	subtype$treatment_or_therapy+subtype$race+
@@ -38,28 +39,31 @@ contr.mtrx=makeContrasts(
 	lumb_normal=LumB-Normal,
 levels=design)
 
-fit=lmFit(expre,design)#fit a linear model using weighted least squares for each gene
+#fit a linear model using weighted least squares for each gene
+fit=lmFit(expre,design)
 fitSubtype = contrasts.fit(fit, contr.mtrx)
-
-#play with lfc!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-tfitSubtype=treat(fitSubtype, lfc = log2(1.5))#fc+p.val thresholding increases false positives, treat overpasses this
-#lfc=log2(1.2)or log2(1.5)will usually cause most differentially expressed genes to fc => 2-fold,
-# depending on the sample size and precision of the experiment
+#treat is better than fc+p.val thresholds, that increase FP
+tfitSubtype=treat(fitSubtype, lfc = log2(2))
+#log2(1.2 or 1.5) will usually give DE genes with fc => 2
+#depending on the sample size and precision of the experiment
 DE.genes=lapply(1:4,function(x) 
 	topTreat(tfitSubtype,coef=x,n=nrow(expre)))
 names(DE.genes)=c("Basal_Normal","Her2_Normal",
 	"LumA_Normal","LumB_Normal")
 sapply(1:4,function(x) sum(DE.genes[[x]]$adj.P.Val<0.01))
-#[1] 4904 4357 3452 4722
-pdf("DEgenes.pdf")
-par(mfrow=c(2,2))
-sapply(1:4,function(x) plotMA(fitSubtype,coef=x))
-sapply(1:4,function(x) {
-	volcanoplot(tfitSubtype,coef=x)
-	abline(h=-log2(0.01),col="red")
-})
-dev.off()
+#[1] 10943  9348 10220 11376 that many???????????????????????
+#pdf("DEgenes.pdf")
+#par(mfrow=c(2,2))
+#sapply(1:4,function(x) plotMA(fitSubtype,coef=x))
+#sapply(1:4,function(x) {
+#	volcanoplot(tfitSubtype,coef=x)
+#	abline(h=-log2(0.01),col="red")
+#})
+#dev.off()
+save(DE.genes,file="DA2020.RData")
+#################miRNA###########################################
 
+#################methylation###########################################
 
 
 #library(sva)
