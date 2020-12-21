@@ -22,7 +22,7 @@ rownames(methy)=fread(files[1],select=1,skip=1)$V1
 dim(methy)
 #[1] 485577    845
 write.table(methy,"methy.tsv",sep='\t',quote=F)
-
+#2600M when tar.gz
 #######filter NA probes######################################
 nas=rowSums(is.na(methy))
 #keep only those measured at least in half the samples
@@ -142,5 +142,6 @@ colnames(prefi)=substr(colnames(prefi),1,19)
 #joint matrices
 final=cbind(prefi,temp)
 write.table(final,"methyM.tsv",sep='\t',quote=F)
+#2511M when tar.gz
 
 #u're dragging batch effects, use them as covariates when DM
