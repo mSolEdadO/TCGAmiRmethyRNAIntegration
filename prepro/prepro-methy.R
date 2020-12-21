@@ -1,6 +1,4 @@
 library(TCGAbiolinks)
-library(SummarizedExperiment)
-library(doParallel)
 library(data.table)
 
 subtype=read.table("subtype.tsv",header=T,sep='\t')
@@ -56,82 +54,93 @@ dim(methy)
 #[1] 383408    844
 
 #######impute missing data########################################
-load("GDCdata/TCGA-BRCA/harmonized/DNA_Methylation/methy450.RData")
-load("GDCdata/TCGA-BRCA/harmonized/DNA_Methylation/methyN_ori.RData")
-#load("GDCdata/TCGA-BRCA/harmonized/DNA_Methylation/methy27.RData")
-methySubti=lapply(c("Basal","LumA","LumB","Her2"),function(x) 
-	methy450[,colnames(methy450)%in%methyDesign[methyDesign[,4]==x,1]])
-methySubti$normal=mthyltN
-#methySubti$Her2=methy27
-sapply(methySubti,dim)
-#      Basal   LumA   LumB normal   Her2
-#[1,] 396065 396065 396065 395814 396065
-#[2,]    137    337    178     96     75
-nas=lapply(methySubti,function(x) rowSums(is.na(x)))
-methySubti=lapply(1:5,function(x) methySubti[[x]][nas[[x]]<ncol(methySubti[[x]])*0.75,])
-sapply(methySubti,dim)
-#      Basal   LumA   LumB normal   Her2
-#[1,] 395820 395818 395817 395814 395815
-#[2,]    137    337    178     96    75
-#impute missing values
-no_cores=detectCores()-1
-registerDoParallel(cores=no_cores)
-cl=makeCluster(no_cores,type="FORK")
-methySubti=parLapply(cl,methySubti,function(x) impute.knn(x,k=15,maxp=nrow(x))$data)
-names(methySubti)=c("Basal","LumA","LumB","Her2","normal")
-#Buuren and Groothuis suggested that 15 variables are generally sufficient for imputation
-#maxp forces to impute always with knn, even when there's too much NA in columns/rows
-stopCluster(cl)
-save(methySubti,methyDesign,file="imptMethy.RData")
-#######beta to M values########################################
+library(doParallel)
+library(impute)
 
-#Beta values have severe heteroscedasticity for highly methylated or unmethylated CpG sites.
-#M-value method provides much better performance in terms of detection rate and true positive rate
-#for both highly methylated and unmethylated CpG sites
-methySubti=lapply(unique(methyDesign$subtype),function(x) methy[,methyDesign$subtype==x])
-methySubti=lapply(methySubti,function(x) x[,!duplicated(substr(colnames(x),1,12))])
-names(methySubti)=unique(methyDesign$subtype)
-Msubti=lapply(methySubti,beta2m)
-sapply(Msubti,dim)
-#      Basal   LumA   LumB   Her2 normal
-#[1,] 384575 384575 384575 384575 384575
-#[2,]    135    331    177     75     96
-
-pdf("methyDistr.pdf")
-  plot(density(methySubti$Basal),col="blue",frame.plot=F)
-	lines(density(methySubti$LumA),col="purple")
-	lines(density(methySubti$LumB),col="green")
-	lines(density(methySubti$Her2),col="orange")
-	lines(density(methySubti$normal),col="red")
-  plot(density(Msubti$Basal),col="blue",frame.plot=F)
-  	lines(density(Msubti$LumA),col="purple")
-	lines(density(Msubti$LumB),col="green")
-	lines(density(Msubti$Her2),col="orange")
-	lines(density(Msubti$normal),col="red")
-  legend("topright",legend=c("Basal","Her2","LumA","LumB","normal"),fill=c("blue","orange","purple","green","red"),bty="n")
-dev.off()
-#######correct batches#########################################
 #subtype to duplicates
 i=substr(colnames(methy),1,19)
 j=i[duplicated(i)]
 designMethy=subtype[c(which(!subtype$barcode%in%j),
   as.numeric(sapply(which(subtype$barcode%in%j),rep,2))),1:4]
 #needed coz names are not equal to expression data but barcodes do
-designMethy$samples=unlist(sapply(designMethy$barcode,function(x) colnames(methy)[i==x][1]))
+designMethy$samples=unlist(sapply(designMethy$barcode,function(x)
+ colnames(methy)[i==x][1]))
 designMethy$samples[designMethy$barcode%in%j]=rev(colnames(methy)[
 	which(i%in%j)])
-designMethy=designMethy[,order(match(designMethy$samples,
-									colnames(methy)))]
+designMethy=designMethy[order(match(designMethy$samples,
+	colnames(methy))),]
+#separate per subtype
+methy=lapply(levels(designMethy$subtype),function(x) 
+	methy[,designMethy$subtype==x])
+sapply(methy,dim)
+#      Basal   LumA   LumB normal   Her2
+#[1,] 383408 383408 383408 383408 383408
+#[2,]    126     46    425    146    101
+nas=lapply(methy,function(x) rowSums(is.na(x)))
+sapply(nas,max)
+#[1]  69  23 203  75  55
+sapply(nas,function(x) sum(x>0))#cell to estimate
+#[1] 12655  8196 24494 15291  9498
 
+#impute missing values
+no_cores=detectCores()-1
+registerDoParallel(cores=no_cores)
+cl=makeCluster(no_cores,type="FORK")
+#takes a looong time
+methy=parLapply(cl,methy,function(x) 
+	impute.knn(x,k=15,maxp=nrow(x))$data)#maxp forces impute, even if too many NAs
+#Buuren and Groothuis suggested that 15 variables are generally 
+#sufficient for imputation
+stopCluster(cl)
+write.table(do.call(cbind,methy),"methy.tsv",sep='\t',quote=F)
+#######beta to M values########################################
+#Beta values have severe heteroscedasticity for highly methylated or
+#unmethylated CpG sites. M-values provide much better performance in
+#terms of detection rate and true positive rate for both highly 
+#methylated and unmethylated CpG sites
+library(ggplot2)
 
-
-
-library(NOISeq)
-noiseqData=readData(data =do.call(cbind,Msubti), factors =methyDesign)
-myPCAshared=dat(noiseqData, type = "PCA", norm = T,logtransf=T)
-pdf("mPCA.pdf")
- explo.plot(myPCAshared, samples = c(1,2), plottype = "scores", factor = "subtype")
- explo.plot(myPCAshared, samples = c(3,5), plottype = "scores", factor = "plate")
+#check beta distributions
+temp=lapply(methy,function(x) sample(x,10000))
+temp=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
+	cbind(temp[[x]],levels(designMethy$subtype)[x]))))
+temp$beta=as.numeric(as.charachter(temp$beta))
+colnames(temp)=c("beta","subtype")
+png("betaDistr.png")
+ggplot(temp,aes(x=beta))+
+geom_density(aes(fill=subtype,color=subtype,y=..scaled..),
+	alpha=0.3)+theme(text=element_text(size=18))
 dev.off()
 
-save(methySubti,methyDesign,Msubti,annot,file="ini/imptMethy.RData")
+#transform beta to M as in:
+#https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-11-587
+mval=function(beta){log2(beta/(1-beta))}
+m=pbapply::pblapply(methy,function(x) apply(x,c(1,2),mval))
+#check M distributions
+temp=lapply(m,function(x) sample(x,10000))
+temp=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
+	cbind(temp[[x]],levels(designMethy$subtype)[x]))))
+colnames(temp)=c("M","subtype")
+temp$M=as.numeric(as.charachter(temp$M))
+png("MDistr.png")
+ggplot(temp,aes(x=M))+
+geom_density(aes(fill=subtype,color=subtype,y=..scaled..),
+	alpha=0.3)+theme(text=element_text(size=18))
+dev.off()
+
+#######average duplicates########################################
+m=do.call(cbind,m)
+i=designMethy$samples[designMethy$barcode%in%j]
+prefi=m[,!colnames(m)%in%i]
+duplis=m[,colnames(m)%in%i]
+
+temp=do.call(cbind,lapply(j,function(x) 
+  rowMeans(duplis[,substr(colnames(duplis),1,19)%in%x])))
+#identify samples with barcode 
+colnames(temp)=j
+colnames(prefi)=substr(colnames(prefi),1,19)
+#joint matrices
+final=cbind(prefi,temp)
+write.table(final,"methyM.tsv",sep='\t',quote=F)
+
+#u're dragging batch effects, use them as covariates when DM
