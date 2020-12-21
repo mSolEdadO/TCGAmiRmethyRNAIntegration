@@ -25,6 +25,7 @@ write.table(subtype,"subtype.tsv",quote=F,
 #set comparisons
 subtype$subtype=gsub("BRCA","",subtype$subtype)
 #~0 gives a model where each coefficient corresponds to a group mean
+##por ARSYN no hace falta este modelo tan complejo salvo para methy
 design=model.matrix(~0+subtype$subtype+subtype$tumor_stage+
 	subtype$treatment_or_therapy+subtype$race+
 	subtype$ajcc_pathologic_t+subtype$primary_diagnosis+
