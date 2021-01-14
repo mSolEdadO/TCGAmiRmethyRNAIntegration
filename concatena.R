@@ -1,36 +1,35 @@
 library(data.table)
-subtipos=read.table("subtipos.tsv")
-transcri=read.table("normiARSyN.tsv")
-mir=read.table("normiARSyNmiR.tsv")
-methy=fread("Mvals.tsv")
+subtypes=read.table("parallel-aracne/subtype.tsv",header=T,sep='\t')
+expre=fread("parallel-aracne/expreNormi.tsv")
+miR=fread("parallel-aracne/miRNormi.tsv")
+methy=fread("methyM.tsv")
+expre=as.matrix(expre[,2:ncol(expre)],rownames=expre$V1)
+miR=as.matrix(miR[,2:ncol(miR)],rownames=miR$V1)
+methy=as.matrix(methy[,2:ncol(methy)],rownames=methy$V1)
 
-colnames(mir)=gsub(".","-",colnames(mir),fixed=T)
-mirSubti=colnames(mir)
-mirSubti=cbind(mirSubti,sapply(strsplit(mirSubti,"-"),function(x) x[length(x)]))
-mirSubti=cbind(mirSubti,substr(mirSubti[,1],1,12))
-colnames(mirSubti)=colnames(subtipos)
-colnames(methy)=gsub(".","-",colnames(methy),fixed=T)
-methySubti=colnames(methy)
-methySubti=cbind(methySubti,sapply(strsplit(methySubti,"-"),function(x) x[length(x)]))
-methySubti=cbind(methySubti,substr(methySubti[,1],1,12))
-colnames(methySubti)=colnames(methySubti)
+nrow(expre)
+#[1] 17359
+nrow(miR)
+#[1] 669
+nrow(methy)
+#[1] 383408
+#choose methy order
+subtypes=subtypes[order(match(subtypes$barcode,colnames(methy))),]
+expre=expre[,order(match(colnames(expre),subtypes$barcode))]
+miR=miR[,order(match(colnames(miR),subtypes$barcode))]
+names(concatenated)=gsub("BRCA.","",levels(subtypes$subtype))
 
-intersec=lapply(as.character(unique(subtipos$definition)),function(x) 
-	intersect(intersect(as.character(subtipos$patient)[subtipos$definition==x],as.character(mirSubti$patient)[mirSubti$definition==x]),as.character(methySubti$patient)[methySubti$definition==x]))
-names(intersec)=as.character(unique(subtipos$definition))
-concatenadas=lapply(1:5,function(x) list(
-									methy=as.matrix(methy)[,colnames(methy)%in%methySubti$barcode[methySubti$definition==names(intersec)[x]&methySubti$patient%in%intersec[[x]]]],
-									transcri=as.matrix(transcri)[,colnames(transcri)%in%subtipos$barcode[subtipos$definition==names(intersec)[x]&transcri$patient%in%intersec[[x]]]],
-									mir=as.matrix(mir)[,colnames(mir)%in%mirSubti$barcode[mirSubti$definition==names(intersec)[x]&mirSubti$patient%in%intersec[[x]]]]))
-names(concatenadas)=names(intersec)
-concatenadas=lapply(concatenadas,function(x) sapply(x,function(y) y[,order(substr(colnames(y),1,12))]))
-sapply(concatenadas,function(x) ncol(x[[1]]))
-#  LumA  Basal   LumB   Her2 normal own subtypes
-#   331    135    177     75     75 
-#  LumA  Basal   LumB   Her2 normal TCGA subtypes
-#   395    125    128     45     75 
+#matrix per subtype
+concatenated=lapply(levels(subtypes$subtype),function(x) 
+	rbind(methy[,subtypes$subtype==x],expre[,subtypes$subtype==x],
+		miR[,subtypes$subtype==x]))
+sapply(concatenated,dim)
+#      Basal   Her2   LumA   LumB Normal
+#[1,] 401436 401436 401436 401436 401436
+#[2,]    126     46    423    146    101
+lapply(1:5,function(x) write.table(concatenated[[x]],
+	paste(names(concatenated)[x],"txt",sep='.'),sep='\t',quote=F))
 
-save(concatenadas,file="porSubti.RData")
 #########################################
 #lapply(concatenadas,function(x) sapply(x,function(y) summary(as.numeric(y))))
 #$normal
