@@ -1,4 +1,8 @@
 library(data.table)
+library(FactoMineR)
+library(factorextra)
+
+
 subtypes=read.table("parallel-aracne/subtype.tsv",header=T,sep='\t')
 expre=fread("parallel-aracne/expreNormi.tsv")
 miR=fread("parallel-aracne/miRNormi.tsv")
@@ -19,10 +23,33 @@ expre=expre[,order(match(colnames(expre),subtypes$barcode))]
 miR=miR[,order(match(colnames(miR),subtypes$barcode))]
 names(concatenated)=gsub("BRCA.","",levels(subtypes$subtype))
 
-#matrix per subtype
+#data per subtype
 concatenated=lapply(levels(subtypes$subtype),function(x) 
-	rbind(methy[,subtypes$subtype==x],expre[,subtypes$subtype==x],
+	list(methy[,subtypes$subtype==x],expre[,subtypes$subtype==x],
 		miR[,subtypes$subtype==x]))
+
+#pcs per subtype for transcripts
+PCAomics=lapply(concatenated,function(x) 
+	PCA(t(x[[2]]),scale.unit = TRUE,graph=F))
+sapply(1:5,function(x) sum(PCAomics[,x]$eig[,3]<75)+1)#PCs needed
+#[1]  68  28 169  79  38
+sapply(1:5,function(x) length(PCAomics[,x]$eig[,3]))#total PCs
+#[1] 125  45 422 145 100
+#pcs per subtype for miRNAs
+PCAomics=lapply(concatenated,function(x) 
+	PCA(t(x[[2]]),scale.unit = TRUE,graph=F))
+sapply(PCAomics,function(x) sum(x$eig[,3]<75)+1)
+# Basal   Her2   LumA   LumB Normal 
+#    64     28    148     74     54 
+sapply(PCAomics,function(x) nrow(x$eig))
+# Basal   Her2   LumA   LumB Normal 
+#   125     45    422    145    100 
+pdf("miR_PCA.pdf")
+lapply(PCAomics,function(x) fviz_eig(x, addlabels = TRUE))
+dev.off()
+
+#matrix per subtype
+concatenated=lapply(concatenated,function(x) do.call(rbind,x))
 sapply(concatenated,dim)
 #      Basal   Her2   LumA   LumB Normal
 #[1,] 401436 401436 401436 401436 401436
@@ -30,7 +57,24 @@ sapply(concatenated,dim)
 lapply(1:5,function(x) write.table(concatenated[[x]],
 	paste(names(concatenated)[x],"txt",sep='.'),sep='\t',quote=F))
 
-#########################################
+
+#########################################to go back
+files=list.files()
+files=files[grep("txt",files)]
+library(data.table)
+concatenated=lapply(files,fread)
+concatenated=lapply(concatenated,function(x) as.matrix(x[,2:ncol(x)],rownames=x$V1))
+names(concatenated)=gsub(".txt","",files)
+library(FactoMineR)
+concatenated=lapply(concatenated,function(y) apply(cbind(c(1,383409,400768),c(383408,400767,401436)),1,function(x) y[x[1]:x[2],]))
+PCAomics=pbapply::pblapply(concatenated,function(x)
+ sapply(x,function(y) PCA(t(y),
+ scale.unit = TRUE,
+ graph=F)))
+
+
+
+
 #lapply(concatenadas,function(x) sapply(x,function(y) summary(as.numeric(y))))
 #$normal
 #           methy transcri        mir
