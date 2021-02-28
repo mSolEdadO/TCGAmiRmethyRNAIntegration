@@ -123,7 +123,7 @@ dev.off()
 png("miRcountsFinal.png")
 explo.plot(mycountsbio, plottype = "barplot", samples = 1:5)
 dev.off()
-myPCA = dat(noiseqData, type = "PCA", norm = T,logtransf=F)#check batches
+myPCA = dat(noiseqData, type = "PCA", norm = T,logtransf=T)#check batches
 png("miRPCA_Final.png")
 explo.plot(myPCA, samples = c(1,2), plottype = "scores", 
 	factor = "subtype")
