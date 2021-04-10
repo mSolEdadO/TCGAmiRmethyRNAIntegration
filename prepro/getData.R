@@ -7,18 +7,18 @@ mthyltn <-  GDCquery(project = "TCGA-BRCA",
 	data.category = "DNA Methylation",
 	platform="Illumina Human Methylation 450")
 mthyltn=getResults(mthyltn)
-i=substr(mthyltn$cases,1,19)
+i=substr(mthyltn$cases,1,15)
 xprssn <- GDCquery(project = "TCGA-BRCA",
   data.category = "Transcriptome Profiling",
   data.type = "Gene Expression Quantification",
   workflow.type = "HTSeq - Counts")
 xprssn=getResults(xprssn)
-j=substr(xprssn$cases,1,19)
+j=substr(xprssn$cases,1,15)
 mirnas <- GDCquery(project = "TCGA-BRCA",
 	data.category = "Transcriptome Profiling",
 	data.type = "miRNA Expression Quantification")
 mirnas=getResults(mirnas)
-k=substr(mirnas$cases,1,19)
+k=substr(mirnas$cases,1,15)
 
 sapply(list(i,j,k),function(x) length(unique(x)))
 #[1]  890 1217 1202
@@ -27,9 +27,10 @@ samples=intersect(intersect(i,j),k)
 length(samples)
 #[1] 848
 
-#sample subtypes
+#download subtypes
 subtype=TCGA_MolecularSubtype(xprssn$cases)$subtypes
-subtype$barcode=substr(subtype$samples,1,19)
+#https://www.cbioportal.org/study/clinicalData?id=brca_tcga_pan_can_atlas_2018
+subtype$barcode=substr(subtype$samples,1,15)
 sum(!samples%in%subtype$barcode)#non classified samples
 #[1] 6
 #only classified samples  are useful
@@ -52,10 +53,23 @@ lapply(unique(subtype$subtype),function(x)
 subtype=subtype[subtype$barcode%in%samples,]
 write.table(subtype,"subtype.tsv",sep='\t',quote=F,row.names=F)
 
-#some samples were measured twice
-sum(duplicated(i[i%in%samples]))
-#[1] 2
-sum(duplicated(j[j%in%samples]))
-#[1] 4
-sum(duplicated(k[k%in%samples]))
-#[1] 4
+#some patients were measured several times
+sum(duplicated(subtype$patients))
+#[1] 71
+#12 are NOT normal-tumor pairs
+temp=table(subtype[subtype$patients%in%
+	subtype$patients[duplicated(subtype$patients)],2:3])
+sum(temp[5,]!=1)
+#[1] 12
+#TCGA-E9-A1NF has 1 LumA sample & 1 LumB
+#TCGA-BH-A1FE has 2 normal samples + 1 LumA
+
+#can duplicates be explained by metastasis?
+#sum(subtype$samples%in%xprssn$cases)
+tissue=xprssn[xprssn$cases%in%subtype$samples,c(4,28)]
+tissue=tissue[order(match(tissue$cases,subtype$samples)),]
+subtype=cbind(subtype,tissue$tissue.definition)
+colnames(subtype)[5]="tissue"
+#problems with sample IDs
+lapply(unique(subtype$tissue),function(x) 
+	table(subtype[subtype$tissue==x,c(2,5)]))
