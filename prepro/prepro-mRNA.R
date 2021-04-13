@@ -18,7 +18,7 @@ xprssn <- GDCquery(project = "TCGA-BRCA",
   data.category = "Transcriptome Profiling",
   data.type = "Gene Expression Quantification",
   workflow.type = "HTSeq - Counts",
-  barcode=subtype$barcode)
+  barcode=subtype$samples)
 GDCdownload(xprssn)
 expre=GDCprepare(xprssn,summarizedExperiment=F)#fails if T
 temp=as.matrix(expre[,2:ncol(expre)])
@@ -29,12 +29,11 @@ write.table(expre,"expre.tsv",sep='\t',quote=F)
 #subtype to duplicates
 i=substr(colnames(expre),1,19)
 j=i[duplicated(i)]
-designExp=as.matrix(subtype[c(which(!subtype$barcode%in%j),
-  as.numeric(sapply(which(subtype$barcode%in%j),rep,2))),])
-designExp[designExp[,4]%in%j,1]=colnames(expre)[which(i%in%j)]
-designExp=as.data.frame(designExp)
-expre=expre[,order(match(colnames(expre),designExp$samples))]
-#check all matches
+designExp=subtype[c(which(!subtype$samples%in%j),
+  as.numeric(sapply(which(subtype$samples%in%j),rep,2))),]
+designExp=designExp[order(match(designExp$samples,substr(colnames(expre),1,19))),]
+designExp$barcode=colnames(expre)
+#check everything matches
 
 #keep only transcript id not version numbers
 rownames(expre)=sapply(strsplit(rownames(expre),".",fixed=T),
@@ -55,26 +54,18 @@ myannot=myannot[myannot$gene_biotype=="protein_coding"&
 myannot=myannot[!duplicated(myannot$ensembl_gene_id),]
 exprots_hgnc=expre[rownames(expre)%in%myannot$ensembl_gene_id,]
 dim(exprots_hgnc)
-#[1] 19218   846
+#[1] 19210   809
 
-#sum duplicated probes
-myannot[myannot$hgnc_id==
-  myannot$hgnc_id[duplicated(myannot$hgnc_id)],]
-#      ensembl_gene_id percentage_gene_gc_content   gene_biotype start_position
-#19876 ENSG00000204510                      50.06 protein_coding       12916610
-#55271 ENSG00000279195                      50.06 protein_coding       12916610
-#      end_position    hgnc_id hgnc_symbol length
-#19876     12920482 HGNC:28415     PRAMEF7   3872
-#55271     12920482 HGNC:28415     PRAMEF7   3872
-which(rownames(exprots_hgnc)=="ENSG00000279195")
-#[1] 19192
-exprots_hgnc[rownames(exprots_hgnc)=="ENSG00000204510",]=
-  exprots_hgnc[rownames(exprots_hgnc)=="ENSG00000204510",]+
-  exprots_hgnc[19192,]
-exprots_hgnc=exprots_hgnc[c(1:19191,19193:nrow(exprots_hgnc)),]
-dim(exprots_hgnc)
-#[1] 19217   846
-myannot=myannot[myannot$ensembl_gene_id%in%rownames(exprots_hgnc),]
+#check duplicated probes
+#myannot[myannot$hgnc_id==
+#  myannot$hgnc_id[duplicated(myannot$hgnc_id)],]
+#which(rownames(exprots_hgnc)=="ENSG00000279195")#not anymore
+#exprots_hgnc[rownames(exprots_hgnc)=="ENSG00000204510",]=
+#  exprots_hgnc[rownames(exprots_hgnc)=="ENSG00000204510",]+
+#  exprots_hgnc[19192,]
+#exprots_hgnc=exprots_hgnc[c(1:19191,19193:nrow(exprots_hgnc)),]
+#dim(exprots_hgnc)
+#myannot=myannot[myannot$ensembl_gene_id%in%rownames(exprots_hgnc),]
 
 ##################CHECK BIASES########################################################
 library(NOISeq)
@@ -107,11 +98,13 @@ dev.off()
 #If the median of M values for each comparison is not in the CI, the deviation
 # of the sample is significant, therefore, normalization is needed 
 mycd = dat(noiseqData, type = "cd", norm = FALSE) #slooooow
-#[1] "Warning: 103 features with 0 counts in all samples are to be removed for this analysis."
+#[1] "Warning: 107 features with 0 counts in all samples are to be removed for this analysis."
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#   747     98 
-#explo.plot(mycd,samples=sample(1:ncol(expr),10))
+#   695    113 
+png("MvaluesOri.png")
+ explo.plot(mycd,samples=sample(1:ncol(exprots_hgnc),10))
+dev.off()
 
 #4)check for length & GC bias
 #A cubic spline regression model is fitted. Both the model p-value and the coefficient
@@ -150,8 +143,16 @@ library(EDASeq)
 #####sigo lo de Diana porque proportion.test, cpm >1 pierde a MIA
 countMatrixFiltered = filtered.data(exprots_hgnc, factor = "subtype",
  norm = FALSE, depth = NULL, method = 1, cpm = 0, p.adj = "fdr")
-#17359 features are to be kept for differential expression analysis with filtering method 1
+#17077 features are to be kept for differential expression analysis with filtering method 1
 myannot=myannot[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered),]
+
+
+
+
+#te quedaste aqui
+
+
+
 
 #all names must match
 mydataEDA <- newSeqExpressionSet(
