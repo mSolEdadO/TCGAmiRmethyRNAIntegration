@@ -24,7 +24,7 @@ expre=GDCprepare(xprssn,summarizedExperiment=F)#fails if T
 temp=as.matrix(expre[,2:ncol(expre)])
 rownames(temp)=expre$X1
 expre=temp
-write.table(expre,"expre.tsv",sep='\t',quote=F)
+write.table(expre,"RNAseq.tsv",sep='\t',quote=F)
 
 #subtype to duplicates
 i=substr(colnames(expre),1,19)
@@ -146,34 +146,29 @@ countMatrixFiltered = filtered.data(exprots_hgnc, factor = "subtype",
 #17077 features are to be kept for differential expression analysis with filtering method 1
 myannot=myannot[myannot$ensembl_gene_id%in%rownames(countMatrixFiltered),]
 
-
-
-
-#te quedaste aqui
-
-
-
-
 #all names must match
 mydataEDA <- newSeqExpressionSet(
-  counts=countMatrixFiltered,
+  counts=as.matrix(countMatrixFiltered),
   featureData=data.frame(myannot,row.names=myannot$ensembl_gene_id),
-  phenoData=data.frame(designExp,row.names=designExp$samples))
-lFull <- withinLaneNormalization(mydataEDA, "length", which = "full")#corrects length bias
-gcFull <- withinLaneNormalization(lFull, 
-  "percentage_gene_gc_content", which = "full")#corrects GC bias & recover length bias
-#fullfullTMM <-tmm(normCounts(gcFull), long = 1000, lc = 0, k = 0)
-norm.counts <- betweenLaneNormalization(normCounts(gcFull),
- which = "full", offset = FALSE)
-#lfull→gcfull→ttm=719 failed
-#gcfull→lfull→ttm=731 failed
-noiseqData = NOISeq::readData(data = norm.counts, factors=designExp)
+  phenoData=data.frame(designExp,row.names=designExp$barcode))
+#order for less bias
+gcFull <- withinLaneNormalization(mydataEDA, 
+  "percentage_gene_gc_content", which = "full")#corrects GC bias 
+lFull <- withinLaneNormalization(gcFull, "length", which = "full")#corrects length bias 
+fullfullTMM <-NOISeq::tmm(normCounts(lFull), long = 1000, lc = 0, k = 0)
+#norm.counts <- betweenLaneNormalization(normCounts(lFull),
+# which = "median", offset = FALSE)
+#FAILED PASSED 
+#   290    518
+noiseqData = NOISeq::readData(data = fullfullTMM,, factors=designExp)
 #cd has to preceed ARSyN or won't work
 mycd=NOISeq::dat(noiseqData,type="cd",norm=TRUE)
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
-#   200    645 
-
+#   297    511 
+#full
+#FAILED PASSED 
+#   346    462 
 #############################SOLVE BATCH EFFECT#######################################################
 myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = F)
 png("preArsyn.png")
@@ -211,12 +206,10 @@ sapply(1:5,function(x) explo.plot(mylenBias, samples = x))
 dev.off()
 
 #############################RESOLVE DUPLICATES & SAVE##################################################
-#get duplicated index
-i=designExp$samples[designExp$barcode%in%
-  designExp$barcode[duplicated(designExp$barcode)]]
-#get sample ids per barcode
-i=lapply(designExp$barcode[duplicated(designExp$barcode)],
-  function(x) i[substr(i,1,19)%in%x])
+#get duplicates
+i=designExp$samples[duplicated(designExp$samples)]
+#get sample barcode per sample
+i=lapply(i,function(x) designExp$barcode[designExp$samples==x])
 #separate duplicates
 final=exprs(ffTMMARSyn)
 duplis=final[,colnames(final)%in%unlist(i)]
@@ -225,11 +218,23 @@ prefi=final[,!colnames(final)%in%unlist(i)]
 temp=do.call(cbind,lapply(i,function(x) 
   rowMeans(duplis[,colnames(duplis)%in%x])))
 #identify samples with barcode 
-colnames(temp)=designExp$barcode[duplicated(designExp$barcode)]
+colnames(temp)=designExp$samples[duplicated(designExp$samples)]
 colnames(prefi)=substr(colnames(prefi),1,19)
 #joint matrices
 final=cbind(prefi,temp)
 dim(final)
-#[1] 17359   842
-final=final[,order(match(colnames(final),subtype$barcode))]
-write.table(final,"expreNormi.tsv",sep='\t',quote=F)
+#[1] 17077   805
+final=final[,order(match(colnames(final),subtype$samples))]
+write.table(final,"RNAseqnormalized.tsv",sep='\t',quote=F)
+
+###################################################
+                  samples      patient                      barcode
+143   TCGA-A7-A13D-01A-13 TCGA-A7-A13D TCGA-A7-A13D-01A-13R-A12P-07
+143.1 TCGA-A7-A13D-01A-13 TCGA-A7-A13D TCGA-A7-A13D-01A-13R-A277-07
+213   TCGA-A7-A26E-01A-11 TCGA-A7-A26E TCGA-A7-A26E-01A-11R-A277-07
+213.1 TCGA-A7-A26E-01A-11 TCGA-A7-A26E TCGA-A7-A26E-01A-11R-A169-07
+243   TCGA-A7-A26J-01A-11 TCGA-A7-A26J TCGA-A7-A26J-01A-11R-A169-07
+243.1 TCGA-A7-A26J-01A-11 TCGA-A7-A26J TCGA-A7-A26J-01A-11R-A277-07
+384   TCGA-A7-A13E-01A-11 TCGA-A7-A13E TCGA-A7-A13E-01A-11R-A12P-07
+384.1 TCGA-A7-A13E-01A-11 TCGA-A7-A13E TCGA-A7-A13E-01A-11R-A277-07
+########################################################
