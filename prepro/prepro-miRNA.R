@@ -1,29 +1,44 @@
 library(TCGAbiolinks)
+library(biomaRt)
 
-subtype=read.table("Desktop/prepro/subtype.tsv",header=T)
+subtype=read.table("subtype.tsv",header=T,sep='\t')
 #get the data
 mirnas <- GDCquery(project = "TCGA-BRCA",
 	data.category = "Transcriptome Profiling",
 	data.type = "miRNA Expression Quantification",
-	barcode=subtype$barcode)
+	barcode=subtype$samples)
 GDCdownload(mirnas)
 mir=GDCprepare(mirnas)
 rownames(mir)=mir$miRNA_ID
 mir=mir[,grep("read_count",colnames(mir))]
 colnames(mir)=gsub("read_count_","",colnames(mir))
 dim(mir)
-#[1] 1881  846
-write.table(mir,"Desktop/prepro/miR.tsv",sep='\t',quote=F)
+#[1] 1881  809
+write.table(mir,"miRNAseq.tsv",sep='\t',quote=F)
 
 #subtype to duplicates
 i=substr(colnames(mir),1,19)
 j=i[duplicated(i)]
-designExp=as.matrix(subtype[c(which(!subtype$barcode%in%j),
-  as.numeric(sapply(which(subtype$barcode%in%j),rep,2))),])
-designExp=as.data.frame(designExp)
-designExp=designExp[order(match(designExp$barcode,
-	substr(colnames(mir),1,19))),]
+designExp=subtype[c(which(!subtype$samples%in%j),
+   as.numeric(sapply(which(subtype$samples%in%j),rep,2))),]
+designExp=designExp[order(match(designExp$samples,substr(colnames(mir),1,19))),]
 
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+myannot=getBM(attributes = c("ensembl_gene_id", 
+  "percentage_gene_gc_content", "mirbase_id",
+  "start_position","end_position"),
+  mart=mart)
+myannot=myannot[myannot$mirbase_id%in%rownames(mir),]
+myannot$length=abs(myannot$end_position-myannot$start_position)
+
+######fix duplicate miRs
+
+#####consider ↓
+#			  ↓
+#			  ↓
+#miRNAseq has a known GC bias
+#there should not be a length bias
+#if these biases are not fixed you can not compare 1 miRNA expression with another 
 ##################CHECK BIASES########################################################
 library(NOISeq)
 

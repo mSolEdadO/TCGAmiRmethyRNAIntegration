@@ -226,15 +226,12 @@ dim(final)
 #[1] 17077   805
 final=final[,order(match(colnames(final),subtype$samples))]
 write.table(final,"RNAseqnormalized.tsv",sep='\t',quote=F)
-
-###################################################
-                  samples      patient                      barcode
-143   TCGA-A7-A13D-01A-13 TCGA-A7-A13D TCGA-A7-A13D-01A-13R-A12P-07
-143.1 TCGA-A7-A13D-01A-13 TCGA-A7-A13D TCGA-A7-A13D-01A-13R-A277-07
-213   TCGA-A7-A26E-01A-11 TCGA-A7-A26E TCGA-A7-A26E-01A-11R-A277-07
-213.1 TCGA-A7-A26E-01A-11 TCGA-A7-A26E TCGA-A7-A26E-01A-11R-A169-07
-243   TCGA-A7-A26J-01A-11 TCGA-A7-A26J TCGA-A7-A26J-01A-11R-A169-07
-243.1 TCGA-A7-A26J-01A-11 TCGA-A7-A26J TCGA-A7-A26J-01A-11R-A277-07
-384   TCGA-A7-A13E-01A-11 TCGA-A7-A13E TCGA-A7-A13E-01A-11R-A12P-07
-384.1 TCGA-A7-A13E-01A-11 TCGA-A7-A13E TCGA-A7-A13E-01A-11R-A277-07
-########################################################
+#duplicates share everything except the plate
+# TCGA-A7-A13D-01A-13R-A12P-07
+# TCGA-A7-A13D-01A-13R-A277-07
+# TCGA-A7-A26E-01A-11R-A277-07
+# TCGA-A7-A26E-01A-11R-A169-07
+# TCGA-A7-A26J-01A-11R-A169-07
+# TCGA-A7-A26J-01A-11R-A277-07
+# TCGA-A7-A13E-01A-11R-A12P-07
+# TCGA-A7-A13E-01A-11R-A277-07
