@@ -91,3 +91,27 @@ venn.diagram(x=list(
 	alpha = 0.50,cex = 1.5,cat.cex = 1.5,margin = 0.1,
 	fontfamily = "sans",cat.fontfamily=rep("sans",3),
 	category.names=c("RNAseq","HM450","miRNAseq"),filename="Normal")
+
+###############ADD CLINICAL INFO##########################
+clin <- GDCquery_clinic("TCGA-BRCA","clinical")
+clin <- clin[,c("bcr_patient_barcode","gender",
+	"tumor_stage","race","vital_status")]
+samples=cbind(samples,t(sapply(samples$patient,function(x) 
+	clin[clin$bcr_patient_barcode==x,2:4])))
+table(subtype$gender)
+#female 
+#   805 
+table(subtype$tumor_stage)
+#not reported      stage i     stage ia     stage ib     stage ii    stage iia 
+#           6           63           58            4            5          256 
+#   stage iib    stage iii   stage iiia   stage iiib   stage iiic     stage iv 
+#         196            1          132           20           49           10 
+#     stage x 
+#           5 
+table(subtype$race)
+#american indian or alaska native                            asian 
+#                               1                               37 
+#       black or african american                     not reported 
+#                             151                               15 
+#                           white 
+#                             601 
