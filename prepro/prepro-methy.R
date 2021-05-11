@@ -6,81 +6,86 @@ subtype=read.table("subtype.tsv",header=T,sep='\t')
 mthyltn <-  GDCquery(project = "TCGA-BRCA",
 	data.category = "DNA Methylation",
 	platform="Illumina Human Methylation 450",
-	barcode=subtype$barcode)
+	barcode=subtype$samples)
 GDCdownload(mthyltn)
-#GDCdownload will download 844 files. A total of 119.236093 GB
+#GDCdownload will download 807 files. A total of X GB
 ####mthyltn=GDCprepare(mthyltn) dies
 #build matrix
-files=list.files()
-files=sapply(files,function(x) paste(x,"/",list.files(x),sep=""))
+files=list.files("GDCdata",full.names=T,recursive=T)
 methy=do.call(cbind,pbapply::pbsapply(files,function(x) 
 	fread(x,select=2,stringsAsFactors=F)))#2 has beta values
-#~44m 03s 
+#~45m 24s 
 colnames(methy)=sapply(strsplit(files,".",fixed=T),
 	function(x) x[6])#barcodes
 rownames(methy)=fread(files[1],select=1,skip=1)$V1
 dim(methy)
-#[1] 485577    845
+#[1] 485577    850
 write.table(methy,"methy.tsv",sep='\t',quote=F)
-#2600M when tar.gz
-#######filter NA probes######################################
-nas=rowSums(is.na(methy))
-#keep only those measured at least in half the samples
-methy=methy[nas<ncol(methy)*.5,]
+#5751M
+#2486M as tar.gz
+#######drop probes with too many na########################################
+#before noise-prone filter or the process will be slooow
+
+#subtype to duplicates
+i=substr(colnames(methy),1,19)
+j=i[duplicated(i)]
+designMethy=subtype[c(which(!subtype$samples%in%j),
+  as.numeric(sapply(which(subtype$samples%in%j),rep,2))),1:4]
+#needed coz names are not equal to expression data but barcodes do
+designMethy$barcode=unlist(sapply(designMethy$samples,function(x)
+ colnames(methy)[i==x][1]))
+designMethy$barcode[designMethy$samples%in%j]=rev(colnames(methy)[
+	which(i%in%j)])
+designMethy=designMethy[order(match(designMethy$barcode,
+	colnames(methy))),]
+
+total=table(subtype$subtype)
+#NA per subtype
+nas=lapply(names(total),function(x) 
+	rowSums(is.na(methy[,designMethy$subtype==x])))
+#keep probes with NA in less than 25% of samples of all subtypes
+i=unique(unlist(lapply(1:5,function(x) which(nas[[x]]<total[x]*.25))))
+methy=methy[i,]
 dim(methy)
-#[1] 395775    844
+#[1] 395728    844
 
 ############filter noise-prone probes##############################
-#polymorphisms may affect DNAm measurements
-methy=methy[grep("rs",rownames(methy),invert=T),]
-dim(methy)
-#[1] 395710    844
-
 #get probes annotation
 annot=fread(files[1])
+colnames(annot)[1]="probe"
 annot=annot[annot$probe%in%rownames(methy),]
-sum(annot$probe==rownames(methy)) #order is the same
-#[1] 395710
+annot=annot[order(match(annot$probe,rownames(methy))),]
+#sum(annot$probe==rownames(methy)) #order is the same
 
-#there're 9 males that may drive fake DM due to chr imbalance 
-methy=methy[!annot$Chromosome%in%c("chrX","chrY"),]
-dim(methy)
-#[1] 385940    844
-annot=annot[annot$probe%in%rownames(methy),]
+#sex chrs should be dropped if mixed gender
+#since this is not the case, keep chrX
+#https://bioconductor.org/packages/devel/workflows/vignettes/methylationArrayAnalysis/inst/doc/methylationArrayAnalysis.html
+#methy=methy[!annot$Chromosome%in%c("chrX","chrY"),]
+#dim(methy)
+
 #drop probes with ambigous mapping
 #https://docs.gdc.cancer.gov/Data/Bioinformatics_Pipelines/Methylation_LO_Pipeline/
 methy=methy[annot$Chromosome!="*",]
-dim(methy)
-#[1] 383408    844
+nrow(methy)
+#[1] 393197
+
+#polymorphisms may affect DNAm measurements
+methy=methy[grep("rs",rownames(methy),invert=T),]
+nrow(methy)
+#[1] 393132
 
 #######impute missing data########################################
 library(doParallel)
 library(impute)
 
-#subtype to duplicates
-i=substr(colnames(methy),1,19)
-j=i[duplicated(i)]
-designMethy=subtype[c(which(!subtype$barcode%in%j),
-  as.numeric(sapply(which(subtype$barcode%in%j),rep,2))),1:4]
-#needed coz names are not equal to expression data but barcodes do
-designMethy$samples=unlist(sapply(designMethy$barcode,function(x)
- colnames(methy)[i==x][1]))
-designMethy$samples[designMethy$barcode%in%j]=rev(colnames(methy)[
-	which(i%in%j)])
-designMethy=designMethy[order(match(designMethy$samples,
-	colnames(methy))),]
 #separate per subtype
-methy=lapply(levels(designMethy$subtype),function(x) 
+methy=lapply(names(total),function(x) 
 	methy[,designMethy$subtype==x])
-sapply(methy,dim)
-#      Basal   LumA   LumB normal   Her2
-#[1,] 383408 383408 383408 383408 383408
-#[2,]    126     46    425    146    101
 nas=lapply(methy,function(x) rowSums(is.na(x)))
 sapply(nas,max)
-#[1]  69  23 203  75  55
+#[1]  47  19 165  61  49
 sapply(nas,function(x) sum(x>0))#cell to estimate
-#[1] 12655  8196 24494 15291  9498
+#[1] 12944  8333 24770 14630  5229
 
 #impute missing values
 no_cores=detectCores()-1
@@ -92,7 +97,10 @@ methy=parLapply(cl,methy,function(x)
 #Buuren and Groothuis suggested that 15 variables are generally 
 #sufficient for imputation
 stopCluster(cl)
-write.table(do.call(cbind,methy),"methy.tsv",sep='\t',quote=F)
+#alternative
+#methy=lapply(methy,function(x) impute.knn(x,k=15,maxp=nrow(x))$data)
+
+write.table(do.call(cbind,methy),"methyNormi.tsv",sep='\t',quote=F)
 #######beta to M values########################################
 #Beta values have severe heteroscedasticity for highly methylated or
 #unmethylated CpG sites. M-values provide much better performance in
@@ -104,7 +112,7 @@ library(ggplot2)
 temp=lapply(methy,function(x) sample(x,10000))
 temp=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
 	cbind(temp[[x]],levels(designMethy$subtype)[x]))))
-temp$beta=as.numeric(as.charachter(temp$beta))
+temp$beta=as.numeric(as.character(temp$beta))
 colnames(temp)=c("beta","subtype")
 png("betaDistr.png")
 ggplot(temp,aes(x=beta))+
@@ -121,7 +129,7 @@ temp=lapply(m,function(x) sample(x,10000))
 temp=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
 	cbind(temp[[x]],levels(designMethy$subtype)[x]))))
 colnames(temp)=c("M","subtype")
-temp$M=as.numeric(as.charachter(temp$M))
+temp$M=as.numeric(as.character(temp$M))
 png("MDistr.png")
 ggplot(temp,aes(x=M))+
 geom_density(aes(fill=subtype,color=subtype,y=..scaled..),
@@ -130,9 +138,10 @@ dev.off()
 
 #######average duplicates########################################
 m=do.call(cbind,m)
-i=designMethy$samples[designMethy$barcode%in%j]
-prefi=m[,!colnames(m)%in%i]
-duplis=m[,colnames(m)%in%i]
+i=substr(colnames(m),1,19)
+j=i[duplicated(i)]
+prefi=m[,!i%in%j]
+duplis=m[,i%in%j]
 
 temp=do.call(cbind,lapply(j,function(x) 
   rowMeans(duplis[,substr(colnames(duplis),1,19)%in%x])))

@@ -25,6 +25,7 @@ j=i[duplicated(i)]
 designExp=subtype[c(which(!subtype$samples%in%j),
    as.numeric(sapply(which(subtype$samples%in%j),rep,2))),]
 designExp=designExp[order(match(designExp$samples,substr(colnames(mir),1,19))),]
+designExp$barcode=colnames(mir)
 
 #biomart version with all the miRNAs & the same hg
 mart=useMart("ensembl",host="http://may2017.archive.ensembl.org", 
