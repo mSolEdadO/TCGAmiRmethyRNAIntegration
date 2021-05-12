@@ -1,38 +1,16 @@
 library(limma)
 library(data.table)
-library(TCGbiolinks)
 
 #################RNA###########################################
-subtype=read.table("Desktop/prepro/subtype.tsv",header=T)
-expre=fread("Desktop/prepro/expreNormi.tsv")
+subtype=read.table("subtype.tsv",header=T,sep='\t')
+expre=fread("RNAseqnormalized.tsv")
 expre=as.matrix(expre[,2:ncol(expre)],rownames=expre$V1)
 
-#get covariates
-clinical <- GDCquery_clinic(project="TCGA-BRCA",
-							type="clinical")
-#keep ingo of patients in data matrix
-clinical=as.data.frame(t(sapply(subtype$patients,function(x)
- clinical[clinical$bcr_patient_barcode==x,])))
-subtype=cbind(subtype,clinical[,2:59])#drop repeated categories
-subtype=subtype[,colSums(is.na(subtype))<ncol(expre)]#drop full NA
-#fix format
-subtype=apply(subtype,2,function(x) unlist(x))
-subtype=as.data.frame(subtype,stringsAsFactors=T)
-subtype$ajcc_pathologic_stage=NULL#same as tumor_stage
-write.table(subtype,"subtype.tsv",quote=F,
-	row.names=F,sep='\t')
-
 #set comparisons
-subtype$subtype=gsub("BRCA","",subtype$subtype)
 #~0 gives a model where each coefficient corresponds to a group mean
-##por ARSYN no hace falta este modelo tan complejo salvo para methy
-design=model.matrix(~0+subtype$subtype+subtype$tumor_stage+
-	subtype$treatment_or_therapy+subtype$race+
-	subtype$ajcc_pathologic_t+subtype$primary_diagnosis+
-	subtype$age_at_index+subtype$ajcc_pathologic_m)
+design=model.matrix(~0+subtype$subtype)
 #fix names
-colnames(design)=gsub("subtype.","",colnames(design))
-colnames(design)=gsub(",","",gsub(" ","_",colnames(design)))
+colnames(design)=gsub("subtype.subtype","",colnames(design))
 contr.mtrx=makeContrasts(
 	basal_normal=Basal-Normal,
 	her2_normal=Her2-Normal,
@@ -40,11 +18,17 @@ contr.mtrx=makeContrasts(
 	lumb_normal=LumB-Normal,
 levels=design)
 
+#check if count&variance are indi
+#if counts are more variable at lower expression, voom makes the 
+#data “normal enough”
+v=voom(expre,design,plot=T,save.plot=T)#no need if fitted curve is smooth
+#https://ucdavis-bioinformatics-training.github.io/2018-June-RNA-Seq-Workshop/thursday/DE.html
+
 #fit a linear model using weighted least squares for each gene
-fit=lmFit(expre,design)
+fit=lmFit(v,design)
 fitSubtype = contrasts.fit(fit, contr.mtrx)
 #treat is better than fc+p.val thresholds, that increase FP
-tfitSubtype=treat(fitSubtype, lfc = log2(2))
+tfitSubtype=treat(fitSubtype, lfc = log2(1.5))
 #log2(1.2 or 1.5) will usually give DE genes with fc => 2
 #depending on the sample size and precision of the experiment
 DE.genes=lapply(1:4,function(x) 
@@ -52,20 +36,30 @@ DE.genes=lapply(1:4,function(x)
 names(DE.genes)=c("Basal_Normal","Her2_Normal",
 	"LumA_Normal","LumB_Normal")
 sapply(1:4,function(x) sum(DE.genes[[x]]$adj.P.Val<0.01))
-#[1] 10943  9348 10220 11376 that many???????????????????????
+#[1] 5279 4370 4051 4867
 #pdf("DEgenes.pdf")
 #par(mfrow=c(2,2))
 #sapply(1:4,function(x) plotMA(fitSubtype,coef=x))
 #sapply(1:4,function(x) {
 #	volcanoplot(tfitSubtype,coef=x)
-#	abline(h=-log2(0.01),col="red")
+#	abline(h=-log2(1.2),col="red")
 #})
 #dev.off()
-save(DE.genes,file="DA2020.RData")
+temp=do.call(rbind,lapply(1:4,function(x) 
+	cbind(names(DE.genes)[x],DE.genes[[x]])))
+png("logFC.png")
+ggplot(temp,aes(y=logFC,x=contrast,color=contrast))+
+	geom_boxplot()+theme(legend.position="none")
+dev.off()
+
 #################miRNA###########################################
 
 #################methylation###########################################
-
+##por ARSYN no hace falta este modelo tan complejo salvo para methy
+design=model.matrix(~0+subtype$subtype+subtype$tumor_stage+
+	subtype$treatment_or_therapy+subtype$race+
+	subtype$ajcc_pathologic_t+subtype$primary_diagnosis+
+	subtype$age_at_index+subtype$ajcc_pathologic_m)
 
 #library(sva)
 library(missMethyl)
@@ -91,8 +85,7 @@ design=cbind(design,gender)
 
 #mRNA DE
 rna=do.call(cbind,sapply(concatenadas,function(x) x[[3]]))
-v=voom(rna,DE.design,plot=T,save.plot=T)#ideally count&variance are indi, but a smooth fitted curve is good enough to discard voom 
-#counts are more variable at lower expression, voom address this by making the data “normal enough”
+v=voom(rna,DE.design,plot=T,save.plot=T)
 #rna variance~[0.1,0.3]
 
 
