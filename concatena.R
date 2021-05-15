@@ -23,32 +23,25 @@ concatenated=lapply(levels(subtype$subtype),function(x)
 names(concatenated)=levels(subtype$subtype)
 
 #########################################PCs per subtype & data
-#For CpGs
-PCAmethy=pbapply::pblapply(concatenated,function(x) 
-	PCA(t(x[[1]]),scale.unit = TRUE,graph=F))
-sapply(PCAmethy,function(x) sum(x$eig[,3]<75)+1)
-# Basal   Her2   LumA   LumB Normal 
-#    45     20    125     50     15 
-sapply(PCAmethy,function(x) sum(x$eig[,3]<50)+1)#~matches elbow
-# Basal   Her2   LumA   LumB Normal 
-#    13      8     20     12      3#better 1:4
-pdf("PCmethy.pdf")
-lapply(1:5,function(x) fviz_eig(PCAmethy[[x]],addlabels=F,
-	ncp=30,main=names(PCAmethy)[x]))
+her2MFA=MFA(t(her2),group=c(393132,17077,604),#size of categories
+	name.group=c("methy","RNA","miRNA"),graph=F,ncp=3)
+#PCs to keep 50% of variance
+sapply(her2MFA$separate.analyses,function(x) sum(x$eig[,3]<50))+1
+#methy   RNA miRNA 
+#    8    15    16
+pdf("PCsHer2.pdf")
+lapply(1:3,function(x) fviz_eig(her2MFA$separate.analyses[[x]],
+	addlabels=F,ncp=45,main=names(her2MFA$separate.analyses)[x]))
 dev.off()
-#what if I keep 15 PC
-sapply(PCAmethy,function(x) x$eig[15,3])#var explained
-#   Basal     Her2     LumA     LumB   Normal 
-#52.89847 68.57905 46.55021 54.21850 75.06699 
-#check varibility
-temp=data.frame(do.call(rbind,lapply(1:5,function(x) 
-	cbind(names(PCAmethy)[x],
-	sample(PCAmethy[[x]]$call$ecart.type,10000)))))
-colnames(temp)=c("subtype","sde")
-temp$sde=as.numeric(as.character(temp$sde))
-png("standardErrorMethy.png")
- ggplot(temp,aes(y=sde,x=subtype))+geom_boxplot()
+#what if I keep 20 PC
+sapply(her2MFA$separate.analyses,function(x) x$eig[20,3])#var explained
+#   methy      RNA    miRNA 
+#76.37429 61.49526 61.38255 
+#mixed PCs
+png("PCsHer2.png")
+ fviz_screeplot(her2MFA,addlabels=F,ncp=45,main="global")
 dev.off()
+
 
 #For transcripts
 PCArna=lapply(concatenated,function(x) 
@@ -125,8 +118,8 @@ PCAomics=pbapply::pblapply(concatenated,function(x)
  scale.unit = TRUE,
  graph=F)))
 
-
-
+#################################
+###################3
 
 #lapply(concatenadas,function(x) sapply(x,function(y) summary(as.numeric(y))))
 #$normal
