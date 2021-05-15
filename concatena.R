@@ -3,69 +3,110 @@ library(FactoMineR)
 library(factorextra)
 
 
-subtypes=read.table("parallel-aracne/subtype.tsv",header=T,sep='\t')
-expre=fread("parallel-aracne/expreNormi.tsv")
-miR=fread("parallel-aracne/miRNormi.tsv")
+subtype=read.table("subtype.tsv",header=T,sep='\t')
+expre=fread("parallel-aracne/RNAseqnormalized.tsv")
+miR=fread("parallel-aracne/miRNAseqNormi.tsv")
 methy=fread("methyM.tsv")
 expre=as.matrix(expre[,2:ncol(expre)],rownames=expre$V1)
 miR=as.matrix(miR[,2:ncol(miR)],rownames=miR$V1)
 methy=as.matrix(methy[,2:ncol(methy)],rownames=methy$V1)
-
-nrow(expre)
-#[1] 17359
-nrow(miR)
-#[1] 669
-nrow(methy)
-#[1] 383408
 #choose methy order
-subtypes=subtypes[order(match(subtypes$barcode,colnames(methy))),]
-expre=expre[,order(match(colnames(expre),subtypes$barcode))]
-miR=miR[,order(match(colnames(miR),subtypes$barcode))]
-names(concatenated)=gsub("BRCA.","",levels(subtypes$subtype))
+subtype=subtype[order(match(subtype$samples,colnames(methy))),]
+expre=expre[,order(match(colnames(expre),subtype$samples))]
+miR=miR[,order(match(colnames(miR),subtype$samples))]
+
 #data per subtype
-concatenated=lapply(levels(subtypes$subtype),function(x) 
-	list(methy[,subtypes$subtype==x],expre[,subtypes$subtype==x],
-		miR[,subtypes$subtype==x]))
-
-#########################################drop near zero var features
-
+concatenated=lapply(levels(subtype$subtype),function(x) 
+	list(methy=methy[,subtype$subtype==x],
+		RNA=expre[,subtype$subtype==x],
+		miRNA=miR[,subtype$subtype==x]))
+names(concatenated)=levels(subtype$subtype)
 
 #########################################PCs per subtype & data
 #For CpGs
-PCAomics=lapply(concatenated,function(x) 
+PCAmethy=pbapply::pblapply(concatenated,function(x) 
 	PCA(t(x[[1]]),scale.unit = TRUE,graph=F))
-sapply(PCAomics,function(x) sum(x$eig[,3]<75)+1)
+sapply(PCAmethy,function(x) sum(x$eig[,3]<75)+1)
 # Basal   Her2   LumA   LumB Normal 
-#    64     28    148     74     54 
-sapply(PCAomics,function(x) nrow(x$eig))
+#    45     20    125     50     15 
+sapply(PCAmethy,function(x) sum(x$eig[,3]<50)+1)#~matches elbow
 # Basal   Her2   LumA   LumB Normal 
-#   125     45    422    145    100 
+#    13      8     20     12      3#better 1:4
+pdf("PCmethy.pdf")
+lapply(1:5,function(x) fviz_eig(PCAmethy[[x]],addlabels=F,
+	ncp=30,main=names(PCAmethy)[x]))
+dev.off()
+#what if I keep 15 PC
+sapply(PCAmethy,function(x) x$eig[15,3])#var explained
+#   Basal     Her2     LumA     LumB   Normal 
+#52.89847 68.57905 46.55021 54.21850 75.06699 
+#check varibility
+temp=data.frame(do.call(rbind,lapply(1:5,function(x) 
+	cbind(names(PCAmethy)[x],
+	sample(PCAmethy[[x]]$call$ecart.type,10000)))))
+colnames(temp)=c("subtype","sde")
+temp$sde=as.numeric(as.character(temp$sde))
+png("standardErrorMethy.png")
+ ggplot(temp,aes(y=sde,x=subtype))+geom_boxplot()
+dev.off()
+
 #For transcripts
-PCAomics=lapply(concatenated,function(x) 
+PCArna=lapply(concatenated,function(x) 
 	PCA(t(x[[2]]),scale.unit = TRUE,graph=F))
-sapply(1:5,function(x) sum(PCAomics[,x]$eig[,3]<75)+1)#PCs needed
-#[1]  68  28 169  79  38
-sapply(1:5,function(x) length(PCAomics[,x]$eig[,3]))#total PCs
-#[1] 125  45 422 145 100
+sapply(PCArna,function(x) sum(x$eig[,3]<50)+1)
+#    32     15     63     38     12 
+pdf("PCrna.pdf")
+lapply(1:5,function(x) fviz_eig(PCArna[[x]],addlabels=F,
+	ncp=50,main=names(PCArna)[x]))
+dev.off()
+#what if I keep 25 PC
+sapply(PCArna,function(x) x$eig[25,3])#var explained
+#   Basal     Her2     LumA     LumB   Normal 
+#42.90686 71.39674 29.40306 37.90650 72.93814 
+
 #For miRNAs
-PCAomics=lapply(concatenated,function(x) 
+PCAmir=lapply(concatenated,function(x) 
 	PCA(t(x[[3]]),scale.unit = TRUE,graph=F))
-sapply(PCAomics,function(x) sum(x$eig[,3]<75)+1)
+sapply(PCAmir,function(x) sum(x$eig[,3]<50)+1)
 # Basal   Her2   LumA   LumB Normal 
-#    64     28    148     74     54 
-sapply(PCAomics,function(x) nrow(x$eig))
-# Basal   Her2   LumA   LumB Normal 
-#   125     45    422    145    100 
+#    32     16     64     36     20 
+pdf("PCmiRNA.pdf")
+lapply(1:5,function(x) fviz_eig(PCAmir[[x]],addlabels=F,
+	ncp=50,main=names(PCAmir)[x]))
+dev.off()
+#what if I keep 25 PC
+sapply(PCAmir,function(x) x$eig[25,3])#var explained
+#   Basal     Her2     LumA     LumB   Normal 
+#42.28663 71.59183 26.04078 38.46184 58.49842 
+temp=data.frame(do.call(rbind,lapply(1:5,function(x) 
+ cbind(names(PCAmir)[x],
+ PCAmir[[x]]$call$ecart.type))))
+colnames(temp)=c("subtype","sde")
+temp$sde=as.numeric(as.character(temp$sde))
+png("standardErrormiR.png")
+ggplot(temp,aes(x=sde))+
+geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)
+dev.off()
+
+
+
+
+
+
+
+
+
+
+#########################################drop near zero var features
 
 ##########################################matrix per subtype
 concatenated=lapply(concatenated,function(x) do.call(rbind,x))
 sapply(concatenated,dim)
 #      Basal   Her2   LumA   LumB Normal
-#[1,] 401436 401436 401436 401436 401436
-#[2,]    126     46    423    146    101
+#[1,] 410813 410813 410813 410813 410813
+#[2,]    128     46    416    140     75
 lapply(1:5,function(x) write.table(concatenated[[x]],
-	paste(names(concatenated)[x],"txt",sep='.'),sep='\t',quote=F))
-
+	paste(names(concatenated)[x],"mtrx",sep='.'),sep='\t',quote=F))
 
 #########################################to go back
 files=list.files()
