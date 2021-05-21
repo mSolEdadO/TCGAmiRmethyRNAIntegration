@@ -2,7 +2,6 @@ library(data.table)
 library(FactoMineR)
 library(factorextra)
 
-
 subtype=read.table("subtype.tsv",header=T,sep='\t')
 expre=fread("parallel-aracne/RNAseqnormalized.tsv")
 miR=fread("parallel-aracne/miRNAseqNormi.tsv")
@@ -22,6 +21,15 @@ concatenated=lapply(levels(subtype$subtype),function(x)
 		miRNA=miR[,subtype$subtype==x]))
 names(concatenated)=levels(subtype$subtype)
 
+##########################################matrix per subtype
+concatenated=lapply(concatenated,function(x) do.call(rbind,x))
+sapply(concatenated,dim)
+#      Basal   Her2   LumA   LumB Normal
+#[1,] 410813 410813 410813 410813 410813
+#[2,]    128     46    416    140     75
+lapply(1:5,function(x) write.table(concatenated[[x]],
+	paste(names(concatenated)[x],"mtrx",sep='.'),sep='\t',quote=F))
+
 #########################################PCs per subtype & data
 her2MFA=MFA(t(her2),group=c(393132,17077,604),#size of categories
 	name.group=c("methy","RNA","miRNA"),graph=F,ncp=3)
@@ -29,18 +37,31 @@ her2MFA=MFA(t(her2),group=c(393132,17077,604),#size of categories
 sapply(her2MFA$separate.analyses,function(x) sum(x$eig[,3]<50))+1
 #methy   RNA miRNA 
 #    8    15    16
-pdf("PCsHer2.pdf")
-lapply(1:3,function(x) fviz_eig(her2MFA$separate.analyses[[x]],
-	addlabels=F,ncp=45,main=names(her2MFA$separate.analyses)[x]))
-dev.off()
 #what if I keep 20 PC
 sapply(her2MFA$separate.analyses,function(x) x$eig[20,3])#var explained
 #   methy      RNA    miRNA 
 #76.37429 61.49526 61.38255 
+#elbow plots
+pdf("PCsHer2.pdf")
+lapply(1:3,function(x) fviz_eig(her2MFA$separate.analyses[[x]],
+	addlabels=F,ncp=45,main=names(her2MFA$separate.analyses)[x]))
+dev.off()
+#sd per omic
+png("Her2sd.png")
+ ggplot(her2MFA$summary.quanti,aes(y=ecart.type,
+ 	x=names(her2MFA$separate.analyses)[her2MFA$summary.quanti$group]))+
+ 	geom_boxplot()+ylab("sd")+xlab("")+
+ 	scale_y_continuous(trans="log10")+
+ 	theme(text=element_text(size=18))
+dev.off()
 #mixed PCs
 png("PCsHer2.png")
  fviz_screeplot(her2MFA,addlabels=F,ncp=45,main="global")
 dev.off()
+#var distributions should be similar if the planned 
+#approach relies on correlation networks [PMC7303201]
+normalized=her2/her2MFA$global.pca$call$col.w#var=1 for all groups
+write.table(normalized,"Her2.normalized",sep='\t',quote=F)
 
 
 #For transcripts
@@ -91,15 +112,6 @@ dev.off()
 
 
 #########################################drop near zero var features
-
-##########################################matrix per subtype
-concatenated=lapply(concatenated,function(x) do.call(rbind,x))
-sapply(concatenated,dim)
-#      Basal   Her2   LumA   LumB Normal
-#[1,] 410813 410813 410813 410813 410813
-#[2,]    128     46    416    140     75
-lapply(1:5,function(x) write.table(concatenated[[x]],
-	paste(names(concatenated)[x],"mtrx",sep='.'),sep='\t',quote=F))
 
 #########################################to go back
 files=list.files()
