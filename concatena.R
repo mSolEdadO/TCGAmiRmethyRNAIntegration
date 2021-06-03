@@ -1,6 +1,4 @@
 library(data.table)
-library(FactoMineR)
-library(factorextra)
 
 subtype=read.table("subtype.tsv",header=T,sep='\t')
 expre=fread("parallel-aracne/RNAseqnormalized.tsv")
@@ -31,96 +29,108 @@ lapply(1:5,function(x) write.table(concatenated[[x]],
 	paste(names(concatenated)[x],"mtrx",sep='.'),sep='\t',quote=F))
 
 #########################################PCs per subtype & data
-her2MFA=MFA(t(her2),group=c(393132,17077,604),#size of categories
-	name.group=c("methy","RNA","miRNA"),graph=F,ncp=3)
+library(FactoMineR)
+library(factorextra)
+library(ggplot2)
+
+#function to wrap it all for the different subtypes
+check_var=function(data,name){
+#data has features in rows & samples in columns
+	print(name)
+	mfa=MFA(t(data),group=c(393132,17077,604),#size of categories
+	#mfa=MFA(t(data),group=c(10,10,10),#size of categories
+		name.group=c("methy","RNA","miRNA"),graph=F,ncp=3)
+	print("PCs to keep 50% of variance")
+	print(sapply(mfa$separate.analyses,function(x)
+	 	sum(x$eig[,3]<50))+1)
+	print("Variance when 20 PCs are kept")
+	print(sapply(mfa$separate.analyses,function(x) 
+		x$eig[20,3]))#var explained
+	#	x$eig[5,3]))#var explained
+	#elbow plots
+	pdf(paste(name,"pdf",sep='.'))
+	print({
+	lapply(1:3,function(x) fviz_eig(mfa$separate.analyses[[x]],
+		addlabels=F,ncp=50,main=names(mfa$separate.analyses)[x]))
+	})
+	dev.off()
+	#sd per omic
+	p=ggplot(mfa$summary.quanti,aes(y=ecart.type,
+		x=names(mfa$separate.analyses)[mfa$summary.quanti$group]))
+	p+geom_boxplot()+ylab("sd")+xlab("")+
+		scale_y_continuous(trans="log10")+
+	 	theme(text=element_text(size=18))
+	ggsave(file=paste(name,"sd.png",sep='.'))
+	print("Weights per omic")
+	print(unique(mfa$global.pca$call$col.w))
+	#mixed PCs
+	png(paste(name,"global","png",sep='.'))
+	print({
+	fviz_screeplot(mfa,addlabels=F,ncp=45,main="global")})
+	dev.off()
+#var distributions should be similar if the planned 
+#approach relies on correlation networks [Tarazona2020]
+#normalized=her2/her2MFA$global.pca$call$col.w#var=1 for all groups
+#write.table(normalized,"Her2.normalized",sep='\t',quote=F)
+#but sgcca output is the same for scaled data normalized data
+}
+
+#load a matrix per subtype
+files=list.files()
+files=files[grep("mtrx",files)]
+concatenated=lapply(files,fread)
+concatenated=lapply(concatenated,function(x) 
+	as.matrix(x[,2:ncol(x)],rownames=x$V1))
+names(concatenated)=gsub(".mtrx","",files)
+pblapply(1:4,function(x) check_var(concatenated[[x]],names(concatenated)[x]))
+#Basal
 #PCs to keep 50% of variance
-sapply(her2MFA$separate.analyses,function(x) sum(x$eig[,3]<50))+1
+#methy   RNA miRNA 
+#    8    32    32
+#Variance when 20 PCs are kept
+#   methy      RNA    miRNA 
+#76.37429 61.49526 61.38255
+#Weights per omic
+
+#Her2
+#PCs to keep 50% of variance
 #methy   RNA miRNA 
 #    8    15    16
-#what if I keep 20 PC
-sapply(her2MFA$separate.analyses,function(x) x$eig[20,3])#var explained
+#Variance when 20 PCs are kept
 #   methy      RNA    miRNA 
-#76.37429 61.49526 61.38255 
-#elbow plots
-pdf("PCsHer2.pdf")
-lapply(1:3,function(x) fviz_eig(her2MFA$separate.analyses[[x]],
-	addlabels=F,ncp=45,main=names(her2MFA$separate.analyses)[x]))
-dev.off()
-#sd per omic
-png("Her2sd.png")
- ggplot(her2MFA$summary.quanti,aes(y=ecart.type,
- 	x=names(her2MFA$separate.analyses)[her2MFA$summary.quanti$group]))+
- 	geom_boxplot()+ylab("sd")+xlab("")+
- 	scale_y_continuous(trans="log10")+
- 	theme(text=element_text(size=18))
-dev.off()
-#mixed PCs
-png("PCsHer2.png")
- fviz_screeplot(her2MFA,addlabels=F,ncp=45,main="global")
-dev.off()
-#var distributions should be similar if the planned 
-#approach relies on correlation networks [PMC7303201]
-normalized=her2/her2MFA$global.pca$call$col.w#var=1 for all groups
-write.table(normalized,"Her2.normalized",sep='\t',quote=F)
+#76.37429 61.49526 61.38255
+#Weights per omic
+# 
+#LumA
+#PCs to keep 50% of variance
+#methy   RNA miRNA 
+#    8    63    64
+#Variance when 20 PCs are kept
+#   methy      RNA    miRNA 
+#76.37429 61.49526 61.38255
+#Weights per omic
 
+#LumB
+#PCs to keep 50% of variance
+#methy   RNA miRNA 
+#    8    38    36
+#Variance when 20 PCs are kept
+#   methy      RNA    miRNA 
+#76.37429 61.49526 61.38255
+#Weights per omic
 
-#For transcripts
-PCArna=lapply(concatenated,function(x) 
-	PCA(t(x[[2]]),scale.unit = TRUE,graph=F))
-sapply(PCArna,function(x) sum(x$eig[,3]<50)+1)
-#    32     15     63     38     12 
-pdf("PCrna.pdf")
-lapply(1:5,function(x) fviz_eig(PCArna[[x]],addlabels=F,
-	ncp=50,main=names(PCArna)[x]))
-dev.off()
-#what if I keep 25 PC
-sapply(PCArna,function(x) x$eig[25,3])#var explained
-#   Basal     Her2     LumA     LumB   Normal 
-#42.90686 71.39674 29.40306 37.90650 72.93814 
-
-#For miRNAs
-PCAmir=lapply(concatenated,function(x) 
-	PCA(t(x[[3]]),scale.unit = TRUE,graph=F))
-sapply(PCAmir,function(x) sum(x$eig[,3]<50)+1)
-# Basal   Her2   LumA   LumB Normal 
-#    32     16     64     36     20 
-pdf("PCmiRNA.pdf")
-lapply(1:5,function(x) fviz_eig(PCAmir[[x]],addlabels=F,
-	ncp=50,main=names(PCAmir)[x]))
-dev.off()
-#what if I keep 25 PC
-sapply(PCAmir,function(x) x$eig[25,3])#var explained
-#   Basal     Her2     LumA     LumB   Normal 
-#42.28663 71.59183 26.04078 38.46184 58.49842 
-temp=data.frame(do.call(rbind,lapply(1:5,function(x) 
- cbind(names(PCAmir)[x],
- PCAmir[[x]]$call$ecart.type))))
-colnames(temp)=c("subtype","sde")
-temp$sde=as.numeric(as.character(temp$sde))
-png("standardErrormiR.png")
-ggplot(temp,aes(x=sde))+
-geom_density(aes(fill=subtype,color=subtype,y=..scaled..),alpha=0.3)
-dev.off()
-
-
-
-
-
-
-
-
-
+#Normal
+#PCs to keep 50% of variance
+#methy   RNA miRNA 
+#    8    12    20
+#Variance when 20 PCs are kept
+#   methy      RNA    miRNA 
+#76.37429 61.49526 61.38255
+#Weights per omic
 
 #########################################drop near zero var features
 
 #########################################to go back
-files=list.files()
-files=files[grep("txt",files)]
-library(data.table)
-concatenated=lapply(files,fread)
-concatenated=lapply(concatenated,function(x) 
-	as.matrix(x[,2:ncol(x)],rownames=x$V1))
-names(concatenated)=gsub(".txt","",files)
 concatenated=lapply(concatenated,function(y) 
 	apply(cbind(c(1,383409,400768),c(383408,400767,401436)),1,
 		function(x) y[x[1]:x[2],]))
@@ -192,3 +202,16 @@ lapply(concatenadas,function(x) summary(as.numeric(x)))
 #Basal
 #    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
 #-13.1357  -0.0875  -0.0497   0.0000  -0.0257 369.4758 
+
+
+
+##############
+#hay que correr lo que sigue ompimizando penalties
+ cca=wrapper.sgcca(normalized,penalty=c(1,.5,.3),ncomp=10,scale=T)
+#da lo mismo normalizada por eigenvalue que no normalizada
+#en features seleccionadas y en loadging values
+ cca=wrapper.sgcca(normalized,penalty=c(1,.5,.3),ncomp=10,scale=F)
+#selecciona todos los features de cada bloque
+
+#què significan los links entre nodos????
+#tiene caso normalizar???
