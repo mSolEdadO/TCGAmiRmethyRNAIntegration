@@ -152,5 +152,22 @@ colnames(prefi)=substr(colnames(prefi),1,19)
 final=cbind(prefi,temp)
 write.table(final,"methyM.tsv",sep='\t',quote=F)
 #2511M when tar.gz
+###########check final data#################################
+library(NOISeq)
 
 #u're dragging batch effects, use them as covariates when DM
+noiseqData = readData(data = final, factor=subtype)
+myPCA = dat(noiseqData, type = "PCA", norm = T, logtransf = T)
+#logtransf=F fails & norm=F flattens points
+png("PCA_methy_global.png")
+print({explo.plot(myPCA, samples = c(1,2), plottype = "scores",
+ factor = "subtype")})
+dev.off()
+png("PCA_methy_global_stage.png")
+print({explo.plot(myPCA, samples = c(1,2), plottype = "scores",
+ factor = "tumor_stage")})
+dev.off()
+png("PCA_methy_global_race.png")
+print({explo.plot(myPCA, samples = c(1,2), plottype = "scores",
+ factor = "race")})
+dev.off()
