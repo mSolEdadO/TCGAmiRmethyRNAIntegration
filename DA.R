@@ -53,7 +53,19 @@ ggplot(temp,aes(y=logFC,x=contrast,color=contrast))+
 dev.off()
 
 #################miRNA###########################################
+mir=fread("Downloads/miRNAseqNormi.tsv")
+mir=as.matrix(mir[,2:ncol(mir)],rownames=mir$V1)
 
+v=voom(mir,design,plot=T,save.plot=T)#no need if fitted curve is smooth
+fit=lmFit(v,design)
+fitSubtype = contrasts.fit(fit, contr.mtrx)
+tfitSubtype=treat(fitSubtype, lfc = log2(1.5))
+DE.miR=lapply(1:4,function(x) 
+	topTreat(tfitSubtype,coef=x,n=nrow(mir)))
+names(DE.miR)=c("Basal_Normal","Her2_Normal",
+	"LumA_Normal","LumB_Normal")
+sapply(1:4,function(x) sum(DE.miR[[x]]$adj.P.Val<0.01))
+#[1] 329 185 132 220
 #################methylation###########################################
 ##por ARSYN no hace falta este modelo tan complejo salvo para methy
 design=model.matrix(~0+subtype$subtype+subtype$tumor_stage+
