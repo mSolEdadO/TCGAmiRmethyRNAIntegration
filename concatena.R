@@ -28,9 +28,13 @@ sapply(concatenated,dim)
 lapply(1:5,function(x) write.table(concatenated[[x]],
 	paste(names(concatenated)[x],"mtrx",sep='.'),sep='\t',quote=F))
 
+#to go back
+#apply(cbind(c(1,393133,410210),c(393132,410209,410813)),1,
+#	function(x) data[x[1]:x[2],])
+
 #########################################PCs per subtype & data
 library(FactoMineR)
-library(factorextra)
+library(factoextra)
 library(ggplot2)
 
 #function to wrap it all for the different subtypes
@@ -39,7 +43,7 @@ check_var=function(data,name){
 	print(name)
 	mfa=MFA(t(data),group=c(393132,17077,604),#size of categories
 	#mfa=MFA(t(data),group=c(10,10,10),#size of categories
-		name.group=c("methy","RNA","miRNA"),graph=F,ncp=3)
+		name.group=c("CpGs","transcripts","miRNAs"),graph=F,ncp=3)
 	print("PCs to keep 50% of variance")
 	print(sapply(mfa$separate.analyses,function(x)
 	 	sum(x$eig[,3]<50))+1)
@@ -82,16 +86,18 @@ concatenated=lapply(files,fread)
 concatenated=lapply(concatenated,function(x) 
 	as.matrix(x[,2:ncol(x)],rownames=x$V1))
 names(concatenated)=gsub(".mtrx","",files)
-pblapply(1:4,function(x) check_var(concatenated[[x]],names(concatenated)[x]))
+pblapply(1:4,function(x) 
+	check_var(concatenated[[x]],names(concatenated)[x]))
+#~02d 23h 33m 41s
 #Basal
 #PCs to keep 50% of variance
 #methy   RNA miRNA 
-#    8    32    32
+#   13    32    32 
 #Variance when 20 PCs are kept
 #   methy      RNA    miRNA 
-#76.37429 61.49526 61.38255
+#58.33845 36.82078 35.84572 
 #Weights per omic
-
+#[1] 2.435986e-05 1.842977e-03 6.675847e-02
 #Her2
 #PCs to keep 50% of variance
 #methy   RNA miRNA 
@@ -100,118 +106,30 @@ pblapply(1:4,function(x) check_var(concatenated[[x]],names(concatenated)[x]))
 #   methy      RNA    miRNA 
 #76.37429 61.49526 61.38255
 #Weights per omic
-# 
+#[1] 2.010012e-05 0.001200744 0.0335368
 #LumA
 #PCs to keep 50% of variance
 #methy   RNA miRNA 
-#    8    63    64
+#    20    63    64
 #Variance when 20 PCs are kept
 #   methy      RNA    miRNA 
-#76.37429 61.49526 61.38255
+#50.15342 25.43620 21.87975 
 #Weights per omic
-
+#[1] 2.799981e-05 1.915935e-03 1.069552e-01
 #LumB
 #PCs to keep 50% of variance
 #methy   RNA miRNA 
-#    8    38    36
-#Variance when 20 PCs are kept
-#   methy      RNA    miRNA 
-#76.37429 61.49526 61.38255
-#Weights per omic
-
+#    12    38    36
+#
 #Normal
 #PCs to keep 50% of variance
 #methy   RNA miRNA 
-#    8    12    20
+#    3    12    20
 #Variance when 20 PCs are kept
-#   methy      RNA    miRNA 
-#76.37429 61.49526 61.38255
+#       CpGs transcripts      miRNAs 
+#   78.36429    66.41633    50.37623 
 #Weights per omic
+#[1] 8.721703e-06 7.684326e-04 4.049163e-02
 
-#########################################drop near zero var features
+##################################drop near zero var features???????''
 
-#########################################to go back
-concatenated=lapply(concatenated,function(y) 
-	apply(cbind(c(1,383409,400768),c(383408,400767,401436)),1,
-		function(x) y[x[1]:x[2],]))
-library(FactoMineR)
-PCAomics=pbapply::pblapply(concatenated,function(x)
- sapply(x,function(y) PCA(t(y),
- scale.unit = TRUE,
- graph=F)))
-
-#################################
-###################3
-
-#lapply(concatenadas,function(x) sapply(x,function(y) summary(as.numeric(y))))
-#$normal
-#           methy transcri        mir
-#Min.    -8.42100 -39100.0  -7370.000
-#Max.     8.40100 370900.0 911600.000
-#$LumA
-#           methy   transcri        mir
-#Min.    -8.37300 -1.046e+06 -1.646e+05
-#Max.     8.45200  3.383e+06  9.950e+05
-#$LumB
-#           methy   transcri        mir
-#Min.    -8.40200 -1.130e+06 -19390.000
-#Max.     8.45600  2.446e+06 937100.000
-#$Her2
-#          methy   transcri        mir
-#Min.    -8.3730 -719500.00 -1.864e+04
-#Max.     8.3530 3143000.00  1.068e+06
-#$Basal
-#          methy   transcri        mir
-#Min.    -8.5370 -1.196e+06 -26820.000
-#Max.     8.2840  3.294e+06 680800.000
-
-#since omics have different ranges →MFA weight
-evals=lapply(concatenadas,function(x) sapply(x,function(y) svd(y,nu=0,nv=0)))
-evals=lapply(evals,function(x) sapply(x,function(y) 1/sqrt(y[1])))
-#$LumA
-#     methy.d   transcri.d        mir.d 
-#0.0049129995 0.0002105128 0.0002012404 
-#$LumB
-#     methy.d   transcri.d        mir.d 
-#0.0066157577 0.0002897397 0.0002886322 
-#$normal
-#     methy.d   transcri.d        mir.d 
-#0.0072579414 0.0003289092 0.0003312752 
-#$Her2
-#     methy.d   transcri.d        mir.d 
-#0.0085562074 0.0003376987 0.0003486907 
-#$Basal
-#     methy.d   transcri.d        mir.d 
-#0.0065336421 0.0002825550 0.0003301057 
-concatenadas=lapply(1:5,function(x) scale(do.call(rbind,lapply(1:3,function(y) 
-	as.matrix(concatenadas[[x]][[y]]*evals[[x]][y])))))
-save(concatenadas,file="escaladas.RData")
-lapply(concatenadas,function(x) summary(as.numeric(x)))
-#$LumA
-#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#-49.0892  -0.0787  -0.0445   0.0000  -0.0225 396.1100 
-#$LumB
-#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-# -6.3675  -0.0844  -0.0489   0.0000  -0.0257 396.6516 
-#normal
-#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-# -2.9152  -0.0843  -0.0471   0.0000  -0.0237 379.8674 
-#Her2
-#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-# -6.0729  -0.0750  -0.0427   0.0000  -0.0227 413.7628 
-#Basal
-#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-#-13.1357  -0.0875  -0.0497   0.0000  -0.0257 369.4758 
-
-
-
-##############
-#hay que correr lo que sigue ompimizando penalties
- cca=wrapper.sgcca(normalized,penalty=c(1,.5,.3),ncomp=10,scale=T)
-#da lo mismo normalizada por eigenvalue que no normalizada
-#en features seleccionadas y en loadging values
- cca=wrapper.sgcca(normalized,penalty=c(1,.5,.3),ncomp=10,scale=F)
-#selecciona todos los features de cada bloque
-
-#què significan los links entre nodos????
-#tiene caso normalizar???
