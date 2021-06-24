@@ -6,19 +6,32 @@ raw=as.matrix(raw[,2:ncol(raw)],rownames=raw$V1)
 raw=apply(cbind(c(1,393133,410210),c(393132,410209,410813)),1,function(x) raw[x[1]:x[2],])
 normi=fread("Her2.normalized")
 normi=as.matrix(normi[,2:ncol(normi)],rownames=normi$V1)
-normi=apply(cbind(c(1,393133,410210),c(393132,410209,410813)),1,function(x) normi[x[1]:x[2],])
+normi=apply(cbind(c(1,393133,410210),c(393132,410209,410813)),1,function(x) t(normi[x[1]:x[2],]))
 names(raw)=c("CpGs","transcripts","miRNAs")
 names(normi)=c("CpGs","transcripts","miRNAs")
 
-#note: the penalty parameters will need to be tuned
 #op1:cca=wrapper.sgcca(raw,penalty=c(1,.5,.3),ncomp=5,scale=T)
 #op2:cca.n=wrapper.sgcca(normalized,penalty=c(1,.5,.3),ncomp=5,scale=F)
 #op3:cca.n1=wrapper.sgcca(normalized,penalty=c(1,.5,.3),ncomp=5,scale=T)
-#op1 y op3 seleccionan las mismas features,
-#pero con algunos loadgings y loadings.star distintos 
-#op1 converge (cca$crit) un poco antes que op3
-# NO tiene caso normalizar por eigenvalue
-#selectVar() se basa en loadings != 0, NO en loadings.star
+#op1 & op3 give the same results BUT op1 ends (cca$crit) faster
+#is raw data better???what if such covergence depends on penalties???
+#selectVar() is the same than loadings != 0, NOT loadings.star != 0
 
-#checa tune.block.splsda para implementar con caret
-#y tune.spls con X concatenada y escalada?
+#note: the penalty parameters will need to be tuned
+#sparsity parameters are chosen for each of the 10 MCCV iterations
+#using an internal 5-fold CV loop: the parameters that minimize the
+#prediction error [Tenenhaus2014]
+
+params_searcher=function(subtype,lCpG,ltranscri,lmir){
+	size=nrow(subtype$miRNAs)
+	i=sample(1:size,round(size/2))
+	data=lapply(subtype,function(y) y[i,])
+	results=wrapper.sgcca(data,penalty=c(lCpG,ltranscri,lmir),scale=T)#ncomp=1 for training
+	evar=as.data.frame(do.call(cbind,results$explained_variance))
+	evar$component=gsub("comp ","",rownames(evar))
+	evar=evar%>%pivot_longer(-component,names_to="omic",values_to="explained_variance")
+	features=as.data.frame(do.call(cbind,lapply(results$loadings,function(x) apply(x,2,function(y) sum(y!=0)))))
+	features$component=gsub("comp","",rownames(features))
+	features=features%>%pivot_longer(-component,names_to="omic",values_to="features")
+	return(merge(evar,features,by=c("component","omic")))}
+lapply(1:5,function(x) params_searcher())

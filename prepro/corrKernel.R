@@ -23,7 +23,7 @@ between_kernel_corr=function(data,subtype){
 subtype = commandArgs(trailingOnly=TRUE)
 #load data
 data=fread(paste(subtype,"mtrx",sep='.'))
-data=as.matrix(data[,2:ncol(data)],rownames=data$V1))
+data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
 #separate omics
 data=apply(cbind(c(1,393133,410210),c(393132,410209,410813)),
 #numbers change with the number of features
