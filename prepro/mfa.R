@@ -87,7 +87,11 @@ check_var(mtrx,name)
 #PCs to keep 50% of variance
 #methy   RNA miRNA 
 #    12    38    36
-#
+#"Variance when 20 PCs are kept"
+#       CpGs transcripts      miRNAs 
+#   58.67621    32.26742    32.46045 
+#[1] "Weights per omic"
+#[1] 1.547911e-05 2.198907e-03 7.503839e-02
 #Normal
 #PCs to keep 50% of variance
 #methy   RNA miRNA 
