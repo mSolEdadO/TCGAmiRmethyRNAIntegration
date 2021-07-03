@@ -16,7 +16,7 @@ params_searcher=function(subtype,lCpG,ltrnscri,lmir,count){
 	#save only the model's size
 	evar=as.data.frame(do.call(rbind,results$explained_variance))
 	features=as.data.frame(do.call(rbind,lapply(results$loadings,
-		function(x) sum(x!=0))))
+		function(x) sum(x!=0))))#number of selected features
 	out=cbind(evar,features,results$penalty)
 	out$omic=rownames(out)
 	colnames(out)[1:3]=c("explained_variance","nfeatures","sparsity")
@@ -69,3 +69,4 @@ write.table(combi,paste(subtype,lCpG,ltrnscri,lmir,"params",sep='_'),
 #sub=sapply(1:length(args),function(x) 
 #	paste(sub[1],args[x],sub[3],sub[4],sub[5],sub[6],sep='_'))
 #writeLines(sub,"temp")#add the lines on the needed resources
+
