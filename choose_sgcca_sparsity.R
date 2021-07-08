@@ -23,7 +23,8 @@ sapply(omics,function(x)
 
 ########sparsity of an omic affects selection of the other omics?
 #separate per miR sparsity
-i=as.character(sapply(grid,function(x) sapply(grid,function(y) paste("Her2",x,y,sep='_'))))
+i=as.character(sapply(grid,function(x) 
+	sapply(grid,function(y) paste("Her2",x,y,sep='_'))))
 temp=lapply(i,function(x) params[grep(x,files)])
 #effect of varying miR sparsity on transcript selection
 table(unlist(lapply(temp,function(x) sapply(1:9,function(y) sapply((y+1):10,function(z) wilcox.test(x[[y]]$nfeatures[x[[y]]$omic=="transcripts"],x[[z]]$nfeatures[x[[z]]$omic=="transcripts"],paired=T)$p.val))))<0.05,useNA="always")
@@ -37,7 +38,8 @@ table(unlist(lapply(temp,function(x) sapply(1:9,function(y) sapply((y+1):10,func
 #miR sparsity affects more CpG selection than transcript selection
 
 #separate per CpG sparsity
-i=as.character(sapply(grid,function(x) sapply(grid,function(y) paste(x,y,"params",sep='_'))))
+i=as.character(sapply(grid,function(x) 
+	sapply(grid,function(y) paste(x,y,"params",sep='_'))))
 temp=lapply(i,function(x) params[grep(x,files)])
 #effect of varying CpG sparsity on transcript selection
 table(unlist(lapply(temp,function(x) sapply(1:9,function(y) sapply((y+1):10,function(z) wilcox.test(x[[y]]$nfeatures[x[[y]]$omic=="transcripts"],x[[z]]$nfeatures[x[[z]]$omic=="transcripts"],paired=T)$p.val))))<0.05,useNA="always")
@@ -50,6 +52,9 @@ table(unlist(lapply(temp,function(x) sapply(1:9,function(y) sapply((y+1):10,func
 # 2867   729   904 
 #CpG sparsity affects more miR selection than transcript selection
 ######################separate per transcript sparsity
+i=as.character(sapply(grid,function(x) sapply(grid,function(y) paste("Her2",x,"0.*?",y,"params",sep='_'))))
+temp=lapply(intersect(i,j),function(x) params[grep(x,files)])
+#thus u CAN plot all together 
 
 ####################CHOOSING SPARSITY##########################
 #this ignores the sparsity value of non-ploted omics
@@ -99,3 +104,22 @@ sapply(omics,function(x) colMeans(temp[temp$omic==x,1:2]))
 #                           CpGs       miRNAs  transcripts
 #explained_variance 1.372375e-01   0.05925499 6.288162e-02
 #nfeatures          9.947385e+04 374.25000000 2.878450e+03
+################################
+nopen=wrapper.sgcca(data,penalty=c(1,1,1),scale=T)
+loadings=as.data.frame(do.call(rbind,nopen$loadings))
+loadings$omic=substr(rownames(loadings),1,1)
+loadings$omic=gsub("E","transcripts",gsub("h","miRNAs",
+	gsub("c","CpGs",loadings$omic)))
+loadings$omic=factor(loadings$omic,
+	levels=c("CpGs","transcripts","miRNAs"))
+png("loadings_l0.png")
+  ggplot(loadings,aes(y=comp1,x=omic))+geom_boxplot()+
+  ylab("loadings")+theme(text=element_text(size=18))
+dev.off()
+#transcript & miRNA loadings are normal distributed
+shapiro.test(sample(nopen$loadings$transcripts,5000))
+#W = 0.99956, p-value = 0.3302
+shapiro.test(nopen$loadings$miRNAs)
+#W = 0.99848, p-value = 0.8877
+shapiro.test(sample(nopen$loadings$CpGs,5000))
+#W = 0.98626, p-value < 2.2e-16
