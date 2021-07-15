@@ -51,7 +51,8 @@ png("logFC.png")
 ggplot(temp,aes(y=logFC,x=contrast,color=contrast))+
 	geom_boxplot()+theme(legend.position="none")
 dev.off()
-
+#write.table(temp,"DE.genes.tsv",sep='\t',quote=F)
+#next:GSEA
 #################miRNA###########################################
 mir=fread("Downloads/miRNAseqNormi.tsv")
 mir=as.matrix(mir[,2:ncol(mir)],rownames=mir$V1)

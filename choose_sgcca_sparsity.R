@@ -49,7 +49,7 @@ plots=lapply(levels(results$omic),function(i)
 	ggplot(results[results$omic==i,],aes(x=nfeatures,
 		y=AVE,color=sparsity))+geom_point()+ggtitle(i)+
 	theme(text=element_text(size=18)))
-png("sparsity_search.png")
+#png("sparsity_search.png")
  grid.arrange(plots[[1]],plots[[2]],plots[[3]])
  #no facet_wrap coz u want indy axes
 dev.off()
@@ -70,7 +70,7 @@ sapply(30:22,function(x) (results$AVE[x]-results$AVE[x-1])/(results$nfeatures[x]
 
 #####################CHECK LOADINGS
 init=wrapper.sgcca(data,penalty=c(1,1,1),scale=T)
-final=wrapper.sgcca(data,penalty=c(0.2,0.6,0.5),scale=T)
+final=wrapper.sgcca(data,penalty=c(0.2,0.6,0.5),scale=T,scheme="centroid",ncomp=16)
 
 loadings=as.data.frame(do.call(rbind,init$loadings))
 loadings$omic=substr(rownames(loadings),1,1)
@@ -116,3 +116,5 @@ plots=lapply(unique(temp$omic),function(x)
 png("loadings_change.png")
  grid.arrange(plots[[1]],plots[[2]],plots[[3]])
 dev.off()
+
+##############why the fuck do I have chrY cpgs?????????????''
