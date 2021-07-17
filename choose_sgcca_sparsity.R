@@ -1,17 +1,49 @@
 #aim: find a sparsity value per omic that maximizes evar &
 # minimizes nfeatures
+######################PIMP DATA AS NEEDED
+library(data.table)
+#data=fread(paste(subtype,"normalized",sep='.'))
+data=fread("Her2.normalized")
+data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
+#separate omics
+data=apply(cbind(c(1,393133,410210),c(393132,410209,410813)),1,
+	function(x) t(data[x[1]:x[2],]))
+names(data)=c("CpGs","transcripts","miRNAs")
+tfs=readLines("TFs_Ensembl_v_1.01.txt")
+#https://www.cell.com/cell/fulltext/S0092-8674(18)30106-5?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS0092867418301065%3Fshowall%3Dtrue
+data$TFs=data$transcripts[,colnames(data$transcripts)%in%tfs]
+
+#separate transcripts per enriched biological process
+library(HTSanalyzeR)
+library(org.Hs.eg.db)
+library(GO.db)
+library(biomaRt)
+enriched=read.table("fgseaRes.tsv",sep='\t',header=T)
+#enrich_GSEA.R output without leading edges
+enriched=enriched[enriched$contrast=="Her2_Normal",]
+GS_GO_BP<-GOGeneSets(species="Hs",ontologies=c("BP"))                    
+GS_GO_BP=GS_GO_BP[names(GS_GO_BP)%in%enriched$pathway]
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+myannot=getBM(attributes = c("ensembl_gene_id","entrezgene_id"),
+	mart=mart)
+myannot=myannot[myannot$entrezgene_id%in%unlist(GS_GO_BP),]
+perBP=lapply(GS_GO_BP,function(x) 
+	data$transcripts[,colnames(data$transcripts)%in%
+	myannot$ensembl_gene_id[myannot$entrezgene_id%in%x]])
+
+data$transcripts=NULL
+#sapply(data,ncol)
+#  CpGs miRNAs    TFs 
+#393132    604   1500
+######################NARROW DOWN SPARSITY VALUES
 library(ggplot2)
 library(gridExtra)
 library(mixOmics)
 library(tidyverse)
 library(pbapply)
 
-######################NARROW DOWN SPARSITY VALUES
-grid=seq(0,.9,.1)
-temp=pblapply(grid,function(x) 
-	wrapper.sgcca(data,penalty=c(x,1,1),scale=T))
 #take model descriptors<-----------------recycled
-describe=function(resus,names){
+describe=function(resus,names,omic){
 	AVE=as.data.frame(sapply(resus,function(x) 
 		do.call(rbind,x$AVE[[1]])))
 	nfeat=as.data.frame(sapply(resus,function(x) 
@@ -26,51 +58,54 @@ describe=function(resus,names){
 		values_to="nfeatures")
 	toplot=merge(nfeat,AVE,by=c("omic","sparsity"))
 	#force order
-	toplot$omic=factor(toplot$omic,levels=c("CpGs","transcripts","miRNAs"))
+	#toplot$omic=factor(toplot$omic,levels=c("CpGs","transcripts","miRNAs"))
 	toplot$sparsity=as.numeric(toplot$sparsity)
+	toplot=toplot[toplot$omic==omic,]
 return(toplot)}
 
+grid=c(seq(0,.1,.02),seq(0.2,.9,.1))
+temp=pblapply(grid,function(x) 
+	wrapper.sgcca(data,penalty=c(x,1,1),scale=T,scheme="centroid"))
 results=list()
-results$CpGs=describe(temp,grid)
-results$CpGs=results$CpGs[results$CpGs$omic=="CpGs",]
+results$CpGs=describe(temp,grid,"CpGs")
 temp=pblapply(grid,function(x) 
-	wrapper.sgcca(data,penalty=c(1,x,1),scale=T))
-results$transcripts=describe(temp,grid)
-results$transcripts=results$transcripts[results$
-	transcripts$omic=="transcripts",]
+	wrapper.sgcca(data,penalty=c(1,x,1),scale=T,scheme="centroid"))
+results$miRNAs=describe(temp,grid,"miRNAs")
 temp=pblapply(grid,function(x) 
-	wrapper.sgcca(data,penalty=c(1,1,x),scale=T))
-results$miRNAs=describe(temp,grid)
-results$miRNAs=results$miRNAs[results$
-	miRNAs$omic=="miRNAs",]
+	wrapper.sgcca(data,penalty=c(1,1,x),scale=T,scheme="centroid"))
+results$TFs=describe(temp,grid,"TFs")
 results=do.call(rbind,results)
 
 plots=lapply(levels(results$omic),function(i) 
 	ggplot(results[results$omic==i,],aes(x=nfeatures,
 		y=AVE,color=sparsity))+geom_point()+ggtitle(i)+
-	theme(text=element_text(size=18)))
-#png("sparsity_search.png")
+		scale_x_continuous(trans="log10")+
+		theme(text=element_text(size=18)))
+png("sparsity_search.png")
  grid.arrange(plots[[1]],plots[[2]],plots[[3]])
  #no facet_wrap coz u want indy axes
 dev.off()
-#turn it analytical by choosing the point when the slop changes????
-sapply(10:2,function(x) (description$AVE[x]-description$AVE[x-1])/
-	(description$nfeatures[x]-description$nfeatures[x-1]))
-#[1] 4.265165e-08 3.532026e-08 3.315587e-08 4.461965e-08 5.877692e-08
-#[6] 7.409449e-08 2.620996e-07 4.787702e-07 9.293855e-06
-#sparsity: 0.2-0.3 for CpGs
-sapply(20:12,function(x) (results$AVE[x]-results$AVE[x-1])/(results$nfeatures[x]-results$nfeatures[x-1]))
-#[1]  7.945155e-08  8.699518e-08  1.455164e-07  2.795368e-07  7.898728e-07
-#[6]  1.674634e-06  1.457345e-06 -2.883192e-06  5.426026e-06
-#sparsity: 0.6-0.7 for transcripts
-sapply(30:22,function(x) (results$AVE[x]-results$AVE[x-1])/(results$nfeatures[x]-results$nfeatures[x-1]))
-#[1] -9.330695e-08  1.483156e-07  4.117869e-07  3.723666e-06  5.615809e-06
-#[6]  1.169444e-05  2.834565e-05  4.721406e-05  2.599923e-04
-#sparsity: 0.5-0.6 for miRNAs
+
+#turn it analyticalish by choosing the largest fall in AVE
+sc=which.max(sapply(14:2,function(x) (results$AVE[x]-results$AVE[x-1])))
+results$sparsity[14:2][s]
+#[1] 0.04"
+#choosen sparsity
+sm=which.max(sapply(28:16,function(x) (results$AVE[x]-results$AVE[x-1])))
+results$sparsity[28:16][s]
+#[1] 0.2
+st=which.max(sapply(42:30,function(x) (results$AVE[x]-results$AVE[x-1])))
+results$sparsity[42:30][s]
+#[1] 0.2
+
+##############SGCCA PER BP
+test=pblapply(perBP[1:2],function(x) wrapper.sgcca(X=list(CpGs=data$CpGs,
+	TFs=data$TFs,BP=x,miRNAs=data$miRNAs),penalty=c(sc,st,1,sm),
+	scale=T,scheme="centroid",ncomp=15))
+#ncomp to explain 50% of transcripts matrix, found with mfa.R
 
 #####################CHECK LOADINGS
 init=wrapper.sgcca(data,penalty=c(1,1,1),scale=T)
-final=wrapper.sgcca(data,penalty=c(0.2,0.6,0.5),scale=T,scheme="centroid",ncomp=16)
 
 loadings=as.data.frame(do.call(rbind,init$loadings))
 loadings$omic=substr(rownames(loadings),1,1)
@@ -117,4 +152,3 @@ png("loadings_change.png")
  grid.arrange(plots[[1]],plots[[2]],plots[[3]])
 dev.off()
 
-##############why the fuck do I have chrY cpgs?????????????''
