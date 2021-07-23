@@ -7,7 +7,6 @@ comps=args[3]
 
 ######################MATRIX TO LIST OF MOLECULAR LEVELS
 library(data.table)
-#data=fread(paste(subtype,"normalized",sep='.'))
 data=fread(paste(subtype,"normalized",sep='.'))
 data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
 #separate omics
@@ -20,21 +19,21 @@ tfs=unique(unlist(strsplit(as.character(tfs$TF),',')))
 #[1] 991 lot less than https://doi.org/10.1016/j.cell.2018.01.029
 #BUT tftargets does have an evidence based list of interactions
 data$TFs=data$transcripts[,colnames(data$transcripts)%in%tfs]
+print(sapply(data,ncol))
 
 #######KEEP ONLY THE TRANSCRIPTS FOR A BIOLOGICAL PROCESS
-library(HTSanalyzeR)
 library(org.Hs.eg.db)
 library(GO.db)
 library(biomaRt)
-GS_GO_BP<-GOGeneSets(species="Hs",ontologies=c("BP"))                    
-GS_GO_BP=unlist(GS_GO_BP[names(GS_GO_BP)==BP])
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-myannot=getBM(attributes = c("ensembl_gene_id","entrezgene_id"),
-	mart=mart)
-myannot=myannot[myannot$entrezgene_id%in%unlist(GS_GO_BP),]
-data$BP=data$transcripts[,colnames(data$transcripts)%in%
-	myannot$ensembl_gene_id[myannot$entrezgene_id%in%GS_GO_BP]])
+print("Checking GO ID in biomaRt")#this takes a loooong time
+geneSet<- getBM(attributes=c('ensembl_gene_id', 'go_id'),filters = 'go',
+ values = BP, mart = mart)
+#using BP as filter outputs other GOs eitherway
+geneSet=unique(gene.data$ensembl_gene_id[gene.data$go_id==BP])
+data$BP=data$transcripts[,colnames(data$transcripts)%in%geneSet]
 data$transcripts=NULL
+print(sapply(data,ncol))
 
 ######################CHOOSE SPARSITY VALUES
 #sparsity parameters are chosen for each of the 10 MCCV iterations
@@ -101,6 +100,7 @@ sm=which.max(sapply(42:30,function(x) (results$AVE[x]-results$AVE[x-1])))
 sm=results$sparsity[42:30][sm]
 
 ##############################GET SELECTED FEATURES
+print("Final SGCCA")
 temp=wrapper.sgcca(X=data,penalty=c(sc,st,sm,1),scale=T,
 	scheme="centroid",ncomp=comps))#ncomp to explain 50% of transcripts matrix according to mfa.R
 output=rbind(rowSums(do.call(rbind,temp$AVE$AVE_X)),temp$penalty)
