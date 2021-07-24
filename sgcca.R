@@ -3,7 +3,8 @@
 args=commandArgs(trailingOnly=TRUE)
 subtype=args[1]
 BP=args[2]
-comps=args[3]
+components=as.numeric(args[3])
+print(components)
 
 ######################MATRIX TO LIST OF MOLECULAR LEVELS
 library(data.table)
@@ -19,20 +20,20 @@ tfs=unique(unlist(strsplit(as.character(tfs$TF),',')))
 #[1] 991 lot less than https://doi.org/10.1016/j.cell.2018.01.029
 #BUT tftargets does have an evidence based list of interactions
 data$TFs=data$transcripts[,colnames(data$transcripts)%in%tfs]
-print(sapply(data,ncol))
 
 #######KEEP ONLY THE TRANSCRIPTS FOR A BIOLOGICAL PROCESS
-library(org.Hs.eg.db)
-library(GO.db)
 library(biomaRt)
+
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-print("Checking GO ID in biomaRt")#this takes a loooong time
+print(paste0("Checking "BP" in biomaRt"))#this takes a loooong time
 geneSet<- getBM(attributes=c('ensembl_gene_id', 'go_id'),filters = 'go',
  values = BP, mart = mart)
 #using BP as filter outputs other GOs eitherway
-geneSet=unique(gene.data$ensembl_gene_id[gene.data$go_id==BP])
+geneSet=unique(geneSet$ensembl_gene_id[geneSet$go_id==BP])
 data$BP=data$transcripts[,colnames(data$transcripts)%in%geneSet]
 data$transcripts=NULL
+#avoid corr(x,x)=1
+data$TFs=data$TFs[,!colnames(data$TFs)%in%colnames(data$BP)]
 print(sapply(data,ncol))
 
 ######################CHOOSE SPARSITY VALUES
@@ -67,29 +68,32 @@ describe=function(resus,names,omic){
 	toplot=toplot[toplot$omic==omic,]
 return(toplot)}
 
+print("CpG sparsity")
 grid=c(seq(0,.1,.02),seq(0.2,.9,.1))
 temp=pblapply(grid,function(x) 
 	wrapper.sgcca(data,penalty=c(x,1,1,1),scale=T,scheme="centroid"))
 #centroid scheme enable two components to be negatively correlated
 results=list()
 results$CpGs=describe(temp,grid,"CpGs")
+print("miRNA sparsity")
 temp=pblapply(grid,function(x) 
 	wrapper.sgcca(data,penalty=c(1,x,1,1),scale=T,scheme="centroid"))
 results$miRNAs=describe(temp,grid,"miRNAs")
+print("TF sparsity")
 temp=pblapply(grid,function(x) 
 	wrapper.sgcca(data,penalty=c(1,1,x,1),scale=T,scheme="centroid"))
 results$TFs=describe(temp,grid,"TFs")
 results=do.call(rbind,results)
 
-plots=lapply(levels(results$omic),function(i) 
-	ggplot(results[results$omic==i,],aes(x=nfeatures,
-		y=AVE,color=sparsity))+geom_point()+ggtitle(i)+
-		scale_x_continuous(trans="log10")+
-		theme(text=element_text(size=18)))
-png(paste(subtype,BP,"png",sep='.'))
-	print({grid.arrange(plots[[1]],plots[[2]],plots[[3]])})
- #no facet_wrap coz u want indy axes
-dev.off()
+#plots=lapply(levels(results$omic),function(i) 
+#	ggplot(results[results$omic==i,],aes(x=nfeatures,
+#		y=AVE,color=sparsity))+geom_point()+ggtitle(i)+
+#		scale_x_continuous(trans="log10")+
+#		theme(text=element_text(size=18)))
+#png(paste(subtype,BP,"png",sep='.'))
+#	print({grid.arrange(plots[[1]],plots[[2]],plots[[3]])})
+#no facet_wrap coz u want indy axes
+#dev.off()
 
 #turn it analyticalish by choosing the largest fall in AVE
 sc=which.max(sapply(14:2,function(x) (results$AVE[x]-results$AVE[x-1])))
@@ -100,20 +104,29 @@ sm=which.max(sapply(42:30,function(x) (results$AVE[x]-results$AVE[x-1])))
 sm=results$sparsity[42:30][sm]
 
 ##############################GET SELECTED FEATURES
+library(igraph)
+
 print("Final SGCCA")
-temp=wrapper.sgcca(X=data,penalty=c(sc,st,sm,1),scale=T,
-	scheme="centroid",ncomp=comps))#ncomp to explain 50% of transcripts matrix according to mfa.R
+temp=wrapper.sgcca(X=data,penalty=c(sc,sm,st,1),scale=T,
+	scheme="centroid",ncomp=components)#ncomp to explain 50% of transcripts matrix according to mfa.R
 output=rbind(rowSums(do.call(rbind,temp$AVE$AVE_X)),temp$penalty)
 rownames(output)=c("sum_AVE","penalty")
 write.table(output,paste(subtype,BP,"descriptors",sep='.'),sep='\t',
 	quote=F)
 #selectVar() is the same than loadings != 0, NOT loadings.star != 0
-output=lapply(temp$loadings,function(x) x[rowSums(x!=0)>0,])
-lapply(1:4,function(x) 
-	write.table(output[[x]],
-		paste(subtype,BP,names(output)[x],sep='.'),
-		sep='\t',quote=F))
+#output=lapply(temp$loadings,function(x) x[rowSums(x!=0)>0,])
+#lapply(1:4,function(x) 
+#	write.table(output[[x]],
+#		paste(subtype,BP,names(output)[x],sep='.'),
+#		sep='\t',quote=F))
 
+g=lapply(1:components,function(x) network(temp,comp=list(CpGs=x,
+	TFs=x,miRNAs=x,BP=x),blocks=1:4)$gR)
+edges=do.call(rbind,lapply(g,function(x) 
+	as.data.frame(cbind(get.edgelist(x),E(x)$weight))))
+colnames(edges)=c("source","target","corr")
+write.table(edges,paste(subtype,BP,"net",sep='.'),sep='\t',quote=F,
+	row.names=F)
 #####ISSUE
 #como tienes un número diferente de features para cada BP, no sabes
 #si un BP tiene mejor AVE que otros, por los valores de penalty
