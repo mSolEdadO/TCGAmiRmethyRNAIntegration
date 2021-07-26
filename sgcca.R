@@ -25,14 +25,14 @@ data$TFs=data$transcripts[,colnames(data$transcripts)%in%tfs]
 library(biomaRt)
 
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-print(paste0("Checking "BP" in biomaRt"))#this takes a loooong time
+print(paste("Checking",BP,"in biomaRt"))#this takes a loooong time
 geneSet<- getBM(attributes=c('ensembl_gene_id', 'go_id'),filters = 'go',
  values = BP, mart = mart)
 #using BP as filter outputs other GOs eitherway
 geneSet=unique(geneSet$ensembl_gene_id[geneSet$go_id==BP])
 data$BP=data$transcripts[,colnames(data$transcripts)%in%geneSet]
 data$transcripts=NULL
-#avoid corr(x,x)=1
+#avoid selecting TFs that are transcripts from BP
 data$TFs=data$TFs[,!colnames(data$TFs)%in%colnames(data$BP)]
 print(sapply(data,ncol))
 
@@ -122,6 +122,7 @@ write.table(output,paste(subtype,BP,"descriptors",sep='.'),sep='\t',
 
 g=lapply(1:components,function(x) network(temp,comp=list(CpGs=x,
 	TFs=x,miRNAs=x,BP=x),blocks=1:4)$gR)
+dev.off()#to avoid pdf issues
 edges=do.call(rbind,lapply(g,function(x) 
 	as.data.frame(cbind(get.edgelist(x),E(x)$weight))))
 colnames(edges)=c("source","target","corr")
