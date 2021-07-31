@@ -120,9 +120,9 @@ write.table(output,paste(subtype,BP,"descriptors",sep='.'),sep='\t',
 #		paste(subtype,BP,names(output)[x],sep='.'),
 #		sep='\t',quote=F))
 
+source("function_networkAlt.R")#with no plotting
 g=lapply(1:components,function(x) network(temp,comp=list(CpGs=x,
-	TFs=x,miRNAs=x,BP=x),blocks=1:4)$gR)
-dev.off()#to avoid pdf issues
+	TFs=x,miRNAs=x,BP=x),blocks=1:4)$gR)#to avoid pdf issues
 edges=do.call(rbind,lapply(g,function(x) 
 	as.data.frame(cbind(get.edgelist(x),E(x)$weight))))
 colnames(edges)=c("source","target","corr")
