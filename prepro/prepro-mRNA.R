@@ -140,7 +140,6 @@ library(EDASeq)
 #CPM=(counts/fragments sequenced)*one million.
 #Filtering those genes with average CPM below 1, would be different
 #to filtering by those with average counts below 1. 
-#####sigo lo de Diana porque proportion.test, cpm >1 pierde a MIA
 countMatrixFiltered = filtered.data(exprots_hgnc, factor = "subtype",
  norm = FALSE, depth = NULL, method = 1, cpm = 0, p.adj = "fdr")
 #17077 features are to be kept for differential expression analysis with filtering method 1
