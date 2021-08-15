@@ -2,30 +2,40 @@
 
 BP=$1
 echo "Building data for $BP"
-Rscript BP.R $BP
-noncpgs=$(echo "data/$BP.txt")
-cat ${BP}>${noncpgs}
-grep -v 'probes' Her2.TFs>>${noncpgs}
-grep -v 'probes' Her2.miRNAs>>${noncpgs}
-cpgs=$(echo "data/$BP-cpgs.txt")
-cat ${BP}>${cpgs}
-grep -v 'probes' Her2.CpGs>>${cpgs}
+cd data/
+Rscript ../BP.R $BP
+if [[ ! -f "$BP" ]];then exit 1; fi
+noncpgs=$(echo "$BP.txt")
+cat $BP>$noncpgs
+grep -v 'probes' Her2.TFs >> $noncpgs
+grep -v 'probes' Her2.miRNAs >> $noncpgs
+cpgs=$(echo "$BP-cpgs.txt")
+cat $BP>$cpgs
+grep -v 'probes' Her2.CpGs>>$cpgs
 
 echo "Building submit file"
+cd ../
 Rscript submit_file.R $BP
 sub=$(echo "$BP.sub")
-cat sub|perl -pe 's/\t/\n/g'>temp
-cat condor.header temp>${sub}
+cat $sub|perl -pe 's/\t/\n/g'>temp
+cat condor.header temp>$sub
 
-echo "Submiting jobs"
 condor_submit $sub
-
-#when all jobs are done, get the sif with comments of kernel size...
-#erase intemediate files
-a=$(condor_q -run)
-echo $a|wc
-while $a>1; wait
+echo "Waiting for aracne to end" 
+aim=$(wc -l bp.txt|cut -d' ' -f1)
+echo "$aim" #107
+aim=$(expr $aim + $aim )
+echo "$aim" #214
+done=$(ls data/|grep -c 'adj')
+echo "$done" #0
+while [ $done -le $aim ]; do 
+	done=$(ls data/|grep -c 'adj');
+	echo "$done";
+	sleep 5;done #se queda pasmado, se produce adj aunque no halla interacciones? quiza estas esperando algo que no va a pasar
+echo "Building sif file"	
 line=$(echo "bin/adj2sif data/$BP_*.adj>$BP.sif")
 eval $line
-rm *output *log *error
-rm data/*adj
+
+echo "Removing intemediate files"
+#rm *output *log *error $sub
+#rm data/*adj data/*txt data/GO\:*
