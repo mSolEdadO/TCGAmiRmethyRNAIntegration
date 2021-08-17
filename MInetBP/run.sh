@@ -17,25 +17,22 @@ echo "Building submit file"
 cd ../
 Rscript submit_file.R $BP
 sub=$(echo "$BP.sub")
+if [[ ! -f "$sub" ]];then exit 1; fi
 cat $sub|perl -pe 's/\t/\n/g'>temp
 cat condor.header temp>$sub
 
 condor_submit $sub
 echo "Waiting for aracne to end" 
-aim=$(wc -l bp.txt|cut -d' ' -f1)
-echo "$aim" #107
-aim=$(expr $aim + $aim )
-echo "$aim" #214
-done=$(ls data/|grep -c 'adj')
-echo "$done" #0
-while [ $done -le $aim ]; do 
-	done=$(ls data/|grep -c 'adj');
-	echo "$done";
-	sleep 5;done #se queda pasmado, se produce adj aunque no halla interacciones? quiza estas esperando algo que no va a pasar
+aim=$(condor_q|grep 'jobs'|cut -d' ' -f1)
+while [ $aim -gt 0 ]; do 
+	echo "$aim";
+	aim=$(condor_q|grep 'jobs'|cut -d' ' -f1);
+	sleep 5;
+done
 echo "Building sif file"	
-line=$(echo "bin/adj2sif data/$BP_*.adj>$BP.sif")
+line=$(echo "bin/adj2sif data/$BP*.adj>$BP.sif")
 eval $line
-
 echo "Removing intemediate files"
-#rm *output *log *error $sub
-#rm data/*adj data/*txt data/GO\:*
+rm *output *log *error $sub bp.txt temp
+rm data/GO\:*
+####does not come back after ending
