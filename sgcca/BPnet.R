@@ -33,7 +33,7 @@ edges=edges[substr(edges$source,1,1)!="c",]
 #add CGI info
 temp=temp[order(temp$source),]
 i=table(temp$source)
-temp$CGI=unlist(sapply(1:2979,function(x) 
+temp$CGI=unlist(sapply(1:length(i),function(x) 
 	rep(methy$CGI_Coordinate[methy$ID==names(i)[x]],i[x])))
 
 g=graph.data.frame(temp[,c(2,4)],directed=F)#targets to CGI
@@ -41,6 +41,7 @@ E(g)$cor=as.numeric(temp$corr)
 #magic happens here
 g1=simplify(g,edge.attr.comb=list(cor=function(x) 
 	median(abs(x)),name="ignore"))
+print(paste("Components in subnetwork:",components(g1)$no),sep=' ')
 edgesAlt=as.data.frame(get.edgelist(g1))
 edgesAlt$corr=E(g1)$cor
 edgesAlt=rbind(as.matrix(edgesAlt),as.matrix(edges))

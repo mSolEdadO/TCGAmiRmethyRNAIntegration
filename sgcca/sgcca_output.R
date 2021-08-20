@@ -59,7 +59,7 @@ cor.test(temp$sum_AVE,temp$nfeatures,method="spearman")#best method???
 #-0.3159477 
 #small but significant cor between axes
 
-################### choose edges
+################### choose edges?
 lala=descri[descri$BP%in%levels(descri$BP)[1:6],]
 ##I want only the most important correlations BUT, throwing edges
 # also throws BP transcripts
@@ -68,4 +68,4 @@ png("Cov.vs.Edges.png")
  scale_y_continuous(trans="log10")+geom_point()+facet_wrap(~BP,ncol=3,
  nrow=2)+theme(text=element_text(size=18))
 dev.off()
-#so I can not choose easily some edges → check MI nets
+#so I CAN NOT choose edges based on correlation
