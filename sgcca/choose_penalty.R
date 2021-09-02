@@ -32,19 +32,35 @@ describe=function(data,pc,pt,pm){
 		scheme="centroid")
 	#get results description
 	description=as.data.frame(do.call(rbind,resus$AVE$AVE_X))
-	description$nfeat=sapply(resus$loadings,function(x) sum(x!=0))
+	description$nfeatures=sapply(resus$loadings,function(x) sum(x!=0))
 	description$omic=rownames(description)
 	description$penalty=resus$penalty
 	colnames(description)[1]="AVE"
 return(description)}
 
-results=do.call(rbind,lapply(1:5,function(x) #5 subsamplings're enough???
-	describe(data,penalty_cpgs,penalty_transcripts,penalty_mir)))
-write.table(results,
-	paste(subtype,penalty_cpgs,penalty_transcripts,penalty_mir,
-	sep='.'),sep='\t',quote=F,rownames=F)
-
-#############################################
-#grid=c(seq(0.01,.1,.01),seq(0.3,.9,.2))
+#this block is for cluster
+#results=do.call(rbind,lapply(1:10,function(x) #are 10 subsamplings enough???
+#	describe(data,penalty_cpgs,penalty_transcripts,penalty_mir)))
+#write.table(results,
+#	paste(subtype,penalty_cpgs,penalty_transcripts,penalty_mir,
+#	sep='.'),sep='\t',quote=F,rownames=F)
+#use this for making the submit file
+#grid=seq(0.01,0.9,length=10)#first values tested
 #sub=readLines("condor.seed")
-results=pblapply(grid,function(x) sapply(grid,function(y) sapply(grid,function(z) describe(data,x,y,z))))
+#args=as.character(sapply(grid,function(x) 
+#	sapply(grid,function(y) sapply(grid,function(z)
+#	paste("Her2",x,y,z,sep=' ')))))
+#temp=lapply(args,function(x) gsub("Her2 0.01 0.01 0.01",x,sub))
+#writeLines(unlist(temp),"temp")
+#cat temp|perl -pe 's/\t/\n/g'>temp1
+#cat condor.header temp1>penalty.sub
+
+#this block is for your lap
+grid=seq(0.01,0.1,0.01)
+resus=pblapply(grid,function(x) lapply(grid,function(y) 
+	lapply(grid,function(z) describe(data,x,y,z))))
+resus=do.call(rbind,lapply(resus,function(x) 
+	do.call(rbind,lapply(x,function(y) do.call(rbind,y)))))
+write.table("penalty_search.tsv",sep='\t',quote=F,row.names=F)
+
+
