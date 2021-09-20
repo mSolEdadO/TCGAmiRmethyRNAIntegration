@@ -1,16 +1,11 @@
-#if input is from cluster
-#files=list.files()
-#files=files[grep("params",files)]
-#temp=lapply(files,read.table,head=T)
-#temp=do.call(rbind,temp)
-
-#if input is from your lap
 temp=read.table("penalty_search.tsv",sep='\t',header=T)
 
 #######################################DIAGNOSTIC PLOTS
 library(ggplot2)
+library(gridExtra)
 
 temp$omic=factor(temp$omic,levels=c("CpGs","transcripts","miRNAs"))
+temp=temp[order(temp$penalty),]
 png("AVE.png",width=800)
  ggplot(temp,aes(y=AVE,x=as.character(round(penalty,2)),
  group=penalty))+geom_boxplot()+facet_wrap(~omic)+xlab("penalty")+
@@ -30,30 +25,34 @@ omics=lapply(omics,function(x) temp[temp$omic==x,])
 omics=lapply(omics,function(x) as.data.frame(apply(x,2,as.numeric)))
 names(omics)=levels(temp$omic)
 omics=lapply(omics,function(y) sapply(unique(y$penalty),function(x) 
-apply(y[y$penalty==x,],2,median)))
+apply(y[y$penalty==x,],2,median)))#better than mean?
 omics=lapply(omics,function(x) as.data.frame(t(x)))
 #indi plots or CpGs will determine axis
 plots=lapply(1:3,function(x) ggplot(omics[[x]],
 	aes(x=nfeatures,y=AVE,col=penalty))+geom_point()+
 	ggtitle(names(omics)[x])+theme(text=element_text(size=18))+
 	scale_x_continuous(trans="log10")+geom_line())
-png("sparsity_search_0.png")
+png("sparsity_search.png")
  grid.arrange(plots[[1]],plots[[2]],plots[[3]])
 dev.off()
 
 #######################################PENALTIES SUGGESTED BY PLOTS
-grid=seq(0.01,0.1,0.01)
-#grid=seq(0.01,0.9,length=10)# first grid, tested in the cluster
+grid=unique(temp$penalty)
 slopes=lapply(omics,function(y) sapply(1:(length(grid)-1),function(x) 
 	(y$AVE[x+1]-y$AVE[x])/(y$nfeatures[x+1]-y$nfeatures[x])))
-slopes$miRNAs[abs(slopes$miRNAs)=="Inf"]=NA
-penalty=sapply(slopes,function(x) grid[which.max(x)+1])
-#the first grid selects always 0.1088889 as penalty
-#so it was necesary to check for a grid with smaller values
-#2nd grid selects
-#       CpGs transcripts      miRNAs 
-#       0.05        0.03        0.08 
+slopes1=lapply(omics,function(y) sapply(1:(length(grid)-1),function(x) 
+	abs(y$AVE[x+1]-y$AVE[x])/abs(y$nfeatures[x+1]-y$nfeatures[x])))
 
+slopes$miRNAs[abs(slopes$miRNAs)=="Inf"]=NA
+slopes$transcripts[abs(slopes$transcripts)=="Inf"]=NA
+penalty=sapply(slopes,function(x) grid[which.max(x)+1])
+#       CpGs transcripts      miRNAs 
+#       0.02        0.03        0.08 
+#slopes1
+#       CpGs transcripts      miRNAs 
+#       0.02        0.10        0.08
+#if u want the point before the biggest drop in AVE
+#transcripts penalty should be 0.09 
 #######################################FINAL SGCCA
 library(igraph)
 library(mixOmics)
@@ -70,10 +69,10 @@ names(data)=c("CpGs","transcripts","miRNAs")
 
 final=wrapper.sgcca(X=data,penalty=penalty,scale=T,
 	scheme="centroid",ncomp=15)#ncomp to explain 50% of transcripts matrix according to mfa.R
-output=rbind(rowSums(do.call(rbind,temp$AVE$AVE_X)),temp$penalty)
+output=rbind(rowSums(do.call(rbind,final$AVE$AVE_X)),final$penalty)
 rownames(output)=c("sum_AVE","penalty")
 #             CpGs transcripts    miRNAs
-#sum_AVE 0.4714325   0.4188032 0.4021734
+#sum_AVE 0.5015248   0.4251959 0.4041626
 #penalty 0.0500000   0.0300000 0.0800000
 
 #######################################CHECK ENRICHMENTS
@@ -103,17 +102,14 @@ enrichBP=lapply(sets,function(y)
  	universe= universo, 
  	hits=as.character(y),
  	minGeneSetSize = 15, 
- 	pAdjustMethod = "fdr"))
+ 	pAdjustMethod = "fdr")))
 sapply(enrichBP,function(x) sum(x$Adjusted.Pvalue<0.05))
 #no positive results
 #observed hits per component stay<6
-sapply(enrichKEGG,function(x) max(x[,5]))
- comp1  comp2  comp3  comp4  comp5  comp6  comp7  comp8  comp9 comp10 comp11 
-     3      2      2      4      3      2      3      2      4      2      1 
-comp12 comp13 comp14 comp15 
-     2      3      2      3 
-> sapply(enrichBP,function(x) max(x[,5]))
- comp1  comp2  comp3  comp4  comp5  comp6  comp7  comp8  comp9 comp10 comp11 
-     3      2      2      2      4      2      2      3      5      2      2 
-comp12 comp13 comp14 comp15 
-     3      2      2      3 
+enrichKEGG=lapply(sets,function(y)
+	as.data.frame(multiHyperGeoTest(collectionOfGeneSets=GS_KEGG,
+ 	universe= universo, 
+ 	hits=as.character(y),
+ 	minGeneSetSize = 15, 
+ 	pAdjustMethod = "fdr")))
+sapply(enrichKEGG,function(x) sum(x$Adjusted.Pvalue<0.05))
