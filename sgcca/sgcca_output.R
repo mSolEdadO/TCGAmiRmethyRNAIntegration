@@ -1,71 +1,64 @@
-#######################net at different cor.value
-library(data.table)
-library(igraph)
+#######################################CHECK ENRICHMENTS
 library(biomaRt)
-library(tidyverse)
+library(org.Hs.eg.db)
+library(KEGG.db)
+library(HTSanalyzeR)
+library("stringr")
+library(GO.db)
+library(GSEABase)
 
-files=list.files()
-files=files[grep("net",files)]
+#get transcripts per component
+selected=apply(final$loadings$transcripts,2,function(x) 
+	rownames(final$loadings$transcripts)[x!=0])
+#around 22 per pc with penalty
+#around 253 per pc with penalty1
+#get dbs 
+GS_KEGG<-KeggGeneSets(species = "Hs")
+GS_GO_BP<-GOGeneSets(species="Hs",ontologies=c("BP"))                    
+diccionario_kegg<-as.list(KEGGPATHID2NAME)
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-descri=lapply(files,function(y) {
-	net=fread(y);
-	BP=gsub(".net","",gsub("Her2.","",y))
-	geneSet<- getBM(attributes=c('ensembl_gene_id', 'go_id'),
-		filters = 'go',values = BP, mart = mart);
-	geneSet=unique(geneSet$ensembl_gene_id[geneSet$go_id==BP]);
-	size=sapply(seq(0,.9,.1),function(x) {
-	g=graph.data.frame(net[net$corr>x,1:2],directed=F);
-	edges=ecount(g);
-	nodes=V(g)$name;
-	bpNodes=sum(nodes%in%geneSet)
-	descri=list(edges=edges,CpGs=sum(substr(nodes,1,1)=="c"),
-		TFs=sum(substr(nodes,1,1)=="E")-bpNodes,
-		miRNAs=sum(substr(nodes,1,1)=="h"),
-		BP=bpNodes)
-	return(descri)})
-})
-descri=do.call(rbind,lapply(1:length(descri),function(x) 
-	cbind(gsub(".net","",gsub("Her2.","",files[x])),
-		rownames(descri[[x]]),descri[[x]])))
-colnames(descri)=c("BP","feature",seq(0,0.9,0.1))
-rownames(descri)=NULL
-descri=as.data.frame(as.matrix(descri))
-descri=as.data.frame(descri%>%pivot_longer(-c(1,2),names_to="cor",
-	values_to="nfeature"))
+myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol",
+	"entrezgene_id"), mart=mart)
+universo=as.character(myannot$entrezgene_id[!is.na(myannot$entrezgene_id)])
+#transform to entrez id
+sets=lapply(selected,function(y) myannot$entrezgene_id[myannot$ensembl_gene_id%in%y])
+sets=lapply(sets,function(x) x[!is.na(x)])
+#enrichment of biological processes
+enrichBP=lapply(sets,function(y)
+	as.data.frame(multiHyperGeoTest(collectionOfGeneSets=GS_GO_BP,
+ 	universe= universo, 
+ 	hits=as.character(y),
+ 	minGeneSetSize = 15, 
+ 	pAdjustMethod = "fdr")))
+#make it a data.frame
+enrichBP=lapply(enrichBP,function(x) x[x$Adjusted.Pvalue<0.05,])
+enrichBP=do.call(rbind,lapply(which(sapply(enrichBP,nrow)>0),
+	function(x) cbind(names(enrichBP)[x],rownames(enrichBP[[x]]),
+		enrichBP[[x]])))
+colnames(enrichBP)[1:2]=c("PC","GO")
+enrichBP$name=Term(as.character(enrichBP$GO))
+fl="http://current.geneontology.org/ontology/subsets/goslim_agr.obo"
+slim <- getOBOCollection(fl)
+bpGroups=goSlim(myCollection, slim, "BP")
 
-####################choose BPs to describe
-library(ggplot2)
 
-files=list.files()
-files=files[grep("descri",files)]
-data=lapply(files,read.table)
-#verify is the same order
-#sum(sapply(strsplit(files,".",fixed=T),function(x) x[2])==unique(descri$BP))
-#df to plot
-temp=sapply(unique(descri$BP),function(x) 
-	sum(descri$nfeature[descri$BP==x&descri$feature!="edges"&descri$cor==0]))
-temp=as.data.frame(cbind(sapply(data,function(x) x[1,4]),temp))
-colnames(temp)=c("sum_AVE","nfeatures")
-png("quadrants.png")
-ggplot(temp,aes(x=nfeatures,y=sum_AVE))+geom_vline(aes(xintercept=1e4))+
-geom_hline(aes(yintercept=.5))+geom_point()+
-scale_x_continuous(trans="log10")+theme(text=element_text(size=18))
-dev.off()
-#most BPs are fairly explained by selected features
-#since ncomp is the same, non-explained BPs may depend on other omics
-cor.test(temp$sum_AVE,temp$nfeatures,method="spearman")#best method???
-#S = 22761, p-value = 0.03051
-#       rho 
-#-0.3159477 
-#small but significant cor between axes
 
-################### choose edges?
-lala=descri[descri$BP%in%levels(descri$BP)[1:6],]
-##I want only the most important correlations BUT, throwing edges
-# also throws BP transcripts
-png("Cov.vs.Edges.png")
- ggplot(lala,aes(x=cor,y=nfeature,color=feature))+geom_line()+
- scale_y_continuous(trans="log10")+geom_point()+facet_wrap(~BP,ncol=3,
- nrow=2)+theme(text=element_text(size=18))
-dev.off()
-#so I CAN NOT choose edges based on correlation
+#net per enriched component
+source("function_networkAlt.R")
+g=network(final,comp=list(CpGs=7,transcripts=7,miRNAs=7),
+	blocks=1:3)$gR
+temp=as.data.frame(get.edgelist(g))
+temp$cor=E(g)$weight
+
+enrichKEGG=lapply(sets,function(y)
+	as.data.frame(multiHyperGeoTest(collectionOfGeneSets=GS_KEGG,
+ 	universe= universo, 
+ 	hits=as.character(y),
+ 	minGeneSetSize = 15, 
+ 	pAdjustMethod = "fdr")))
+enrichKEGG=lapply(enrichKEGG,function(x) x[x$Adjusted.Pvalue<0.05,])
+enrichKEGG=do.call(rbind,lapply(which(sapply(enrichKEGG,nrow)>0),
+	function(x) cbind(names(enrichKEGG)[x],rownames(enrichKEGG[[x]]),
+		enrichKEGG[[x]])))
+colnames(enrichKEGG)[1:2]=c("PC","hsa")
+enrichKEGG$name=unlist(sapply(gsub("hsa","",enrichKEGG$hsa),function(x) diccionario_kegg[names(diccionario_kegg)%in%x]))

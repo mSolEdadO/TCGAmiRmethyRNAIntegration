@@ -39,7 +39,7 @@ dev.off()
 #######################################PENALTIES SUGGESTED BY PLOTS
 grid=unique(temp$penalty)
 #slopes=lapply(omics,function(y) sapply(1:(length(grid)-1),function(x) 
-#	(y$AVE[x+1]-y$AVE[x])/(y$nfeatures[x+1]-y$nfeatures[x])))
+#	y$AVE[x+1]-y$AVE[x]))
 slopes1=lapply(omics,function(y) sapply(1:(length(grid)-1),function(x) 
 	abs(y$AVE[x+1]-y$AVE[x])/abs(y$nfeatures[x+1]-y$nfeatures[x])))
 
@@ -51,6 +51,9 @@ slopes1$transcripts[abs(slopes1$transcripts)=="Inf"]=NA
 #slopes1
 #       CpGs transcripts      miRNAs 
 #       0.02        0.10        0.08
+#LumB
+#       0.02        0.02        0.09 
+
 #if u want the point before the biggest drop in AVE
 #transcripts penalty should be 0.09 
 penalty1[2]=0.09
@@ -68,8 +71,6 @@ names(data)=c("CpGs","transcripts","miRNAs")
 
 final=wrapper.sgcca(X=data,penalty=penalty1,scale=T,
 	scheme="centroid",ncomp=20)#ncomp to explain 50% of transcripts matrix according to mfa.R
-output=rbind(rowSums(do.call(rbind,final$AVE$AVE_X)),final$penalty)
-rownames(output)=c("sum_AVE","penalty")
 
 #####PLOT LOADINGS
 temp=lapply(final$loadings,as.numeric)
