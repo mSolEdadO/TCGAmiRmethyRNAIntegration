@@ -1,59 +1,54 @@
 #!/usr/bin/env Rscript
-
-name = commandArgs(trailingOnly=TRUE)
-#print("I'm in")
 library(data.table)
 library(FactoMineR)
 library(factoextra)
 library(ggplot2)
 
-#function to wrap it all for the different subtypes
-check_var=function(data,name){
-#data has features in rows & samples in columns
-	print(name)
-	mfa=MFA(t(data),group=c(393132,17077,604),#size of categories
+files=list.files()
+files=files[grep("mtrx",files)]
+data=lapply(files,fread)
+data=lapply(data,function(x) as.matrix(x[,2:ncol(x)],rownames=x$V1))
+data=do.call(cbind,data)#all subtypes together
+
+mfa=MFA(t(data),group=c(393132,17077,604),#size of categories
 	#mfa=MFA(t(data),group=c(10,10,10),#size of categories
 		name.group=c("CpGs","transcripts","miRNAs"),graph=F,ncp=3)
-	print("PCs to keep 50% of variance")
+
+print("PCs to keep 50% of variance")
 	print(sapply(mfa$separate.analyses,function(x)
 	 	sum(x$eig[,3]<50))+1)
-	print("Variance when 20 PCs are kept")
-	print(sapply(mfa$separate.analyses,function(x) 
-		x$eig[20,3]))#var explained
-	#	x$eig[5,3]))#var explained
-	#elbow plots
-	pdf(paste(name,"pdf",sep='.'))
-	print({
-	lapply(1:3,function(x) fviz_eig(mfa$separate.analyses[[x]],
-		addlabels=F,ncp=50,main=names(mfa$separate.analyses)[x]))
-	})
-	dev.off()
-	#sd per omic
-	write.table(mfa$summary.quanti,paste(name,"ecart",sep='.'),sep='\t',quote=F)
-	p=ggplot(mfa$summary.quanti,aes(y=ecart.type,
-		x=names(mfa$separate.analyses)[mfa$summary.quanti$group]))
-	p+geom_boxplot()+ylab("sd")+xlab("")+
-		scale_y_continuous(trans="log10")+
-	 	theme(text=element_text(size=18))
-	ggsave(file=paste(name,"sd.png",sep='.'))
-	print("Weights per omic")
-	print(unique(mfa$global.pca$call$col.w))
-	#mixed PCs
-	png(paste(name,"global","png",sep='.'))
-	print({
-	fviz_screeplot(mfa,addlabels=F,ncp=45,main="global")})
-	dev.off()
+print("PCs to keep 75% of variance")
+	print(sapply(mfa$separate.analyses,function(x)
+	 	sum(x$eig[,3]<75))+1)
+pdf(paste(name,"pdf",sep='.'))
+print({
+lapply(1:3,function(x) fviz_eig(mfa$separate.analyses[[x]],
+	addlabels=F,ncp=50,main=names(mfa$separate.analyses)[x]))
+})
+dev.off()
+write.table(mfa$summary.quanti,paste(name,"ecart",sep='.'),sep='\t',quote=F)
+p=ggplot(mfa$summary.quanti,aes(y=ecart.type,
+	x=names(mfa$separate.analyses)[mfa$summary.quanti$group]))
+p+geom_boxplot()+ylab("sd")+xlab("")+
+	scale_y_continuous(trans="log10")+
+ 	theme(text=element_text(size=18))
+ggsave(file=paste(name,"sd.png",sep='.'))
+print("Weights per omic")
+print(unique(mfa$global.pca$call$col.w))
+#mixed PCs
+png(paste(name,"global","png",sep='.'))
+print({
+fviz_screeplot(mfa,addlabels=F,ncp=45,main="global")})
+dev.off()
+
 #var distributions should be similar if the planned 
 #approach relies on correlation networks [Tarazona2020]
-#normalized=her2/her2MFA$global.pca$call$col.w#var=1 for all groups
-#write.table(normalized,"Her2.normalized",sep='\t',quote=F)
+normalized=data/mfa$global.pca$call$col.w#var=1 for all groups
+subtype=read.table("subtype.tsv",header=T,sep='\t')
+lapply(levels(subtype$subtype),function(x)
+	write.table(normalized[,colnames(normalized)%in%subtype$samples[subtype$subtype==x]],
+	paste(x,"normalized",sep='.'),sep='\t',quote=F))
 #but sgcca output is the same for scaled data normalized data
-}
-
-mtrx=fread(paste(name,"mtrx",sep='.'))
-mtrx=as.matrix(mtrx[,2:ncol(mtrx)],rownames=mtrx$V1)
-check_var(mtrx,name)
-
 
 ##################################RESULTS##############################
 #Basal
