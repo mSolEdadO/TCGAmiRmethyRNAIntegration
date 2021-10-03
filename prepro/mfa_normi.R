@@ -19,5 +19,7 @@ pcs=PCA(data, scale.unit = TRUE, ncp = 2, graph = F)
 #print("eigenvalue > 1 indicates the PC accounts for more variance than original variables")
 #print(sum(pcs$eig[,1]>1))
 w=pcs$svd$vs[1]
-normi=data/w
+normi=t(data)/w
 write.table(normi,paste(omic,"eigenNormi",sep='.'),sep='\t',quote=F)
+
+
