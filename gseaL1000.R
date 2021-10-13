@@ -1,7 +1,11 @@
+#for the cluster
+#gsea per perturbation
+########
+
 #!/usr/bin/env Rscript
 args=commandArgs(trailingOnly=TRUE)
-cells=args[1]
-perturbation=args[2]
+cells=args[1]#like BT20, MDAMB231
+perturbation=args[2]#colname of the perturbation matrix
 library(data.table)
 
 ###################GET SETS
@@ -14,7 +18,7 @@ library(data.table)
 #             mart=mart)
 #get community data
 #files=list.files()
-#files=files[grep("comm",files)]
+#files=files[grep("comm",files)]#tables with columns: gene & community
 #merge all in a data.frame
 #communities=lapply(files,read.csv,header=T)
 #communities=data.frame(do.call(rbind,lapply(1:4,function(x) 
@@ -28,7 +32,8 @@ library(data.table)
 #communities$name=paste(communities[,3],"community",communities$community,sep='')
 #write.table(communities[,c(1,4,5)],"communities.tsv",sep='\t',quote=F,row.names=F)
 communities=read.table("communities.tsv",sep='\t',header=T)
-data=fread(paste(cells,"mtrx",sep='.'))
+data=fread(paste(cells,"mtrx",sep='.'))#output of L1000_subset
+#colummns are perturbations and rows are genes
 data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
 #print(dim(data))
 #separate by community

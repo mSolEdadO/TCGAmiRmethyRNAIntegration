@@ -2,8 +2,9 @@
 library(cTRAP)
 
 ###################GET L1000 METADATA
-cells=commandArgs(trailingOnly=TRUE)
+cells=commandArgs(trailingOnly=TRUE)#like BT20, MDAMB231
 
+#exchange comments for GSE70138
 meta=loadCMapData("cmapMetadata.txt", type="metadata")
 #https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE92742&format=file&file=GSE92742_Broad_LINCS_sig_info.txt.gz
 #meta=loadCMapData("GSE70138_Broad_LINCS_sig_metrics_2017-03-06.txt",

@@ -37,27 +37,24 @@ write.table(do.call(rbind,launched[!names(launched)%in%cells]),
 
 
 ########################ARE COMMUNITIES THE SAME ACROSS NETS???
-library(biomaRt)
-library(HTSanalyzeR)
-
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://apr2019.archive.ensembl.org")
-myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","mirbase_id","external_gene_name","entrezgene"), mart=mart)
+#library(biomaRt)
+#library(HTSanalyzeR)
+#mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",host="http://apr2019.archive.ensembl.org")
+#myannot=getBM(attributes = c("ensembl_gene_id","hgnc_symbol","chromosome_name","mirbase_id","external_gene_name","entrezgene"), mart=mart)
 #used ensembl ids since communities original ids are of this type
-universo=as.character(myannot$ensembl_gene_id)
-
-communities=read.table("communities.tsv",sep='\t',header=T)
-communities$group=gsub("community[0-9]+","",communities$name,perl=T)
-sets=lapply(unique(communities$group),function(x) communities[communities$group==x,])
-sets=lapply(sets,function(x) 
-	lapply(unique(x$name),function(y) x$genes[x$name==y]))
-
-sameSet=temp=lapply(1:3,function(x) lapply((x+1):4,function(z) 
-	do.call(rbind,lapply(sets[[x]],function(y)
-	 multiHyperGeoTest(collectionOfGeneSets=sets[[z]],
-	 	universe=universo,hits=as.character(y),minGeneSetSize=15,
-	 	pAdjustMethod="fdr")))))
+#universo=as.character(myannot$ensembl_gene_id)
+#communities=read.table("communities.tsv",sep='\t',header=T)
+#communities$group=gsub("community[0-9]+","",communities$name,perl=T)
+#sets=lapply(unique(communities$group),function(x) communities[communities$group==x,])
+#sets=lapply(sets,function(x) 
+#	lapply(unique(x$name),function(y) x$genes[x$name==y]))
+#sameSet=temp=lapply(1:3,function(x) lapply((x+1):4,function(z) 
+#	do.call(rbind,lapply(sets[[x]],function(y)
+#	 multiHyperGeoTest(collectionOfGeneSets=sets[[z]],
+#	 	universe=universo,hits=as.character(y),minGeneSetSize=15,
+#	 	pAdjustMethod="fdr")))))
 #modules contain the same genes
-sapply(sameSet,function(x) sapply(x,function(y) sum(y[,7]<0.05)))
+#sapply(sameSet,function(x) sapply(x,function(y) sum(y[,7]<0.05)))
 #[[1]]
 #[1] 23 24 24
 #[[2]]
