@@ -1,79 +1,104 @@
-#!/usr/bin/env Rscript
+temp=read.table("penalty_search.tsv",sep='\t',header=T)
 
-args=commandArgs(trailingOnly=TRUE)
-penalty_cpgs=args[2]
-penalty_transcripts=args[3]
-penalty_mir=args[4]
+#######################################DIAGNOSTIC PLOTS
+library(ggplot2)
+library(gridExtra)
 
-######################DATA TO LIST OF MATRIXES PER MOLECULAR LEVEL
+temp$omic=factor(temp$omic,levels=c("CpGs","transcripts","miRNAs"))
+temp=temp[order(temp$penalty),]
+png("AVE.png",width=800)
+ ggplot(temp,aes(y=AVE,x=as.character(round(penalty,2)),
+ group=penalty))+geom_boxplot()+facet_wrap(~omic)+xlab("penalty")+
+ theme(text=element_text(size=18),
+ axis.text.x = element_text(angle = 45))
+dev.off()
+png("nfeatures.png",width=800)
+ ggplot(temp,aes(y=nfeatures,x=as.character(round(penalty,2)),
+ group=penalty))+geom_boxplot()+facet_wrap(~omic)+xlab("penalty")+
+ theme(text=element_text(size=18),
+ axis.text.x = element_text(angle = 45))+
+ scale_y_continuous(trans="log10")
+dev.off()
+#plot median AVE vs meadian nfeatures
+omics=levels(temp$omic)
+omics=lapply(omics,function(x) temp[temp$omic==x,])
+omics=lapply(omics,function(x) as.data.frame(apply(x,2,as.numeric)))
+names(omics)=levels(temp$omic)
+omics=lapply(omics,function(y) sapply(unique(y$penalty),function(x) 
+apply(y[y$penalty==x,],2,median)))#better than mean?
+omics=lapply(omics,function(x) as.data.frame(t(x)))
+#indi plots or CpGs will determine axis
+plots=lapply(1:3,function(x) ggplot(omics[[x]],
+	aes(x=nfeatures,y=AVE,col=penalty))+geom_point()+
+	ggtitle(names(omics)[x])+theme(text=element_text(size=18))+
+	scale_x_continuous(trans="log10")+geom_line())
+png("sparsity_search.png")
+ grid.arrange(plots[[1]],plots[[2]],plots[[3]])
+dev.off()
+
+#######################################PENALTIES SUGGESTED BY PLOTS
+grid=unique(temp$penalty)
+#slopes=lapply(omics,function(y) sapply(1:(length(grid)-1),function(x) 
+#	y$AVE[x+1]-y$AVE[x]))
+slopes1=lapply(omics,function(y) sapply(1:(length(grid)-1),function(x) 
+	abs(y$AVE[x+1]-y$AVE[x])/abs(y$nfeatures[x+1]-y$nfeatures[x])))
+
+slopes1$miRNAs[abs(slopes1$miRNAs)=="Inf"]=NA
+slopes1$transcripts[abs(slopes1$transcripts)=="Inf"]=NA
+#penalty=sapply(slopes,function(x) grid[which.max(x)+1])
+#       CpGs transcripts      miRNAs 
+#       0.02        0.03        0.08 
+#slopes1
+#       CpGs transcripts      miRNAs 
+#       0.02        0.10        0.08
+#LumB
+#       0.02        0.02        0.09 
+
+#if u want the point before the biggest drop in AVE
+#transcripts penalty should be 0.09 
+penalty1[2]=0.09
+#######################################FINAL SGCCA
+library(igraph)
+library(mixOmics)
 library(data.table)
 
-sizes=c(Basal=129,Her2=47,LumA=417,LumB=141,Normal=76)
-#1 more than the samples coz of the rownames 
-i=lapply(sizes,function(x) c(1,sample(2:x,10)))
-
-files=list.files()
-files=files[grep("eigeN",files)]
-data=lapply(1:5,function(x) fread(files[x],select=i[[x]]))
-data=lapply(data,function(x) as.matrix(x[,2:ncol(x)],rownames=x$V1))
-data=cbind(data)
-#n=ncol(data)
-#subn=round(n*.5)
+data=fread(paste(subtype,"normalized",sep='.'))
+data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
 #separate omics
 data=apply(cbind(c(1,393133,410210),c(393132,410209,410813)),1,
 	function(x) t(data[x[1]:x[2],]))
 names(data)=c("CpGs","transcripts","miRNAs")
 
-######################CHECK SPARSITY VALUES
-#sparsity parameters are chosen for each of the 10 MCCV iterations
-#using an internal 5-fold CV loop: the parameters that minimize the
-#prediction error [Tenenhaus2014]
+final=wrapper.sgcca(X=data,penalty=penalty1,scale=T,
+	scheme="centroid",ncomp=20)#ncomp to explain 50% of transcripts matrix according to mfa.R
 
-library(mixOmics)
+#####PLOT LOADINGS
+temp=lapply(final$loadings,as.numeric)
+temp=data.frame(do.call(rbind,lapply(1:3,function(x) 
+	cbind(names(temp)[x],temp[[x]]))))
+colnames(temp)=c("omic","loading")
+temp$omic=factor(temp$omic,levels=c("CpGs","transcripts","miRNAs"))
+png("loadings.png")
+ ggplot(temp[temp$loadings!=0,],aes(x=omic,y=loadings))+
+ geom_boxplot()+theme(text=element_text(size=18))
+dev.off()
 
-#take model descriptors<-----------------recycled
-describe=function(data,pc,pt,pm){
-	#subsample observations
-	#data=lapply(data,function(x) x[sample(1:n,subn),])
-	resus=wrapper.sgcca(data,penalty=c(pc,pt,pm),scale=T,
-		scheme="centroid")
-	#get results description
-	description=as.data.frame(do.call(rbind,resus$AVE$AVE_X))
-	description$nfeatures=sapply(resus$loadings,function(x) sum(x!=0))
-	description$omic=rownames(description)
-	description$penalty=resus$penalty
-	colnames(description)[1]="AVE"
-return(description)}
+initial=wrapper.sgcca(X=final$X,penalty=rep(1,3),scale=T,
+	scheme="centroid",ncomp=20)#ncomp to explain 50% of transcripts matrix according to mfa.R
+rbind(rowSums(do.call(rbind,initial$AVE$AVE_X)),
+	rowSums(do.call(rbind,final$AVE$AVE_X))) 
+#          CpGs transcripts    miRNAs
+#[1,] 0.7512414   0.5791811 0.5558149
+#[2,] 0.6099801   0.5408933 0.5326386
+temp$initial=unlist(lapply(initial$loadings,as.numeric))
+plots=lapply(levels(temp$omic),function(x) ggplot(temp[temp$omic==x,],
+	aes(y=final,x=initial))+geom_point()+ggtitle(x)+
+    theme(text=element_text(size=18)))
+png("loadings_change.png")
+ grid.arrange(plots[[1]],plots[[2]],plots[[3]])
+dev.off()
 
-#this block is for the cluster
-#results=do.call(rbind,lapply(1:10,function(x) #are 10 subsamplings enough???
-#	describe(data,penalty_cpgs,penalty_transcripts,penalty_mir)))
-#write.table(results,
-#	paste(subtype,penalty_cpgs,penalty_transcripts,penalty_mir,
-#	sep='.'),sep='\t',quote=F,rownames=F)
-#use this for making the submit file
-#grid=seq(0.01,0.9,length=10)#first values tested
-#sub=readLines("condor.seed")
-#args=as.character(sapply(grid,function(x) 
-#	sapply(grid,function(y) sapply(grid,function(z)
-#	paste("Her2",x,y,z,sep=' ')))))
-#temp=lapply(args,function(x) gsub("Her2 0.01 0.01 0.01",x,sub))
-#writeLines(unlist(temp),"temp")
-#cat temp|perl -pe 's/\t/\n/g'>temp1
-#cat condor.header temp1>penalty.sub
-
-#this block is for your lap
-library(parallel)
-
-grid=seq(0.01,0.1,0.01)
-cl <- parallel::makeCluster(detectCores()-20)
-clusterExport(cl, c("describe","grid","wrapper.sgcca","data"))
-resus=pblapply(grid,function(x) lapply(grid,function(y) 
-	lapply(grid,function(z) parLapply(cl,1:10,describe(data,x,y,z)))))
-stopCluster(cl)
-save(resus,file="penalty_search.RData")
-#resus=do.call(rbind,lapply(resus,function(x) 
-#	do.call(rbind,lapply(x,function(y) do.call(rbind,y)))))
-#write.table("penalty_search.tsv",sep='\t',quote=F,row.names=F)
-
-
+#LumB
+rowSums(do.call(rbind,final$AVE$AVE_X))
+#       CpGs transcripts      miRNAs 
+#  0.5679904   0.4261171   0.4305767 
