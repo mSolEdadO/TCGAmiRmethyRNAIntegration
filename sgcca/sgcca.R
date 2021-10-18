@@ -21,16 +21,21 @@ penalty=c(CpGs=0.02,transcripts=0.02,miRNAs=0.05)#output of choose_penalty.R
 ########################THE SGCCA
 final=wrapper.sgcca(X=data,penalty=penalty,scale=F,
 	scheme="centroid",ncomp=ncomp)#ncomp to explain 50% of transcripts matrix according to mfa.R
-save(final,file=paste(subtype,"RData",sep='.'))
+#get selected features
+selected=lapply(final$loadings,function(y) 
+	apply(y,2,function(x) x[x!=0]))
+selected=as.data.frame(do.call(rbind,lapply(selected,function(y) 
+	do.call(rbind,lapply(1:length(y),function(x) 
+		cbind(names(y)[x],y[[x]],names(y[[x]])))))))
+colnames(selected)=c("component","loading","variable")
 
 #####PLOT LOADINGS
-temp=lapply(final$loadings,as.numeric)
-temp=data.frame(do.call(rbind,lapply(1:3,function(x) 
-	cbind(names(temp)[x],temp[[x]]))))
-colnames(temp)=c("omic","loading")
-temp$omic=factor(temp$omic,levels=c("CpGs","transcripts","miRNAs"))
+selected$omic=substr(selected$variable,1,1)
+selected$omic=gsub("E","transcripts",
+	gsub("h","miRNAs",gsub("c","CpGs",selected$omic)))
+selected$loading=as.numeric(as.character(selected$loading))
 png(paste(subtype,"loadings.png",sep='-'))
- ggplot(temp[temp$loadings!=0,],aes(x=omic,y=loadings))+
+ ggplot(selected,aes(x=omic,y=loading))+
  geom_boxplot()+theme(text=element_text(size=18))
 dev.off()
 
@@ -41,11 +46,31 @@ rbind(rowSums(do.call(rbind,initial$AVE$AVE_X)),
 #          CpGs transcripts    miRNAs
 #[1,] 0.7512414   0.5791811 0.5558149
 #[2,] 0.6099801   0.5408933 0.5326386
-temp$initial=unlist(lapply(initial$loadings,as.numeric))
-plots=lapply(levels(temp$omic),function(x) ggplot(temp[temp$omic==x,],
-	aes(y=final,x=initial))+geom_point()+ggtitle(x)+
+selected=lapply(unique(selected$omics),function(x) 
+	selected[selected$omics==x,])
+temp=lapply(1:3,function(y) apply(selected[[y]],1,function(x) 
+	initial$loadings[[y]][x[3],x[1]]))
+selected=do.call(rbind,selected)
+selected$initial=unlist(temp)
+plots=lapply(unique(selected$omic),function(x)
+ ggplot(selected[selected$omic==x,],
+	aes(y=loading,x=initial))+geom_point()+ggtitle(x)+
     theme(text=element_text(size=18)))
 png(paste(subtype,"loadings_change.png",sep='-'))
  grid.arrange(plots[[1]],plots[[2]],plots[[3]])
 dev.off()
+
+write.table(selected,paste(subtype,"selected",sep='.'),sep='\t',
+	quote=F,row.names=F)
+
+#!/usr/bin/env Rscript
+
+########################PARAMETERS & PACKAGES
+args=commandArgs(trailingOnly=TRUE)
+subtype=args[1]
+
+library(mixOmics)
+library(data.table)
+########################DATA
+load(paste(subtype,"RData",sep='.'))
 
