@@ -3,7 +3,7 @@
 ########################PARAMETERS & PACKAGES
 args=commandArgs(trailingOnly=TRUE)
 subtype=args[1]
-ncomp=args[2]
+ncomp=as.numeric(args[2])
 
 library(igraph)
 library(mixOmics)
@@ -30,6 +30,9 @@ selected=as.data.frame(do.call(rbind,lapply(selected,function(y)
 colnames(selected)=c("component","loading","variable")
 
 #####PLOT LOADINGS
+library(ggplot2)
+library(gridExtra)
+
 selected$omic=substr(selected$variable,1,1)
 selected$omic=gsub("E","transcripts",
 	gsub("h","miRNAs",gsub("c","CpGs",selected$omic)))
@@ -46,8 +49,8 @@ rbind(rowSums(do.call(rbind,initial$AVE$AVE_X)),
 #          CpGs transcripts    miRNAs
 #[1,] 0.7512414   0.5791811 0.5558149
 #[2,] 0.6099801   0.5408933 0.5326386
-selected=lapply(unique(selected$omics),function(x) 
-	selected[selected$omics==x,])
+selected=lapply(unique(selected$omic),function(x) 
+	selected[selected$omic==x,])
 temp=lapply(1:3,function(y) apply(selected[[y]],1,function(x) 
 	initial$loadings[[y]][x[3],x[1]]))
 selected=do.call(rbind,selected)
@@ -62,15 +65,4 @@ dev.off()
 
 write.table(selected,paste(subtype,"selected",sep='.'),sep='\t',
 	quote=F,row.names=F)
-
-#!/usr/bin/env Rscript
-
-########################PARAMETERS & PACKAGES
-args=commandArgs(trailingOnly=TRUE)
-subtype=args[1]
-
-library(mixOmics)
-library(data.table)
-########################DATA
-load(paste(subtype,"RData",sep='.'))
 
