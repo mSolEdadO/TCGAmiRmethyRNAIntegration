@@ -159,7 +159,7 @@ fullfullTMM <-NOISeq::tmm(normCounts(lFull), long = 1000, lc = 0, k = 0)
 # which = "median", offset = FALSE)
 #FAILED PASSED 
 #   290    518
-noiseqData = NOISeq::readData(data = fullfullTMM,, factors=designExp)
+noiseqData = NOISeq::readData(data = fullfullTMM, factors=designExp)
 #cd has to preceed ARSyN or won't work
 mycd=NOISeq::dat(noiseqData,type="cd",norm=TRUE)
 table(mycd@dat$DiagnosticTest[,  "Diagnostic Test"])
