@@ -3,7 +3,7 @@
 ########################PARAMETERS & PACKAGES
 args=commandArgs(trailingOnly=TRUE)
 subtype=args[1]
-ncomp=as.numeric(args[2])
+#ncomp=as.numeric(args[2])
 
 library(igraph)
 library(mixOmics)
@@ -19,6 +19,7 @@ names(data)=c("CpGs","transcripts","miRNAs")
 penalty=c(CpGs=0.02,transcripts=0.02,miRNAs=0.05)#output of choose_penalty.R
 
 ########################THE SGCCA
+ncomp=nrow(data$miRNAs)-1#the last comp has all loadings>0
 final=wrapper.sgcca(X=data,penalty=penalty,scale=F,
 	scheme="centroid",ncomp=ncomp)#ncomp to explain 50% of transcripts matrix according to mfa.R
 #get selected features
@@ -27,7 +28,7 @@ selected=lapply(final$loadings,function(y)
 selected=as.data.frame(do.call(rbind,lapply(selected,function(y) 
 	do.call(rbind,lapply(1:length(y),function(x) 
 		cbind(names(y)[x],y[[x]],names(y[[x]])))))))
-colnames(selected)=c("component","loading","variable")
+colnames(selected)=c("component","final","variable")
 
 #####PLOT LOADINGS
 library(ggplot2)
@@ -38,7 +39,7 @@ selected$omic=gsub("E","transcripts",
 	gsub("h","miRNAs",gsub("c","CpGs",selected$omic)))
 selected$loading=as.numeric(as.character(selected$loading))
 png(paste(subtype,"loadings.png",sep='-'))
- ggplot(selected,aes(x=omic,y=loading))+
+ ggplot(selected,aes(x=omic,y=final))+
  geom_boxplot()+theme(text=element_text(size=18))
 dev.off()
 
@@ -57,7 +58,7 @@ selected=do.call(rbind,selected)
 selected$initial=unlist(temp)
 plots=lapply(unique(selected$omic),function(x)
  ggplot(selected[selected$omic==x,],
-	aes(y=loading,x=initial))+geom_point()+ggtitle(x)+
+	aes(y=final,x=initial))+geom_point()+ggtitle(x)+
     theme(text=element_text(size=18)))
 png(paste(subtype,"loadings_change.png",sep='-'))
  grid.arrange(plots[[1]],plots[[2]],plots[[3]])
@@ -65,4 +66,11 @@ dev.off()
 
 write.table(selected,paste(subtype,"selected",sep='.'),sep='\t',
 	quote=F,row.names=F)
+
+#net per enriched component
+#source("function_networkAlt.R")
+#g=network(final,comp=list(CpGs=7,transcripts=7,miRNAs=7),
+#	blocks=1:3)$gR
+#temp=as.data.frame(get.edgelist(g))
+#temp$cor=E(g)$weight
 
