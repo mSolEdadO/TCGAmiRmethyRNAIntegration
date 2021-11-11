@@ -11,17 +11,16 @@ total=do.call(rbind,lapply(1:5,function(x)
 	cbind(names(total)[x],total[[x]])))
 colnames(total)[1]="subtype"
 total$component=as.numeric(gsub("comp ","",total$component))
-plots=lapply(unique(total$omic),function(x)  
+total$omic=factor(total$omic,levels=c("CpGs","transcripts","miRNAs"))
+plots=lapply(levels(total$omic),function(x)  
 	ggplot(total[total$omic==x,],aes(subtype,component,fill=n))+
-	geom_tile()+xlab("")+ggtitle(x)+theme(text=element_text(size=18))+
-	scale_fill_gradient(name = "count",trans="log",low=1,high=400))
-#still wanna:
-#1) move color key to the bottom,
-#2) erase background grid
-#3) 5 breaks in color key, no matter omic
-grid.arrange(plots[[1]],plots[[2]],plots[[3]],ncol=3)
-
-
+	geom_tile()+xlab("")+ggtitle(x)+theme(text=element_text(size=18),
+		legend.position=c(0.9,0.8),panel.background=element_blank(),
+		axis.ticks.x= element_blank())+scale_fill_gradient(name="count",
+		trans="log",low=1,high=400,breaks=scales::extended_breaks(n=4)))
+png("../Desktop/selected.png",width=1000)
+ grid.arrange(plots[[1]],plots[[2]],plots[[3]],ncol=3)
+dev.off()
 
 #######################################CHECK ENRICHMENTS
 sets=lapply(sets,function(x) 
@@ -108,58 +107,83 @@ enrichBP=lapply(enrichBP,function(x) cbind(rownames(x),x))
 enrichBP=lapply(enrichBP,function(x) cbind(x,Term(x[,1])))
 
 #################CHECK OUTPUT
+#pimp tables
 enrichKEGG=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
 	cbind(names(enrichKEGG)[x],enrichKEGG[[x]]))))
 colnames(enrichKEGG)[1]="subtype"
 write_tsv(enrichKEGG,"KEGG1.enrichment")
-temp=enrichKEGG%>%filter(Adjusted.Pvalue<0.01)%>%
-	distinct(subtype,hsa)
-#pathways per subtype
-temp%>%count(subtype)
-# subtype   n
-#   Basal 269
-#    Her2 204 
-#    LumA 229
-#    LumB 264
-#  Normal 249
-paths=temp%>%count(hsa)%>%filter(n==5)%>%dplyr::select(hsa)
-# 165 pathways enriched for all the datasets
-#enrichKEGG%>%filter(hsa%in%temp$hsa)%>%dplyr::select(name)%>%distinct()
-targets=myannot$variable[myannot$entrezgene_id%in%
-	unlist(GS_KEGG_id[names(GS_KEGG_id)%in%paths$hsa])]
-#Ensembl id of -2541- genes linked to the 55 common pathways
-
 enrichBP=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
 	cbind(names(enrichBP)[x],enrichBP[[x]]))))
 colnames(enrichBP)[c(1,2,10,11)]=c("subtype","GO","component","name")
 write_tsv(enrichBP,"BP1.enrichment")
-temp=enrichBP%>%filter(Adjusted.Pvalue<0.01)%>%
-	distinct(subtype,GO)
-temp%>%count(subtype)
-# subtype    n
-#   Basal 1213
-#    Her2  806
-#    LumA  958
-#    LumB 1255
-#  Normal 1047
-bps=temp%>%count(GO)%>%filter(n==5)%>%dplyr::select(GO)
-# 496
-targets=union(targets,myannot$variable[myannot$entrezgene_id%in%
-	unlist(GS_GO_BP[names(GS_GO_BP)%in%bps$GO])])
-#add the 4867 ensembl ids linked to the 138 common bps
-#this are the targets for MI 
 
+enriched=list(BP=enrichBP,KEGG=enrichKEGG)
+enriched=lapply(enriched,function(x) 
+	x%>%filter(Adjusted.Pvalue<10**-4))
+
+#############
 #BP categories
-myCollection<-GOCollection(unlist(bps))
-fl="http://current.geneontology.org/ontology/subsets/goslim_agr.obo"
-slim <- getOBOCollection(fl)
-bpGroups=goSlim(myCollection, slim, "BP")
+#bps=unique(enriched$BP$GO)
+#myCollection<-GOCollection(unlist(bps))
+#fl="http://current.geneontology.org/ontology/subsets/goslim_agr.obo"
+#slim <- getOBOCollection(fl)
+#bpGroups=goSlim(myCollection, slim, "BP")
 #% is the frequency of identifiers classified to each term
 
+#################
+#################
+#plot intersections
+library(igraph)
+#matrix subtypes vs function
+temp=lapply(enriched,function(x) x%>%distinct(name,subtype)%>%
+	table%>%t)#t() so columns are
+#count exclusive functions
+exclusive=lapply(temp,function(y) 
+ rev(table(apply(y[which(rowSums(y==0)==4),],1,paste,collapse=""))))#get all intersections
+#$BP
+#10000 01000 00100 00010 00001 
+#   34     4    18    21    32 
+#$KEGG
+#10000 01000 00100 00010 00001 
+#   22     1     4    12    20 
+g=lapply(temp,function(x) crossprod(x))
+#$BP
+#        subtype
+#subtype  Basal Her2 LumA LumB Normal
+#  Basal     53    3    9    6     10
+#  Her2       3   13    5    1      5
+#  LumA       9    5   38    7     11
+#  LumB       6    1    7   36      6
+#  Normal    10    5   11    6     54
+#
+#$KEGG
+#        subtype
+#subtype  Basal Her2 LumA LumB Normal
+#  Basal     45    4    7   13     17
+#  Her2       4    9    2    2      7
+#  LumA       7    2   11    4      6
+#  LumB      13    2    4   26      9
+#  Normal    17    7    6    9     42
+values=lapply(1:2,function(y) lapply(1:5,function(x) 
+	c(diag(g[[y]])[x]-exclusive[[y]][x],
+		exclusive[[y]][x])))
+#graph from the matrix
+g1=lapply(g,function(x) 
+	graph.adjacency(x,weighted=T,mode="undirected",diag=F))
+V(g1$BP)$size=diag(g$BP)
+V(g1$KEGG)$size=diag(g$KEGG)
+pdf("enrichment.pdf")
+lapply(1:2,function(x) 
+	plot(g1[[x]],vertex.shape="pie",vertex.pie=values[[x]],
+	vertex.size=V(g1[[x]])$size,
+	edge.width=E(g1[[x]])$weight*3,
+	vertex.pie.color=list(c("gray","red")),
+	edge.label=E(g1[[x]])$weight,vertex.frame.color="white",
+	vertex.label.cex=1.5,vertex.label.color="black",
+	edge.label.cex=1.5,edge.label.color="black",main=names(g1)[x]))
+dev.off()
 
-#########################plots to refine
-#png("selected.png")
-#heatmap.2(A1[rev(rownames(A)),],scale='n',trace='n',dendrogram='n',Colv=F,Rowv=F,col=rev(grey.colors(20)),key=T,labRow="",srtCol=0,labCol=c("","Basal","","","Her2","","","LumA","","","LumB","","","Normal",""),lmat=rbind(c(0,3),c(2,1),c(0,4)),lhei=c(0.5,5,1.3),lwid=c(0.2,8),colsep=c(3,6,9,12),key.title="",cexCol=2,density.info='n',key.xlab="features",margins=c(5,6),adjCol=c(0.5,NA),add.expr=text(labels=apply(A[,2:ncol(A)],2,function(x) paste(min(as.numeric(x),na.rm=T),max(as.numeric(x),na.rm=T),sep=' - ')),y= as.numeric(sapply(c(36,21,60,40,19),rep,3)),srt=45,xpd=NA,x=(1:15)+.18,cex=1.2))
-#axis(side=4,at=seq(.19,1,.15),labels=seq(0,50,10),line=-1)
-#mtext(side=4,"components",line=1)
-#dev.off()
+##LO QUE SIGUE
+#1) RED DE MI DE UNA FUNCION
+#2)CONCLUS PROMETEDORA ¿DE LA RED?
+#ENVIAR
