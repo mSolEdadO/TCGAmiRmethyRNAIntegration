@@ -42,7 +42,7 @@ BPenrich=compareCluster(variable~subtype+component,
 	ont="BP",
 	readable=T,
 	pAdjustMethod = "fdr",
-    qvalueCutoff  = 0.01)#slooow
+    pvalueCutoff  = 0.01)#slooow
 write_tsv(as.data.frame(BPenrich),"BP.enrichment")
 
 #KEGG enrichmnet needs ncbi-geneid, ncbi-proteinid or uniprot
@@ -60,7 +60,7 @@ KEGGenrich=compareCluster(entrezgene_id~subtype+component,
 	fun="enrichKEGG",
 	pAdjustMethod = "fdr",
 	organism = 'hsa',
-	qvalueCutoff = 0.01)
+	pvalueCutoff = 0.01)
 #get a nice table
 KEGGenrich = setReadable(KEGGenrich, OrgDb = org.Hs.eg.db,
  keyType="ENTREZID")
@@ -99,29 +99,44 @@ dev.off()
 #	functions$BP[[x]][!functions$BP[[x]]%in%exclusive$BP[[x]]])
 #shared$KEGG=lapply(1:5,function(x) 
 #	functions$KEGG[[x]][!functions$KEGG[[x]]%in%exclusive$KEGG[[x]]])
+
+
 ##############BP categories
-x <- enricher(gene, TERM2GENE = cells)
-BPslimenrich=compareCluster(variable~subtype+component,
-	data=sets,
-	fun="enricher",
-	OrgDb=org.Hs.eg.db,
-	keyType="ENSEMBL",
-	ont=slim,
-	readable=T,
-	pAdjustMethod = "fdr",
-    qvalueCutoff  = 0.01)#slooow
+library(GSEABase)
+library(GO.db)
 
-
-exclusiveGO=lapply(exclusive$BP,function(x) 
-	unique(enriched$BP$GO[enriched$BP$name%in%x]))
-myCollection<-lapply(exclusiveGO,GOCollection)
-myCollection$shared=GOCollection(enriched$BP$GO[enriched$BP$name%in%unlist(shared)])
+# as in https://support.bioconductor.org/p/128407/
+#and https://support.bioconductor.org/p/83375/
 fl="http://current.geneontology.org/ontology/subsets/goslim_agr.obo"
-slim <- getOBOCollection(fl)
-bpGroups=lapply(myCollection,function(x) goSlim(x,slim,"BP"))
-#% is the frequency of identifiers classified to each term
-bpGroups=as.data.frame(do.call(rbind,lapply(1:6,function(x) 
-	cbind(names(bpGroups)[x],bpGroups[[x]][,2:3]))))
+#subset used for humans in PMC6800510
+slim <- getOBOCollection(fl)#53 ids only
+#df = select(GO.db, keys(GO.db), "ONTOLOGY")#ontology of all GOids
+#table(df$ONTOLOGY[df$GOID%in%ids(slim)])#found all slim ids
+#BP CC MF 
+#21 16 16 
+gomap=as.list(GOBPOFFSPRING)#descendents off every goid
+#found=names(gomap)[names(gomap)%in%ids(slim)]
+#[1] 21
+#sum(found%in%df$GOID[df$ONTOLOGY=="BP"])
+#[1] 21 #actually only descendents of BP goids
+gomap=gomap[names(gomap)%in%ids(slim)]
+slim=as.data.frame(do.call(rbind,lapply(1:21,function(x) cbind(names(gomap)[x],gomap[[x]]))))
+colnames(slim)=c("parent","child")
+slimnames=as.data.frame(sapply(unique(slim$PARENT),function(x) 
+	Term(GOTERM[[x]])))
+slimnames$id=rownames(slimnames)
+colnames(slimnames)[1]="name"
+slimnames=slimnames[,2:1]
+
+BPslimenrich=compareCluster(ID~subtype+component,
+	data=BPenrich,
+	fun="enricher",
+	TERM2GENE=slim,
+	TERM2NAME=slimnames,
+    pvalueCutoff  = 1)
+dotplot(BPslimenrich,x="subtype",size="count")#cagada de resultado
+
+
 png("BPslim.png")
 ggplot(bpGroups,aes(subtype,Term,fill=Percent))+geom_tile()+
 scale_fill_gradient(low="blue", high="red",na.value="white",
