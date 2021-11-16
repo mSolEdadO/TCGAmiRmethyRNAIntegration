@@ -28,6 +28,7 @@ dev.off()
 library(clusterProfiler)
 library(org.Hs.eg.db)
 library(biomaRt)
+library(enrichplot)
 
 sets=do.call(rbind,lapply(1:5,function(x) cbind(names(sets)[x],sets[[x]])))
 colnames(sets)[1]="subtype"
@@ -82,11 +83,11 @@ return(sets)}
 functions=lapply(enriched,get_sets,exclusive=F)
 #sapply(functions,function(x) sapply(x,length))
 #        BP KEGG
-#Basal  471   60
-#Her2   126    9
-#LumA   290   12
-#LumB   444   22
-#Normal 616   25
+#Basal  277   40
+#Her2    73    8
+#LumA   174   11
+#LumB   247   14
+#Normal 313   22
 pdf("enrichment.pdf")
  lapply(functions,function(x) upset(fromList(x),order.by="freq",
  	text.scale=rep(1.5,6)))
@@ -100,49 +101,90 @@ dev.off()
 #shared$KEGG=lapply(1:5,function(x) 
 #	functions$KEGG[[x]][!functions$KEGG[[x]]%in%exclusive$KEGG[[x]]])
 
+#############
+heatmatrix=function(enrichment){
+	edges=enrichment%>%dplyr::select(subtype,Description,geneID)%>%
+	group_by(subtype,Description)
+	edges=edges%>%group_map(~length(unique(unlist(strsplit(.x$geneID,"/")))))%>%
+	unlist%>%cbind(group_keys(edges))
+	colnames(edges)[1]="genes"
+	p=gplots::heatmap.2(table(edges[,3:2]),Colv=F)
+	edges$Description=factor(edges$Description,
+		levels=rownames(table(edges[,3:2]))[p$rowInd])
+return(edges)}
+
+heatKEGG=heatmatrix(as.data.frame(KEGGenrich))
+png("KEGGenrichment.png",height=1000,width=600)
+ ggplot(heatKEGG,aes(subtype,Description,fill=genes))+geom_tile()+
+ xlab("")+ylab("")+theme(text=element_text(size=18),
+ 	panel.background=element_rect(fill = "white"),
+ 	legend.position=c(-1.8,0.7),axis.text.x=element_text(angle=45))+
+ scale_fill_gradient(low = "#FFF57B", high = "#FF6200")
+dev.off()
+
+library(enrichplot)
+BPsem=pairwise_termsim(BPenrich,semData=godata('org.Hs.eg.db',
+ ont="BP"))
+#BPsem@termsim has the semantic similarity bewteen go terms
+temp=treeplot(BPsem,nCluster=70,
+	showCategory=length(levels(heatBP$Description)))
+barcolors=as.data.frame(cbind(temp$data$label,temp$data$group))
+colnames(barcolors)=c("Description","group")
+barcolors=barcolors[!is.na(barcolors$group),]
+heatBP=heatmatrix(as.data.frame(BPenrich))
+g=graph.data.frame(heatBP[,c("Description","subtype")],directed=F)
+E(g)$weight=heatBP$genes
+g=as.matrix(g[levels(heatBP$Description),unique(heatBP$subtype)])
+heatmap.2(g,scale='n',trace='n',Rowv=F,Colv=F,dendrogram='n',col=rev(heat.colors(100)),labRow="",RowSideColors=rainbow(70)[as.factor(barcolors$group)],srtCol=45)
+#ASI PERO SOLO CON LOS BP ENRIQUECIDOS EN VARIOS COMPONENTES
+temp=as.data.frame(BPenrich)%>%group_by(subtype,Description)%>%tally
+
+#temp=clusterProfiler::simplify(BPenrich,
+#	cutoff=0.01,#semantic similarity higher than `cutoff` are redundant 
+#	by="p.adjust",
+#	select_fun=min)#select representative term by min p.adjust?
 
 ##############BP categories
-library(GSEABase)
-library(GO.db)
-
+#library(GSEABase)
+#library(GO.db)
 # as in https://support.bioconductor.org/p/128407/
 #and https://support.bioconductor.org/p/83375/
-fl="http://current.geneontology.org/ontology/subsets/goslim_agr.obo"
+#fl="http://current.geneontology.org/ontology/subsets/goslim_agr.obo"
 #subset used for humans in PMC6800510
-slim <- getOBOCollection(fl)#53 ids only
+#slim <- getOBOCollection(fl)#53 ids only
 #df = select(GO.db, keys(GO.db), "ONTOLOGY")#ontology of all GOids
 #table(df$ONTOLOGY[df$GOID%in%ids(slim)])#found all slim ids
 #BP CC MF 
 #21 16 16 
-gomap=as.list(GOBPOFFSPRING)#descendents off every goid
+#gomap=as.list(GOBPOFFSPRING)#descendents off every goid
 #found=names(gomap)[names(gomap)%in%ids(slim)]
 #[1] 21
 #sum(found%in%df$GOID[df$ONTOLOGY=="BP"])
 #[1] 21 #actually only descendents of BP goids
-gomap=gomap[names(gomap)%in%ids(slim)]
-slim=as.data.frame(do.call(rbind,lapply(1:21,function(x) cbind(names(gomap)[x],gomap[[x]]))))
-colnames(slim)=c("parent","child")
-slimnames=as.data.frame(sapply(unique(slim$PARENT),function(x) 
-	Term(GOTERM[[x]])))
-slimnames$id=rownames(slimnames)
-colnames(slimnames)[1]="name"
-slimnames=slimnames[,2:1]
+#gomap=gomap[names(gomap)%in%ids(slim)]
+#slim=as.data.frame(do.call(rbind,lapply(1:21,function(x) cbind(names(gomap)[x],gomap[[x]]))))
+#colnames(slim)=c("parent","child")
+#slimnames=as.data.frame(sapply(unique(slim$PARENT),function(x) 
+#	Term(GOTERM[[x]])))
+#slimnames$id=rownames(slimnames)
+#colnames(slimnames)[1]="name"
+#slimnames=slimnames[,2:1]
+#BPslimenrich=compareCluster(ID~subtype+component,
+#	data=as.data.frame(BPenrich),
+#	fun="enricher",
+#	TERM2GENE=slim,
+#	TERM2NAME=slimnames,
+#   pvalueCutoff  = 1)
+#dotplot(BPslimenrich,x="subtype",size="count")#cagada de resultado
+#png("BPslim.png")
+#ggplot(bpGroups,aes(subtype,Term,fill=Percent))+geom_tile()+
+#scale_fill_gradient(low="blue", high="red",na.value="white",
+#	trans="log10")+xlab("")+ylab("")+theme(text=element_text(size=18),
+#	axis.text.x = element_text(angle = 45),legend.position=c(-1,.8))
+#dev.off()
 
-BPslimenrich=compareCluster(ID~subtype+component,
-	data=BPenrich,
-	fun="enricher",
-	TERM2GENE=slim,
-	TERM2NAME=slimnames,
-    pvalueCutoff  = 1)
-dotplot(BPslimenrich,x="subtype",size="count")#cagada de resultado
 
 
-png("BPslim.png")
-ggplot(bpGroups,aes(subtype,Term,fill=Percent))+geom_tile()+
-scale_fill_gradient(low="blue", high="red",na.value="white",
-	trans="log10")+xlab("")+ylab("")+theme(text=element_text(size=18),
-	axis.text.x = element_text(angle = 45),legend.position=c(-1,.8))
-dev.off()
 
 ##LO QUE SIGUE
 #1) RED DE MI DE UNA FUNCION
