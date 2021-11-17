@@ -102,42 +102,46 @@ dev.off()
 #	functions$KEGG[[x]][!functions$KEGG[[x]]%in%exclusive$KEGG[[x]]])
 
 #############
+library(enrichplot)
 heatmatrix=function(enrichment){
-	edges=enrichment%>%dplyr::select(subtype,Description,geneID)%>%
+	edges=as.data.frame(enrichment)%>%dplyr::select(subtype,Description,geneID)%>%
 	group_by(subtype,Description)
 	edges=edges%>%group_map(~length(unique(unlist(strsplit(.x$geneID,"/")))))%>%
 	unlist%>%cbind(group_keys(edges))
 	colnames(edges)[1]="genes"
-	p=gplots::heatmap.2(table(edges[,3:2]),Colv=F)
-	edges$Description=factor(edges$Description,
-		levels=rownames(table(edges[,3:2]))[p$rowInd])
+	edges1=as.data.frame(enrichment)%>%group_by(subtype,Description)%>%tally
+	colnames(edges1)[3]="components"
+	edges=merge(edges,edges1,by=c("subtype","Description"))
 return(edges)}
 
-heatKEGG=heatmatrix(as.data.frame(KEGGenrich))
-png("KEGGenrichment.png",height=1000,width=600)
- ggplot(heatKEGG,aes(subtype,Description,fill=genes))+geom_tile()+
- xlab("")+ylab("")+theme(text=element_text(size=18),
- 	panel.background=element_rect(fill = "white"),
- 	legend.position=c(-1.8,0.7),axis.text.x=element_text(angle=45))+
- scale_fill_gradient(low = "#FFF57B", high = "#FF6200")
-dev.off()
-
-library(enrichplot)
+heatBP=heatmatrix(as.data.frame(BPenrich))
 BPsem=pairwise_termsim(BPenrich,semData=godata('org.Hs.eg.db',
  ont="BP"))
 #BPsem@termsim has the semantic similarity bewteen go terms
-temp=treeplot(BPsem,nCluster=70,
-	showCategory=length(levels(heatBP$Description)))
-barcolors=as.data.frame(cbind(temp$data$label,temp$data$group))
-colnames(barcolors)=c("Description","group")
-barcolors=barcolors[!is.na(barcolors$group),]
-heatBP=heatmatrix(as.data.frame(BPenrich))
-g=graph.data.frame(heatBP[,c("Description","subtype")],directed=F)
-E(g)$weight=heatBP$genes
-g=as.matrix(g[levels(heatBP$Description),unique(heatBP$subtype)])
-heatmap.2(g,scale='n',trace='n',Rowv=F,Colv=F,dendrogram='n',col=rev(heat.colors(100)),labRow="",RowSideColors=rainbow(70)[as.factor(barcolors$group)],srtCol=45)
-#ASI PERO SOLO CON LOS BP ENRIQUECIDOS EN VARIOS COMPONENTES
-temp=as.data.frame(BPenrich)%>%group_by(subtype,Description)%>%tally
+group=treeplot(BPsem,nCluster=50,showCategory=temp)
+#nCluster chosen after lots of plots
+groups=as.data.frame(cbind(group$data$label,group$data$group))
+colnames(groups)=c("Description","group")
+groups=groups[!is.na(groups$Description),]
+heatBP=merge(heatBP,groups,by="Description")
+heatBP1=heatBP%>%group_by(subtype,group)%>%summarise(genes=sum(genes),
+	components=sum(components),processess=length(unique(Description)))
+png("BPenrichment.png")
+ggplot(heatBP1)+geom_point(aes(x=subtype,y=group,
+	size=components/processes,col=genes))+xlab("")+
+	theme(text=element_text(size=18))+
+	scale_color_gradient(low="blue",high="red")+theme_light()+
+	scale_size(range=c(2,10))
+dev.off()
+
+heatKEGG=heatmatrix(as.data.frame(KEGGenrich))
+png("KEGGenrichment.png",height=600)
+ggplot(heatKEGG)+geom_point(aes(x=subtype,y=Description,
+	size=components,col=genes))+xlab("")+
+	theme(text=element_text(size=18))+
+	scale_color_gradient(low="blue",high="red")+theme_light()+
+	scale_size(range=c(2,10))
+dev.off()
 
 #temp=clusterProfiler::simplify(BPenrich,
 #	cutoff=0.01,#semantic similarity higher than `cutoff` are redundant 
