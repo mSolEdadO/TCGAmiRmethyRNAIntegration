@@ -12,15 +12,16 @@ total=lapply(sets,function(x) x%>%count(component,omic))
 total=do.call(rbind,lapply(1:5,function(x) 
 	cbind(names(total)[x],total[[x]])))
 colnames(total)[1]="subtype"
-total$component=as.numeric(gsub("comp ","",total$component))
+total$component=as.numeric(gsub("comp*","",total$component,perl=T))
 total$omic=factor(total$omic,levels=c("CpGs","transcripts","miRNAs"))
 plots=lapply(levels(total$omic),function(x)  
 	ggplot(total[total$omic==x,],aes(subtype,component,fill=n))+
 	geom_tile()+xlab("")+ggtitle(x)+theme(text=element_text(size=18),
 		legend.position=c(0.9,0.8),panel.background=element_blank(),
-		axis.ticks.x= element_blank())+scale_fill_gradient(name="count",
-		trans="log",low="#3D4E5A",high="gray",breaks=scales::extended_breaks(n=4)))
-png("../Desktop/selected.png",width=1000)
+		axis.ticks.x= element_blank(),
+		axis.text.x=element_text(vjust=5))+
+		scale_fill_viridis_b(name="count"))
+png("selected.png",width=1000)
  grid.arrange(plots[[1]],plots[[2]],plots[[3]],ncol=3)
 dev.off()
 
