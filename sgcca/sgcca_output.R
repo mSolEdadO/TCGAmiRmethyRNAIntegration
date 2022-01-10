@@ -158,30 +158,31 @@ scale_fill_viridis_d(option = "plasma")
 dev.off()
 
 #BP categories
-#library(GSEABase)
-#library(GO.db)
+library(GSEABase)
+library(GO.db)
 # as in https://support.bioconductor.org/p/128407/
 #and https://support.bioconductor.org/p/83375/
-#fl="http://current.geneontology.org/ontology/subsets/goslim_agr.obo"
+fl="http://current.geneontology.org/ontology/subsets/goslim_agr.obo"
 #subset used for humans in PMC6800510
-#slim <- getOBOCollection(fl)#53 ids only
-#df = select(GO.db, keys(GO.db), "ONTOLOGY")#ontology of all GOids
-#table(df$ONTOLOGY[df$GOID%in%ids(slim)])#found all slim ids
+slim <- getOBOCollection(fl)#53 ids only
+df = select(GO.db, keys(GO.db), "ONTOLOGY")#ontology of all GOids
+table(df$ONTOLOGY[df$GOID%in%ids(slim)])#found all slim ids
 #BP CC MF 
 #21 16 16 
-#gomap=as.list(GOBPOFFSPRING)#descendents off every goid
-#found=names(gomap)[names(gomap)%in%ids(slim)]
+gomap=as.list(GOBPOFFSPRING)#descendents off every goid
+found=names(gomap)[names(gomap)%in%ids(slim)]
 #[1] 21
-#sum(found%in%df$GOID[df$ONTOLOGY=="BP"])
+sum(found%in%df$GOID[df$ONTOLOGY=="BP"])
 #[1] 21 #actually only descendents of BP goids
-#gomap=gomap[names(gomap)%in%ids(slim)]
-#slim=as.data.frame(do.call(rbind,lapply(1:21,function(x) cbind(names(gomap)[x],gomap[[x]]))))
-#colnames(slim)=c("parent","child")
-#slimnames=as.data.frame(sapply(unique(slim$PARENT),function(x) 
-#	Term(GOTERM[[x]])))
-#slimnames$id=rownames(slimnames)
-#colnames(slimnames)[1]="name"
-#slimnames=slimnames[,2:1]
+gomap=gomap[names(gomap)%in%ids(slim)]
+slim=as.data.frame(do.call(rbind,lapply(1:21,function(x) 
+	cbind(names(gomap)[x],gomap[[x]]))))
+colnames(slim)=c("parent","child")
+slimnames=as.data.frame(sapply(unique(slim$parent),function(x) 
+	Term(GOTERM[[x]])))
+slimnames$id=rownames(slimnames)
+colnames(slimnames)[1]="name"
+slimnames=slimnames[,2:1]
 #BPslimenrich=compareCluster(ID~subtype+component,
 #	data=as.data.frame(BPenrich),
 #	fun="enricher",
