@@ -21,11 +21,11 @@ plots=lapply(levels(total$omic),function(x)
 		axis.ticks.x= element_blank(),
 		axis.text.x=element_text(vjust=5))+
 		scale_fill_viridis_b(name="count"))
-png("selected.png",width=1000)
+png("selected.png",width=880,height=400)
  grid.arrange(plots[[1]],plots[[2]],plots[[3]],ncol=3)
 dev.off()
 
-#######################################CHECK ENRICHMENTS
+#######################################ENRICHMENT
 library(clusterProfiler)
 library(org.Hs.eg.db)
 library(biomaRt)
@@ -68,17 +68,18 @@ KEGGenrich = setReadable(KEGGenrich, OrgDb = org.Hs.eg.db,
  keyType="ENTREZID")
 write_tsv(as.data.frame(KEGGenrich),"KEGG.enrichment")                  
 
-#################
-#plot intersections
+##################PLOT INTERSECTIONS
 library(UpSetR)
 
 enriched=list(BP=BPenrich,KEGG=KEGGenrich)
-#matrix subtypes vs function
 get_sets=function(enriched_table,exclusive){
+#matrix subtypes vs function
  g=table(unique(enriched_table[,c("ID","subtype")]))
+#to get exclusive functions for another time
  if(exclusive==T){
  	g=g[rowSums(g==0)==4,]
  }
+ #upset() needs a list of IDs
  sets=apply(g,2,function(y) names(which(y>0)))
 return(sets)}
 functions=lapply(enriched,get_sets,exclusive=F)
@@ -86,7 +87,7 @@ functions=lapply(enriched,get_sets,exclusive=F)
 #        BP KEGG
 #Basal  277   40
 #Her2    73    8
-#LumA   174   11
+#LumA   551   76
 #LumB   247   14
 #Normal 313   22
 pdf("enrichment.pdf")
@@ -94,62 +95,69 @@ pdf("enrichment.pdf")
  	text.scale=rep(1.5,6)))
 dev.off()
 
-#check exclusive functions
-#exclusive=lapply(enriched,get_sets,exclusive=T)
-#shared=list()
-#shared$BP=lapply(1:5,function(x) 
-#	functions$BP[[x]][!functions$BP[[x]]%in%exclusive$BP[[x]]])
-#shared$KEGG=lapply(1:5,function(x) 
-#	functions$KEGG[[x]][!functions$KEGG[[x]]%in%exclusive$KEGG[[x]]])
-
-#############
+#############CHECK SHARED FUNCTIONS
 library(enrichplot)
 heatmatrix=function(enrichment){
-	edges=as.data.frame(enrichment)%>%dplyr::select(subtype,Description,geneID)%>%
-	group_by(subtype,Description)
-	edges=edges%>%group_map(~length(unique(unlist(strsplit(.x$geneID,"/")))))%>%
-	unlist%>%cbind(group_keys(edges))
+	#only functions enriched in more than one dataset
+	i=enrichment%>%distinct(subtype,Description)%>%count(Description)%>%
+ 	filter(n>1)%>%select(Description)%>%unlist
+	enrichment=enrichment[enrichment$Description%in%i,]
+	#count genes & component per function and subtype
+	edges=enrichment%>%select(subtype,Description,geneID)%>%
+		group_by(subtype,Description)
+	edges=edges%>%group_map(~length(unique(unlist(strsplit(.x$geneID,
+		"/")))))%>%unlist%>%cbind(group_keys(edges))
 	colnames(edges)[1]="genes"
-	edges1=as.data.frame(enrichment)%>%group_by(subtype,Description)%>%tally
+	edges1=enrichment%>%group_by(subtype,Description)%>%tally
 	colnames(edges1)[3]="components"
 	edges=merge(edges,edges1,by=c("subtype","Description"))
 return(edges)}
-
-heatBP=heatmatrix(as.data.frame(BPenrich))
-BPsem=pairwise_termsim(BPenrich,semData=godata('org.Hs.eg.db',
- ont="BP"))
-#BPsem@termsim has the semantic similarity bewteen go terms
-group=treeplot(BPsem,nCluster=50,showCategory=temp)
-#nCluster chosen after lots of plots
-groups=as.data.frame(cbind(group$data$label,group$data$group))
-colnames(groups)=c("Description","group")
-groups=groups[!is.na(groups$Description),]
-heatBP=merge(heatBP,groups,by="Description")
-heatBP1=heatBP%>%group_by(subtype,group)%>%summarise(genes=sum(genes),
-	components=sum(components),processess=length(unique(Description)))
-png("BPenrichment.png")
-ggplot(heatBP1)+geom_point(aes(x=subtype,y=group,
-	size=components/processes,col=genes))+xlab("")+
-	theme(text=element_text(size=18))+
-	scale_color_gradient(low="blue",high="red")+theme_light()+
-	scale_size(range=c(2,10))
-dev.off()
-
-heatKEGG=heatmatrix(as.data.frame(KEGGenrich))
-png("KEGGenrichment.png",height=600)
-ggplot(heatKEGG)+geom_point(aes(x=subtype,y=Description,
+KEGGshared=heatmatrix(KEGGenrich)
+#[1] 35 functions
+png("KEGGenrichment.png")
+ggplot(KEGGshared)+geom_point(aes(x=subtype,y=Description,
 	size=components,col=genes))+xlab("")+
 	theme(text=element_text(size=18))+
 	scale_color_gradient(low="blue",high="red")+theme_light()+
 	scale_size(range=c(2,10))
 dev.off()
 
-#temp=clusterProfiler::simplify(BPenrich,
-#	cutoff=0.01,#semantic similarity higher than `cutoff` are redundant 
-#	by="p.adjust",
-#	select_fun=min)#select representative term by min p.adjust?
+#select functions recursively enriched for further analyses
+temp=KEGGshared%>%select(-genes)%>%pivot_wider(names_from="subtype",
+	values_from="components")
+KEGGshared=temp$Description[rowSums(as.data.frame(temp)[,2:6]>1,na.rm=T)>0]
+#[1] 20 functions selected
+BPshared=heatmatrix(BPenrich)#is too large, so I don't plot it
+#[1] 271 functions
+temp=BPshared%>%select(-genes)%>%pivot_wider(names_from="subtype",
+	values_from="components")
+BPshared=temp$Description[rowSums(as.data.frame(temp)[,2:6]>1,na.rm=T)>0]
+#[1] 123 functions selected
 
-##############BP categories
+
+#############CHECK EXCLUSIVE FUNCTIONS
+#exclusive=lapply(enriched,get_sets,exclusive=T)
+#manual classification of unlist(unique(exclusive$KEGG))
+KEGG.classes=as.data.frame(cbind(unique(ids$class),
+	do.call(rbind,lapply(unique(ids$class),function(x)
+	 sapply(exclusive$KEGG,function(y) sum(y%in%ids$ID[ids$class==x]))))))
+KEGG.classes=KEGG.classes%>%pivot_longer(-1,
+	names_to="subtype",values_to="pathways")
+KEGG.classes$pathways=as.numeric(KEGG.classes$pathways)
+KEGG.classes=KEGG.classes%>%group_by(V1)%>%
+	summarise(total=sum(pathways))%>%merge(KEGG.classes,by="V1")
+png("KEGGexclusive.png")
+ ggplot(KEGG.classes,aes(x=pathways,y=V1,
+ 	fill=subtype))+geom_bar(stat="identity",position="fill")+
+ annotate("text",x=1.05,y=unique(KEGG.classes$V1),
+ 	label=KEGG.classes$total[seq(1,nrow(KEGG.classes),5)])+
+ scale_x_continuous(labels=scales::percent)+
+ theme(text=element_text(size=18),axis.ticks=element_blank(),
+ 	panel.background=element_blank())+xlab("")+ylab("")+
+scale_fill_viridis_d(option = "plasma")
+dev.off()
+
+#BP categories
 #library(GSEABase)
 #library(GO.db)
 # as in https://support.bioconductor.org/p/128407/
@@ -189,9 +197,27 @@ dev.off()
 #dev.off()
 
 
+#BPsem=pairwise_termsim(BPenrich,semData=godata('org.Hs.eg.db',
+# ont="BP"))
+#BPsem@termsim has the semantic similarity bewteen go terms
+#group=treeplot(BPsem,nCluster=50,showCategory=temp)
+#nCluster chosen after lots of plots
+#groups=as.data.frame(cbind(group$data$label,group$data$group))
+#colnames(groups)=c("Description","group")
+#groups=groups[!is.na(groups$Description),]
+#heatBP=merge(heatBP,groups,by="Description")
+#heatBP1=heatBP%>%group_by(subtype,group)%>%summarise(genes=sum(genes),
+#	components=sum(components),processess=length(unique(Description)))
 
 
-##LO QUE SIGUE
-#1) RED DE MI DE UNA FUNCION
-#2)CONCLUS PROMETEDORA ¿DE LA RED?
-#ENVIAR
+#temp=clusterProfiler::simplify(BPenrich,
+#	cutoff=0.01,#semantic similarity higher than `cutoff` are redundant 
+#	by="p.adjust",
+#	select_fun=min)#select representative term by min p.adjust?
+
+
+
+
+#→→→→→→→→→→→→reduce por NES/p.value
+#cuadrantes size vs NES, pvalue = transparencia, color por subtipo?
+ 

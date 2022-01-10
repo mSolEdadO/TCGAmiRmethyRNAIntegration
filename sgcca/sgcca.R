@@ -37,10 +37,10 @@ library(gridExtra)
 selected$omic=substr(selected$variable,1,1)
 selected$omic=gsub("E","transcripts",
 	gsub("h","miRNAs",gsub("c","CpGs",selected$omic)))
-selected$loading=as.numeric(as.character(selected$loading))
+selected$final=as.numeric(as.character(selected$final))
 png(paste(subtype,"loadings.png",sep='-'))
  ggplot(selected,aes(x=omic,y=final))+
- geom_boxplot()+theme(text=element_text(size=18))
+ geom_boxplot()+ylab("loading")+theme(text=element_text(size=18))
 dev.off()
 
 initial=wrapper.sgcca(X=data,penalty=rep(1,3),scale=F,
