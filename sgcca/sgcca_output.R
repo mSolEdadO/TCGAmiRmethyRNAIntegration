@@ -135,29 +135,16 @@ BPshared=temp$Description[rowSums(as.data.frame(temp)[,2:6]>1,na.rm=T)>0]
 #[1] 123 functions selected
 
 
-#############CHECK EXCLUSIVE FUNCTIONS
-#exclusive=lapply(enriched,get_sets,exclusive=T)
-#manual classification of unlist(unique(exclusive$KEGG))
-KEGG.classes=as.data.frame(cbind(unique(ids$class),
-	do.call(rbind,lapply(unique(ids$class),function(x)
-	 sapply(exclusive$KEGG,function(y) sum(y%in%ids$ID[ids$class==x]))))))
-KEGG.classes=KEGG.classes%>%pivot_longer(-1,
-	names_to="subtype",values_to="pathways")
-KEGG.classes$pathways=as.numeric(KEGG.classes$pathways)
-KEGG.classes=KEGG.classes%>%group_by(V1)%>%
-	summarise(total=sum(pathways))%>%merge(KEGG.classes,by="V1")
-png("KEGGexclusive.png")
- ggplot(KEGG.classes,aes(x=pathways,y=V1,
- 	fill=subtype))+geom_bar(stat="identity",position="fill")+
- annotate("text",x=1.05,y=unique(KEGG.classes$V1),
- 	label=KEGG.classes$total[seq(1,nrow(KEGG.classes),5)])+
- scale_x_continuous(labels=scales::percent)+
- theme(text=element_text(size=18),axis.ticks=element_blank(),
- 	panel.background=element_blank())+xlab("")+ylab("")+
-scale_fill_viridis_d(option = "plasma")
-dev.off()
+#############GROUP EXCLUSIVE FUNCTIONS
+exclusive=lapply(enriched,get_sets,exclusive=T)
+ids=read_tsv("KEGG.exclusive")#manual classification of unlist(unique(exclusive$KEGG))
+#data frame it
+KEGG.classes=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
+	cbind(names(exclusive$KEGG)[x],exclusive$KEGG[[x]]))))
+colnames(KEGG.classes)=c("subtype","ID")
+KEGG.classes=merge(KEGG.classes,ids,by="ID")
 
-#BP categories
+#get BP categories
 library(GSEABase)
 library(GO.db)
 # as in https://support.bioconductor.org/p/128407/
@@ -175,15 +162,79 @@ found=names(gomap)[names(gomap)%in%ids(slim)]
 sum(found%in%df$GOID[df$ONTOLOGY=="BP"])
 #[1] 21 #actually only descendents of BP goids
 gomap=gomap[names(gomap)%in%ids(slim)]
+#format to easy data frames
 slim=as.data.frame(do.call(rbind,lapply(1:21,function(x) 
 	cbind(names(gomap)[x],gomap[[x]]))))
 colnames(slim)=c("parent","child")
 slimnames=as.data.frame(sapply(unique(slim$parent),function(x) 
 	Term(GOTERM[[x]])))
-slimnames$id=rownames(slimnames)
+slimnames$parent=rownames(slimnames)
 colnames(slimnames)[1]="name"
-slimnames=slimnames[,2:1]
-#BPslimenrich=compareCluster(ID~subtype+component,
+#count categories per subtype
+BP.classes=as.data.frame(do.call(rbind,lapply(1:5,
+	function(x) cbind(names(exclusive$BP)[x],exclusive$BP[[x]]))))
+colnames(BP.classes)=c("subtype","child")
+BP.classes=merge(merge(BP.classes,slim,by="child"),
+	slimnames,by="parent")
+
+############TEST OVER-REPRESENTATION OF EXCLUSIVE FUNCTIONS
+bias=function(classes,v1,v2){
+	totals=table(classes[,c(v1,v2)])
+	s=colSums(totals)
+	ps=p.adjust(apply(totals,1,function(x) 
+	fisher.test(rbind(x,s-x),simulate.p.value=T)$p.val))
+	#TRUE needed coz > 2 categories
+	return(rownames(totals)[ps<0.05])}
+bias(KEGG.classes,4,2)
+#character(0)
+i=bias(BP.classes,4,3)
+#[1] "carbohydrate derivative metabolic process"
+#[2] "cell cycle"                               
+#[3] "cell population proliferation"            
+#[4] "establishment of localization"            
+#[5] "immune system process"                    
+#[6] "lipid metabolic process"                  
+#[7] "protein metabolic process"                
+#[8] "RNA metabolic process"                    
+#[9] "signaling"                                
+
+####PLOTS
+png("KEGGexclusive.png")
+KEGG.classes%>%count(subtype,class)%>%
+ ggplot(aes(x=n,y=class,fill=subtype))+
+ geom_bar(stat="identity",position="fill")+
+ annotate("text",x=1.05,y=sort(unique(KEGG.classes$class)),
+ 	label=KEGG.classes%>%count(class)%>%select(n)%>%unlist)+
+ scale_x_continuous(labels=scales::percent)+
+ theme(text=element_text(size=18),axis.ticks=element_blank(),
+ 	panel.background=element_blank())+xlab("")+ylab("")+
+scale_fill_viridis_d(option = "plasma")
+dev.off()
+
+#plot
+png("BPexclusive.png",width=600)
+BP.classes%>%count(subtype,name)%>%
+ggplot(aes(x=n,y=name,fill=subtype))+
+geom_bar(stat="identity",position="fill")+
+scale_x_continuous(labels=scales::percent)+
+ theme(text=element_text(size=18),axis.ticks=element_blank(),
+ 	panel.background=element_blank())+xlab("")+ylab("")+
+scale_fill_viridis_d(option = "plasma")+
+annotate("text",x=1.05,y=sort(unique(BP.classes$name)),
+ 	label=BP.classes%>%count(name)%>%select(n)%>%unlist)+
+annotate("text",y=i,x=-.05,label="*",size=8,vjust=.8)
+dev.off()
+
+
+
+#→→→→→→→→→→→→reduce por NES/p.value
+#cuadrantes size vs NES, pvalue = transparencia, color por subtipo?
+ 
+
+
+
+
+#BPslienrich=compareCluster(ID~subtype+component,
 #	data=as.data.frame(BPenrich),
 #	fun="enricher",
 #	TERM2GENE=slim,
@@ -197,7 +248,6 @@ slimnames=slimnames[,2:1]
 #	axis.text.x = element_text(angle = 45),legend.position=c(-1,.8))
 #dev.off()
 
-
 #BPsem=pairwise_termsim(BPenrich,semData=godata('org.Hs.eg.db',
 # ont="BP"))
 #BPsem@termsim has the semantic similarity bewteen go terms
@@ -210,15 +260,7 @@ slimnames=slimnames[,2:1]
 #heatBP1=heatBP%>%group_by(subtype,group)%>%summarise(genes=sum(genes),
 #	components=sum(components),processess=length(unique(Description)))
 
-
 #temp=clusterProfiler::simplify(BPenrich,
 #	cutoff=0.01,#semantic similarity higher than `cutoff` are redundant 
 #	by="p.adjust",
 #	select_fun=min)#select representative term by min p.adjust?
-
-
-
-
-#→→→→→→→→→→→→reduce por NES/p.value
-#cuadrantes size vs NES, pvalue = transparencia, color por subtipo?
- 
