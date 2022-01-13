@@ -95,46 +95,6 @@ pdf("enrichment.pdf")
  	text.scale=rep(1.5,6)))
 dev.off()
 
-#############CHECK SHARED FUNCTIONS
-library(enrichplot)
-heatmatrix=function(enrichment){
-	#only functions enriched in more than one dataset
-	i=enrichment%>%distinct(subtype,Description)%>%count(Description)%>%
- 	filter(n>1)%>%select(Description)%>%unlist
-	enrichment=enrichment[enrichment$Description%in%i,]
-	#count genes & component per function and subtype
-	edges=enrichment%>%select(subtype,Description,geneID)%>%
-		group_by(subtype,Description)
-	edges=edges%>%group_map(~length(unique(unlist(strsplit(.x$geneID,
-		"/")))))%>%unlist%>%cbind(group_keys(edges))
-	colnames(edges)[1]="genes"
-	edges1=enrichment%>%group_by(subtype,Description)%>%tally
-	colnames(edges1)[3]="components"
-	edges=merge(edges,edges1,by=c("subtype","Description"))
-return(edges)}
-KEGGshared=heatmatrix(KEGGenrich)
-#[1] 35 functions
-png("KEGGenrichment.png")
-ggplot(KEGGshared)+geom_point(aes(x=subtype,y=Description,
-	size=components,col=genes))+xlab("")+
-	theme(text=element_text(size=18))+
-	scale_color_gradient(low="blue",high="red")+theme_light()+
-	scale_size(range=c(2,10))
-dev.off()
-
-#select functions recursively enriched for further analyses
-temp=KEGGshared%>%select(-genes)%>%pivot_wider(names_from="subtype",
-	values_from="components")
-KEGGshared=temp$Description[rowSums(as.data.frame(temp)[,2:6]>1,na.rm=T)>0]
-#[1] 20 functions selected
-BPshared=heatmatrix(BPenrich)#is too large, so I don't plot it
-#[1] 271 functions
-temp=BPshared%>%select(-genes)%>%pivot_wider(names_from="subtype",
-	values_from="components")
-BPshared=temp$Description[rowSums(as.data.frame(temp)[,2:6]>1,na.rm=T)>0]
-#[1] 123 functions selected
-
-
 #############GROUP EXCLUSIVE FUNCTIONS
 exclusive=lapply(enriched,get_sets,exclusive=T)
 ids=read_tsv("KEGG.exclusive")#manual classification of unlist(unique(exclusive$KEGG))
@@ -211,7 +171,6 @@ KEGG.classes%>%count(subtype,class)%>%
 scale_fill_viridis_d(option = "plasma")
 dev.off()
 
-#plot
 png("BPexclusive.png",width=600)
 BP.classes%>%count(subtype,name)%>%
 ggplot(aes(x=n,y=name,fill=subtype))+
@@ -225,11 +184,72 @@ annotate("text",x=1.05,y=sort(unique(BP.classes$name)),
 annotate("text",y=i,x=-.05,label="*",size=8,vjust=.8)
 dev.off()
 
+#############ADD GSEA INFO
+library(ggrepel)
+
+gseaK=read_tsv("KEGG.gsea")
+#match gsea subtype to SGCCA result
+gseaK=gseaK%>%select(subtype,Description,NES,p.adjust)
+gseaK$subtype=gsub("_normal","",gseaK$subtype)
+gseaK$subtype=str_to_title(gseaK$subtype)
+gseaK$subtype=gsub("Lumb","LumB",gsub("Luma","LumA",gseaK$subtype))
+#count enriched components per function
+temp=KEGGenrich%>%group_by(subtype,Description)%>%tally
+temp=merge(temp,gseaK,by=c("subtype","Description"))
+png("NES-ncomp.png")
+ggplot(temp,aes(y=NES,x=n,alpha=-log(p.adjust),color=subtype))+
+geom_point(size=3)+xlab("components")+theme_light(base_size=18)+
+scale_color_manual(values=c("#0D0887","#7E03A8","#CC4678","#F89441"))+
+scale_alpha(range = c(0.2,1),breaks=c(0,3,15))+
+scale_x_continuous(breaks=seq(0,10,2))+
+geom_text_repel(aes(label=ifelse((p.adjust<0.001)&(n>2),
+	Description,'')),alpha=1)
+dev.off()
+j=unique(temp$Description[temp$n>1&temp$p.adjust<0.05])
+
+#############CHECK SHARED FUNCTIONS
+heatmatrix=function(enrichment){
+	#only functions enriched in more than one dataset
+	i=enrichment%>%distinct(subtype,Description)%>%count(Description)%>%
+ 	filter(n>1)%>%select(Description)%>%unlist
+	enrichment=enrichment[enrichment$Description%in%i,]
+	#count genes & component per function and subtype
+	edges=enrichment%>%select(subtype,Description,geneID)%>%
+		group_by(subtype,Description)
+	edges=edges%>%group_map(~length(unique(unlist(strsplit(.x$geneID,
+		"/")))))%>%unlist%>%cbind(group_keys(edges))
+	colnames(edges)[1]="genes"
+	edges1=enrichment%>%group_by(subtype,Description)%>%tally
+	colnames(edges1)[3]="components"
+	edges=merge(edges,edges1,by=c("subtype","Description"))
+return(edges)}
+
+KEGGshared=heatmatrix(KEGGenrich)
+png("KEGGenrichment.png",width=800)
+ggplot(KEGGshared)+geom_point(aes(x=subtype,y=Description,
+	size=components,col=genes))+xlab("")+ylab("")+
+	scale_color_gradient(low="blue",high="red")+
+	theme_light(base_size=18)+scale_size(range=c(2,10))+
+	theme(axis.ticks=element_blank())+
+#	annotate("text",y=j[j%in%KEGGshared$Description],x="Basal",
+#		label="*",size=7,vjust=.8,hjust=5)+
+	annotate("text",y=j[j%in%KEGGshared$Description],x="Normal",
+		label="*",size=7,vjust=.8,hjust=-4.1)+
+	coord_cartesian(clip="off")
+dev.off()
+
+BPshared=heatmatrix(BPenrich)#is too large, so I don't plot it
+#[1] 271 functions
+#→→→→→→→→→→→CHECK THIS#######################################
+#temp=BPshared%>%select(-genes)%>%pivot_wider(names_from="subtype",
+#	values_from="components")
+#BPshared=temp$Description[rowSums(as.data.frame(temp)[,2:6]>1,na.rm=T)>0]
+#[1] 123 functions selected
 
 
-#→→→→→→→→→→→→reduce por NES/p.value
-#cuadrantes size vs NES, pvalue = transparencia, color por subtipo?
- 
+
+
+
 
 
 

@@ -2,11 +2,12 @@ library(clusterProfiler)
 library(org.Hs.eg.db)
 library(biomaRt)
 library(enrichplot)
+library(tidyverse)
 load("DA.RData")
 
 #translate ensembl ids to ids kegg can use
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
-myannot=getBM(attributes = c("ensembl_gene_id","entrezgene",
+myannot=getBM(attributes = c("ensembl_gene_id","entrezgene_id",
 	"entrezgene_accession"), mart=mart)
 DE.genes=lapply(DE.genes,function(x) 
 	cbind(ensembl_gene_id=rownames(x),x))
@@ -20,7 +21,7 @@ get_ranks=function(x,ID){
 	r=r[!is.na(names(r))];
 	r=r[!duplicated(names(r))];
 	return(r)}
-ranks=lapply(DE.genes,function(x) get_ranks(x,"entrezgene"))
+ranks=lapply(DE.genes,function(x) get_ranks(x,"entrezgene_id"))
 #if ensembl_gene_id R crashes
 
 #GO GSEA
@@ -43,23 +44,4 @@ gseaK=lapply(ranks,function(x)
 gseaK=do.call(rbind,lapply(1:4,function(x) 
 	cbind(subtype=names(gseaK)[x],as.data.frame(gseaK[[x]]))))
 
-###########################
-#COMPARE WITH SGCCA OVER-REPRESENTED PATHWAYS
-############################
-library(tidyverse)
-library(ggplot2)
-
-keggenrich=read_tsv("KEGG.enrichment")
-png("sgcca_gsea.png")
-gseaK=gseaK[gseaK%ID%in%keggenrich$ID,]
-gseaK%>%ggplot(aes(subtype,Description,fill=NES,
-	alpha=-log(p.adjust)))+
-geom_tile()+scale_fill_gradient(low="blue", high="red")+
-scale_x_discrete(labels=c("basal_normal"="Basal",
-	"her2_normal"="Her2","luma_normal"="LumA","lumb_normal"="LumB"))+
-xlab("")+ylab("")+theme(panel.background=element_blank(),
-	axis.ticks=element_blank())
-dev.off()
-
-gseaK$subtype=gsub("Lumb","LumB",gsub("Luma","LumA",str_to_title(gsub("_normal","",gseaK$subtype))))
-gseaK%>%filter(p.adjust<0.01)%>%select(subtype,ID,NES)%>%merge(keggenrich,by=c("subtype","ID"))
+write_tsv(gseaK,"KEGG.gsea")
