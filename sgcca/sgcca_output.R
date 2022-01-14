@@ -187,25 +187,36 @@ dev.off()
 #############ADD GSEA INFO
 library(ggrepel)
 
-gseaK=read_tsv("KEGG.gsea")
+files=list.files()
+files=files[grep("gsea",files)]
+gsea=lapply(files,read_tsv)
+names(gsea)=gsub(".gsea","",files)
 #match gsea subtype to SGCCA result
-gseaK=gseaK%>%select(subtype,Description,NES,p.adjust)
-gseaK$subtype=gsub("_normal","",gseaK$subtype)
-gseaK$subtype=str_to_title(gseaK$subtype)
-gseaK$subtype=gsub("Lumb","LumB",gsub("Luma","LumA",gseaK$subtype))
+gsea=lapply(gsea,function(x) 
+	x%>%select(subtype,Description,NES,p.adjust))
+gsea=lapply(gsea,function(x) 
+	cbind(subtype=gsub("Luma","LumA",gsub("Lumb","LumB",
+		str_to_title(gsub("_normal","",x$subtype)))),x[,2:4]))
 #count enriched components per function
-temp=KEGGenrich%>%group_by(subtype,Description)%>%tally
-temp=merge(temp,gseaK,by=c("subtype","Description"))
-png("NES-ncomp.png")
-ggplot(temp,aes(y=NES,x=n,alpha=-log(p.adjust),color=subtype))+
-geom_point(size=3)+xlab("components")+theme_light(base_size=18)+
-scale_color_manual(values=c("#0D0887","#7E03A8","#CC4678","#F89441"))+
-scale_alpha(range = c(0.2,1),breaks=c(0,3,15))+
-scale_x_continuous(breaks=seq(0,10,2))+
-geom_text_repel(aes(label=ifelse((p.adjust<0.001)&(n>2),
-	Description,'')),alpha=1)
+temp=lapply(enriched,function(x)
+	x%>%group_by(subtype,Description)%>%tally)
+temp=lapply(1:2,function(x) merge(temp[[x]],gsea[[x]],
+	by=c("subtype","Description")))
+names(temp)=names(gsea)
+pdf("NES-ncomp.pdf")
+lapply(temp,function(x)
+	ggplot(x,aes(y=NES,x=n,alpha=-log(p.adjust),color=subtype))+
+	geom_point(size=3)+xlab("components")+theme_light(base_size=18)+
+	scale_color_manual(values=c("#0D0887","#7E03A8","#CC4678","#F89441"))+
+	scale_alpha(range = c(0.1,1),breaks=c(0,3,15))+
+	scale_x_continuous(breaks=seq(0,10,2))+
+	geom_text_repel(aes(label=ifelse((p.adjust<0.001)&(n>2),
+	Description,'')),alpha=1))
 dev.off()
-j=unique(temp$Description[temp$n>1&temp$p.adjust<0.05])
+j=lapply(temp,function(x)
+	unique(x$Description[x$n>1&x$p.adjust<0.05]))
+#  BP KEGG 
+#  63   16 
 
 #############CHECK SHARED FUNCTIONS
 heatmatrix=function(enrichment){
