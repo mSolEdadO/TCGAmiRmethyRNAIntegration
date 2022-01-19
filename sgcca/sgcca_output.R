@@ -97,7 +97,7 @@ dev.off()
 
 #############GROUP EXCLUSIVE FUNCTIONS
 exclusive=lapply(enriched,get_sets,exclusive=T)
-ids=read_tsv("KEGG.exclusive")#manual classification of unlist(unique(exclusive$KEGG))
+ids=read_tsv("KEGG.exclusive")#manual classification of unique(unlist(exclusive$KEGG))
 #data frame it
 KEGG.classes=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
 	cbind(names(exclusive$KEGG)[x],exclusive$KEGG[[x]]))))
@@ -202,7 +202,7 @@ temp=lapply(enriched,function(x)
 	x%>%group_by(subtype,Description)%>%tally)
 temp=lapply(1:2,function(x) merge(temp[[x]],gsea[[x]],
 	by=c("subtype","Description")))
-names(temp)=names(gsea)
+#names(temp)=names(gsea)
 pdf("NES-ncomp.pdf")
 lapply(temp,function(x)
 	ggplot(x,aes(y=NES,x=n,alpha=-log(p.adjust),color=subtype))+
