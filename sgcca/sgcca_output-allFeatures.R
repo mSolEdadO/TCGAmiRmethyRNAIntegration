@@ -39,12 +39,12 @@ sum(is.na(complexset$entrezgene_id))
 sum(!is.na(complexset$entrezgene_id))
 #[1] 192023
 complexset=complexset%>%filter(entrezgene_id!="NA")
+complexset$entrezgene_id=as.character(complexset$entrezgene_id)
 
-BPenrich$Basal=compareCluster(entrezgene_id~component,
-	data=complexset$Basal,
+BPenrich=compareCluster(entrezgene_id~subtype+component,
+	data=complexset,
 	fun="enrichGO",
 	OrgDb=org.Hs.eg.db,
-	keyType="ENSEMBL",
 	ont="BP",
 	readable=T,
 	pAdjustMethod = "fdr",
