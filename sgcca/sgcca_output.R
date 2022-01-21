@@ -40,7 +40,7 @@ BPenrich=compareCluster(variable~subtype+component,
 	data=sets,
 	fun="enrichGO",
 	OrgDb=org.Hs.eg.db,
-	keyType="ENSEMBL",
+	keyType="ENSEMBL",#entrezgene so output is comparable to allFeatures????
 	ont="BP",
 	readable=T,
 	pAdjustMethod = "fdr",
@@ -164,7 +164,7 @@ KEGG.classes%>%count(subtype,class)%>%
  ggplot(aes(x=n,y=class,fill=subtype))+
  geom_bar(stat="identity",position="fill")+
  annotate("text",x=1.05,y=sort(unique(KEGG.classes$class)),
- 	label=KEGG.classes%>%count(class)%>%select(n)%>%unlist)+
+ 	label=KEGG.classes%>%count(class)%>%dplyr::select(n)%>%unlist)+
  scale_x_continuous(labels=scales::percent)+
  theme(text=element_text(size=18),axis.ticks=element_blank(),
  	panel.background=element_blank())+xlab("")+ylab("")+
@@ -180,7 +180,7 @@ scale_x_continuous(labels=scales::percent)+
  	panel.background=element_blank())+xlab("")+ylab("")+
 scale_fill_viridis_d(option = "plasma")+
 annotate("text",x=1.05,y=sort(unique(BP.classes$name)),
- 	label=BP.classes%>%count(name)%>%select(n)%>%unlist)+
+ 	label=BP.classes%>%count(name)%>%dplyr::select(n)%>%unlist)+
 annotate("text",y=i,x=-.05,label="*",size=8,vjust=.8)
 dev.off()
 
