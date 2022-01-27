@@ -9,35 +9,32 @@ names(sets)=gsub(".selected","",files)
 
 #map every omic id to entrez
 methy=read_tsv("../Downloads/MapMethy.tsv")
-methy=methy[,c(1,4)]#keep only ids
-methy=separate_rows(methy,UCSC_RefGene_Name,convert=T)
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
 myannot=getBM(attributes = c("ensembl_gene_id","entrezgene_id",
-	"mirbase_id","hgnc_symbol"), mart=mart)
-sum(!unique(methy$UCSC_RefGene_Name)%in%myannot$hgnc_symbol)
-#[1] 3549 nothing to do about them
-#this aint ideal but recovers more features than entrezgene_accession
-colnames(methy)[2]="hgnc_symbol"
-myannot=merge(myannot,methy,by="hgnc_symbol")
-#loose names, keep IDs and DB
-myannot=myannot%>%dplyr::select(-1)%>%
-	pivot_longer(-2,values_to="variable",names_to="ID")%>%unique()
-
+	"mirbase_id"), mart=mart)
+#prepare to merge with sets
+myannot=myannot%>%pivot_longer(-entrezgene_id,names_to="DB",
+	values_to="variable")
+myannot=myannot%>%dplyr::select(entrezgene_id,variable)%>%
+	filter(variable!="")
+methy=methy%>%dplyr::select(entrezgene_id,IlmnID)
+colnames(methy)[2]="variable"
+myannot=rbind(myannot,methy)
 #add entrezgene_id to selected features
-sets=lapply(sets,function(x) merge(x,myannot,by="variable",all.x=T))
+sets=lapply(sets,function(x) merge(x,myannot,all.x=T,by="variable"))
+#all the transcripts serve for enrichment, some miRNAs & CpGs don't
+#sapply(setsAlt,function(x) table(x$omic[is.na(x$entrezgene_id)]))
+#       Basal Her2  LumA  LumB Normal
+#CpGs   14123 4038 41035 13250  10200
+#miRNAs     6    1    25     7      3
 
 #########################ACTUAL ENRICHMENT
 library(clusterProfiler)
 library(org.Hs.eg.db)
 
 complexset=do.call(rbind,lapply(1:5,function(x) 
-	cbind(names(sets)[x],sets[[x]][,c("component","entrezgene_id","ID")])))
+	cbind(names(sets)[x],sets[[x]][,c("component","entrezgene_id","omic")])))
 colnames(complexset)[1]="subtype"
-#lots of features don't have an entrezgene_id
-sum(is.na(complexset$entrezgene_id))
-#[1] 91361
-sum(!is.na(complexset$entrezgene_id))
-#[1] 192023
 complexset=complexset%>%filter(entrezgene_id!="NA")
 complexset$entrezgene_id=as.character(complexset$entrezgene_id)
 

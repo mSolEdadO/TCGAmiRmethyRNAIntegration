@@ -1,7 +1,20 @@
-methy=fread("../../../Downloads/HumanMethylation450_15017482_v1-2.csv",skip=7,sep=',')
-methy=methy[,c(1,22,24,26,29,30)]
-desglose=apply(methy,1,function(x) cbind(unlist(strsplit(x[2],";")),unlist(strsplit(x[3],";"))))
-desglose=lapply(desglose,unique)
-desglose=do.call(rbind,lapply(1:length(desglose),function(x) cbind(methy[x,1],desglose[[x]])))
-colnames(desglose)[2:3]=c("gene","position")
-write.table(desglose,"../ini/MapMethyProbeId.tsv",quote=F,row.names=F,sep='\t')
+library(tidyverse)
+library(biomaRt)
+methy=read_csv("humanmethylation450_15017482_v1-2.csv",skip=7)
+#drop control probes
+methy=methy[grep('^[0-9]',methy$IlmnID,perl=T,invert=T),]
+#only keep probe ID, mapping genes & affected position
+methy=methy%>%dplyr::select(IlmnID,UCSC_RefGene_Accession,
+	UCSC_RefGene_Group)%>%filter(!is.na(UCSC_RefGene_Accession))%>%
+	separate_rows(c(UCSC_RefGene_Accession,UCSC_RefGene_Group),
+		sep=';',convert=T)
+#add entrez id, needed for most enrichment tools	
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+myannot=getBM(attributes = c("entrezgene_id",
+	"refseq_mrna","refseq_ncrna"), mart=mart)
+myannot=myannot%>%pivot_longer(-1,names_to="type",values_to="refseq")
+methy=myannot%>%select(entrezgene_id,refseq)%>%
+	merge(methy,by="refseq",all.y=T)
+length(unique(methy$IlmnID[is.na(methy$entrezgene_id)]))
+#[1] 26912 out of 365860 probes don't map to entrez
+write_tsv(methy,"MapMethy.tsv")
