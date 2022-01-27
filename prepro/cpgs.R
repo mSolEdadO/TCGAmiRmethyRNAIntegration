@@ -18,3 +18,4 @@ methy=myannot%>%select(entrezgene_id,refseq)%>%
 length(unique(methy$IlmnID[is.na(methy$entrezgene_id)]))
 #[1] 26912 out of 365860 probes don't map to entrez
 write_tsv(methy,"MapMethy.tsv")
+#https://support.illumina.com/content/dam/illumina-support/documents/downloads/productfiles/methylationepic/infinium-methylationepic-manifest-column-headings.pdf
