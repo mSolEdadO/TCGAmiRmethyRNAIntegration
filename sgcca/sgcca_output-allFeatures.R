@@ -46,8 +46,7 @@ BPenrich=compareCluster(entrezgene_id~subtype+component,
 	readable=T,
 	pAdjustMethod = "fdr",
     pvalueCutoff  = 0.01)#slooow
-#No enrichment found in any of gene cluster, please check your input...
-#write_tsv(as.data.frame(BPenrich),"BP-allFeatures.enrichment")
+write_tsv(as.data.frame(BPenrich),"BP-allFeatures.enrichment")
 
 KEGGenrich=compareCluster(entrezgene_id~subtype+component,
 	data=complexset,
@@ -56,9 +55,7 @@ KEGGenrich=compareCluster(entrezgene_id~subtype+component,
 	organism = 'hsa',
 	pvalueCutoff = 0.01)
 #get a nice table
-KEGGenrich = as.data.frame(setReadable(KEGGenrich, OrgDb = org.Hs.eg.db,
- keyType="ENTREZID"))
-write_tsv(KEGGenrich,"KEGG-allFeatures.enrichment")                  
+write_tsv(as.data.frame(KEGGenrich),"KEGG-allFeatures.enrichment")                  
 
 ##################PLOT INTERSECTIONS
 library(UpSetR)
@@ -77,11 +74,11 @@ return(sets)}
 functions=lapply(enriched,get_sets,exclusive=F)
 #sapply(functions,function(x) sapply(x,length))
 #        BP KEGG
-#Basal  247   25
-#Her2   129   25
-#LumA   933   57
-#LumB   442   30
-#Normal  67   13
+#Basal  226   26
+#Her2   127   31
+#LumA   820   72
+#LumB   448   35
+#Normal  48   26
 pdf("enrichment-allFeatures.pdf")
  lapply(functions,function(x) upset(fromList(x),order.by="freq",
  	text.scale=rep(1.5,6)))
@@ -89,7 +86,21 @@ dev.off()
 
 #############GROUP EXCLUSIVE FUNCTIONS
 exclusive=lapply(enriched,get_sets,exclusive=T)
-ids=read_tsv("KEGG.exclusive")#manual classification of unique(unlist(exclusive$KEGG))
+#write_tsv(unique(KEGGenrich[KEGGenrich$ID%in%unlist(exclusive$KEGG),c("ID","Description")]),"KEGG.exclusive")
+#class comes from https://www.genome.jp/kegg-bin/download_htext?htext=br08901.keg&format=htext&filedir=
+#kegg=readLines("br08901.keg")
+#kegg=kegg[grep("^[A-Z]",kegg,perl=T)]
+#kegg=kegg[substr(kegg,1,1)!="A"]
+#i=which(substr(kegg,1,1)=="B")
+#i=c(i,length(kegg)+1)
+#keggL=lapply(1:59,function(x) kegg[(i[x]+1):(i[x+1]-1)])
+#names(keggL)=substr(kegg[i[1:59]],4,nchar(kegg[i[1:59]]))
+#keggL=lapply(keggL,function(x) substr(x,13,nchar(x)))
+#keggDF=as.data.frame(do.call(rbind,lapply(1:length(keggL),function(x) cbind(names(keggL)[x],keggL[[x]]))))
+#colnames(keggDF)=c("class","Description")
+#merge("KEGG.exclusive",keggDF,by="Description",all.x=T)
+#also simplified classes with ':' to the first term
+ids=read_tsv("KEGG.exclusive")
 #data frame it
 KEGG.classes=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
 	cbind(names(exclusive$KEGG)[x],exclusive$KEGG[[x]]))))
@@ -141,16 +152,15 @@ bias=function(classes,subtype,class){
 bias(KEGG.classes,2,4)
 #character(0)
 i=bias(BP.classes,3,4)
-#[1] "carbohydrate metabolic process" "DNA metabolic process"         
-#[3] "lipid metabolic process"        "protein metabolic process"     
-#[5] "RNA metabolic process"         
+#[1] "DNA metabolic process"   "immune system process"  
+#[3] "lipid metabolic process"
 
-png("KEGGexclusive-allFeatures.png")
+png("KEGGexclusive-allFeatures.png",width=600)
 KEGG.classes%>%count(subtype,class)%>%
  ggplot(aes(x=n,y=class,fill=subtype))+
  geom_bar(stat="identity",position="fill")+
  annotate("text",x=1.05,y=sort(unique(KEGG.classes$class)),
- 	label=KEGG.classes%>%count(class)%>%select(n)%>%unlist)+
+ 	label=KEGG.classes%>%count(class)%>%dplyr::select(n)%>%unlist)+
  scale_x_continuous(labels=scales::percent)+
  theme(text=element_text(size=18),axis.ticks=element_blank(),
  	panel.background=element_blank())+xlab("")+ylab("")+
@@ -170,7 +180,7 @@ annotate("text",y=i,x=-.05,label="*",size=8,vjust=.8)
 dev.off()
 
 #############ADD GSEA INFO
-library(ggrepel)
+#library(ggrepel)
 
 files=list.files()
 files=files[grep("gsea",files)]
@@ -200,7 +210,7 @@ dev.off()
 j=lapply(temp,function(x)
 	unique(x$Description[x$n>1&x$p.adjust<0.05]))
 #  BP KEGG 
-# 256   24 
+# 233   28
 
 #############CHECK SHARED FUNCTIONS
 heatmatrix=function(enrichment){
@@ -221,17 +231,17 @@ return(edges)}
 shared=lapply(enriched,heatmatrix)
 #sapply(shared,function(x) length(unique(x$Description)))
 #  BP KEGG 
-# 416   47 
+# 403   58 
 #BP is too large to plot
 
-png("KEGGenrichment-allFeatures.png",width=800,height=600)
+png("KEGGenrichment-allFeatures.png",width=800,height=700)
 ggplot(shared$KEGG)+geom_point(aes(x=subtype,y=Description,
 	size=components,col=genes))+xlab("")+ylab("")+
 	scale_color_gradient(low="blue",high="red")+
 	theme_light(base_size=18)+scale_size(range=c(2,10))+
 	theme(axis.ticks=element_blank())+
 	annotate("text",y=j$KEGG[j$KEGG%in%shared$KEGG$Description],x="Basal",
-		label="*",size=7,vjust=.8,hjust=5)+
+		label="*",size=7,vjust=.8,hjust=4.5)+
 	coord_cartesian(clip="off")
 dev.off()
 #plot the 19 BPs found in the 5 datasets
@@ -248,8 +258,8 @@ dev.off()
 #[1] 19 all affected by differential expression
 #############COMPARE WITH TRANSCRIPTS ONLY ENRICHMENT
 files=list.files()
-files=files[grep("enrichment",files)]
-files=files[c(2,7)]
+files=files[grep(".enrichment",files,fixed=T)]
+files=files[grep("all",files,invert=T)]
 ori=lapply(files,read_tsv)
 names(ori)=gsub(".enrichment","",files)
 temp=as.data.frame(cbind(set="transcripts only",
