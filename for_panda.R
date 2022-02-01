@@ -1,12 +1,4 @@
-library(pandaR)
-
-pandaRes <- panda(pandaToyData$motif,#c1:TF,c2:gene with a binding site,c3:1
-pandaToyData$expression,#measures
-pandaToyData$ppi,#c1:prote 1,c2:prote 2,c3:1
-hamming=.1,
-progress=TRUE)
-
-###########TO BUILD THE OBJECT NEEDED FOR PANDA U NEED A FEATRUREs MATRIX
+###########FEATRUREs MATRIX TO BUILD THE OBJECT NEEDED FOR PANDA
 library(tidyverse)
 LumB=read_tsv("LumB.selected")
 KEGGenrich=read_tsv("KEGG-allFeatures.enrichment")
@@ -23,7 +15,7 @@ data=fread("LumB.eigeNormi")
 data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
 data=data[rownames(data)%in%features,]
 
-###########TO BUILD THE OBJECT NEEDED FOR PANDA U NEED A REGULATORY NET
+###########REGULATORY NET TO BUILD THE OBJECT NEEDED FOR PANDA
 library(biomaRt)
 
 #regulatory info for CpGs
@@ -40,19 +32,68 @@ myannot=myannot%>%pivot_longer(-1,names_to="type",values_to="refseq")%>%
 methy=merge(methy,myannot,by="refseq",all.x=T)
 methy[methy$ensembl_gene_id%in%features,]
 
-##regulatory info for TFs
+#regulatory info for TFs
 tfs=read_tsv("../Downloads/TFtargets.tsv")
 tfs=tfs%>%separate_rows(target,sep=',',convert=T)
 tfs=tfs%>%separate_rows(TF,sep=',',convert=T)
 #keep only interactions between elements of feature set
 tfs=tfs[tfs$target%in%features&tfs$TF%in%features,]
 
-#CpG to transcript part of motif
-library(tidyverse)
-library(biomaRt)
+#regulatory info for miRNAs
+library(multiMiR)
+#only hsa-miR-375 has direct targets so u need mature IDs
+mirIDs=read_tsv("../Downloads/miR.ids.map.tsv",skip=1)
+mirIDs=mirIDs[mirIDs$precursor%in%features,]
+#get regulatory interactions with miRNAs in feature set
+miRtargets=get_multimir(mirna=c(mirIDs$mature,features),
+	summary=F,table="validated",legacy.out=F)
+miRtargets=multiMiR::select(miRtargets,keys="validated",
+	columns=columns(miRtargets),keytype="type")
+#keep only interactions with feature set
+miRtargets=miRtargets[miRtargets$target_ensembl%in%features,]
+miRtargets=merge(miRtargets,mirIDs,by="mature",all.x=T)
 
-methy=fread("../Downloads/MapMethy.tsv")
-methy=methy[methy$IlmnID%in%rownames(expre),]
-methy=separate_rows(methy[,c("IlmnID","UCSC_RefGene_Name")],
-					UCSC_RefGene_Name,convert=T) 
-lis
+#bring all together
+reguEdges=mapply(c, methy[,c("IlmnID","ensembl_gene_id")],
+				tfs[,c("TF","target")],
+				miRtargets[,c("precursor","target_ensembl")])
+colnames(reguEdges)=c("regulator","target")
+
+###########PPI TO BUILD THE OBJECT NEEDED FOR PANDA
+library(STRINGdb)
+library(igraph)
+library(biomaRt)
+#get human PPI
+string_db <- STRINGdb$new(species=9606)
+human_graph <- string_db$get_graph()#Timeout of 60 seconds was reached over & over
+#get nodes ensembl_peptide_id
+nodes=V(human_graph)$name
+nodes=cbind(nodes,gsub("^[0-9]+.","",nodes,perl=T))
+colnames(nodes)=c("name","ensembl_peptide_id")
+#map ensembl_peptide_id to ensembl_gene_id (in feature set)
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+myannot <- getBM(attributes = c("ensembl_gene_id","ensembl_peptide_id"),
+                 filters = "ensembl_gene_id",values =features,
+                 mart = mart)
+myannot=merge(myannot,nodes,by="ensembl_peptide_id",all.x=T)
+myannot=myannot[!is.na(myannot$name),]
+#keep inly the interactions between feature set
+edges=get.edgelist(human_graph)
+edges=edges[edges[,1]%in%myannot$name&edges[,2]%in%myannot$name,]
+#update node names to IDs in feature set 
+human_graph=graph.edgelist(edges)
+temp=myannot[myannot$name%in%V(human_graph)$name,]
+temp=temp[order(match(temp$name,V(human_graph)$name)),]
+V(human_graph)$name=temp$ensembl_gene_id
+edges=get.edgelist(human_graph)
+
+###########PPI TO BUILD THE OBJECT NEEDED FOR PANDA
+#list all together
+forPanda=list(expression=data.frame(data),
+	motif=data.frame(cbind(reguEdges,1)),
+	ppi=data.frame(cbind(edges1,1)))
+pandaRes <- panda(forPanda$motif,forPanda$expression,forPanda$ppi,progress=T)
+[1] "Initializing and validating"
+Error in tfCoopNetwork[Idx] <- ppi[, 3] : 
+  NAs are not allowed in subscripted assignments
+
