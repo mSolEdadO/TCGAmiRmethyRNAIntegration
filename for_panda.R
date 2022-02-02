@@ -71,10 +71,12 @@ nodes=V(human_graph)$name
 nodes=cbind(nodes,gsub("^[0-9]+.","",nodes,perl=T))
 colnames(nodes)=c("name","ensembl_peptide_id")
 #map ensembl_peptide_id to ensembl_gene_id (in feature set)
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",version=105)
+#https://dec2021.archive.ensembl.org
 myannot <- getBM(attributes = c("ensembl_gene_id","ensembl_peptide_id"),
-                 filters = "ensembl_gene_id",values =features,
-                 mart = mart)
+     filters = "ensembl_gene_id",values =reguEdges$regulator,
+     mart = mart)
+#only interested in nodes from PPI that are also TFs in the regulatory net
 myannot=merge(myannot,nodes,by="ensembl_peptide_id",all.x=T)
 myannot=myannot[!is.na(myannot$name),]
 #keep inly the interactions between feature set
@@ -96,4 +98,6 @@ pandaRes <- panda(forPanda$motif,forPanda$expression,forPanda$ppi,progress=T)
 [1] "Initializing and validating"
 Error in tfCoopNetwork[Idx] <- ppi[, 3] : 
   NAs are not allowed in subscripted assignments
+
+
 
