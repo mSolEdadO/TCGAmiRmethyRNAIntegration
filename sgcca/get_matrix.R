@@ -19,3 +19,23 @@ enriched$BP=enriched$BP%>%filter(!ID%in%todrop)
 features=lapply(enriched,function(x) 
 	x%>%dplyr::select(subtype,component,ID)%>%
 	merge(sets,by=c("subtype","component")))
+
+#get features matrix per function & subtype
+files=list.files()
+files=files[grep("eigeN",files)]
+data=lapply(files,function(x) data.table::fread(x))
+names(data)=gsub(".eigeNormi","",files)
+data=lapply(data,function(x) 
+	as.matrix(x[,2:ncol(x)],rownames=x$V1))
+data=lapply(features,function(z) 
+	lapply(unique(z$ID),function(x) 
+		lapply(unique(z$subtype),function(y) 
+			data[[y]][rownames(data[[y]])%in%
+				z$variable[z$ID==x&z$subtype==y],])))
+lapply(1:2,function(z) 
+	lapply(1:length(unique(features[[z]]$ID)),function(x) 
+		lapply(1:5,function(y) 
+				write.table(data[[z]][[x]][[y]],
+				paste(unique(features[[z]]$subtype)[y],
+					unique(features[[z]]$ID)[x],sep='.'),
+				sep='\t',quote=F))))
