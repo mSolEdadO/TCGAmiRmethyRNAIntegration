@@ -2,6 +2,9 @@
 sets=do.call(rbind,lapply(1:5,function(x) 
 	cbind(subtype=names(sets)[x],
 		sets[[x]][,c("component","variable")])))
+sets=do.call(rbind,lapply(1:5,function(x) 
+	cbind(names(sets)[x],sets[[x]][,c("variable","component")])))
+colnames(sets)[1]="subtype"
 
 #get functions enriched in the 4 subtypes & the normal tissue
 shared=sapply(functions,function(x) 
@@ -38,4 +41,4 @@ lapply(1:2,function(z)
 				write.table(data[[z]][[x]][[y]],
 				paste(unique(features[[z]]$subtype)[y],
 					unique(features[[z]]$ID)[x],sep='.'),
-				sep='\t',quote=F))))
+				sep='\t',col.names=F,quote=F))))

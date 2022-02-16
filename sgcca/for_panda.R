@@ -20,15 +20,20 @@ methy=read_tsv("/home/msoledad/param-rm/MapMethy.tsv")
 #keep only CpG regulators in feature set
 methy=methy[methy$IlmnID%in%features,]
 #keep only interaction with feature set
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
-	version=105)
+#mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
+#	version=105)
 #https://dec2021.archive.ensembl.org
-myannot=getBM(attributes = c("ensembl_gene_id","refseq_ncrna", 
-	"refseq_mrna","mirbase_id"), mart=mart)
+#myannot=getBM(attributes = c("ensembl_gene_id","refseq_ncrna", 
+#	"refseq_mrna","mirbase_id"), mart=mart)
+#write_tsv(myannot,"myannot")
+myannot=read_tsv("myannot")
 myannot=myannot%>%pivot_longer(-c(1,4),names_to="type",values_to="refseq")%>%
 		filter(refseq!="")
 methy=merge(methy,myannot,by="refseq",all.x=T)
 methy=methy[which(methy$ensembl_gene_id%in%features|methy$mirbase_id%in%features),]
+methy=methy[,c("IlmnID","ensembl_gene_id","mirbase_id")]
+methy=methy%>%pivot_longer(-1,names_to="type",values_to="target")%>%
+	filter(!is.na(target))
 
 #regulatory info for TFs
 tfs=read_tsv("/home/msoledad/param-rm/TFtargets.tsv")
@@ -55,13 +60,15 @@ colnames(miRtargets)=gsub("mature_mirna_id","mature",
 miRtargets=merge(miRtargets,mirIDs,by="mature",all.x=T)
 
 #bring all together
-reguEdges=mapply(c, methy[,c("IlmnID","ensembl_gene_id")],
+reguEdges=mapply(c, methy[,c("IlmnID","target")],
 				tfs[,c("TF","target")],
 				miRtargets[,c("precursor","target_ensembl")])
 colnames(reguEdges)=c("regulator","target")
+#reguEdges=reguEdges[rowSums(apply(reguEdges,2,function(x) x=="NA"))==0,]#drop NAs
 reguEdges=as.data.frame(reguEdges)
 if(nrow(reguEdges)>0){
-	write_tsv(reguEdges,paste(mtrx,"moti",sep='.'))}
+	write_tsv(cbind(reguEdges,1),paste(mtrx,"moti",sep='.'),
+		col_names=F)}
 
 ###########PPI TO BUILD THE OBJECT NEEDED FOR PANDA
 #get human PPI
@@ -94,12 +101,16 @@ temp=myannot[myannot$name%in%V(human_graph)$name,]
 temp=temp[order(match(temp$name,V(human_graph)$name)),]
 V(human_graph)$name=temp$ensembl_gene_id
 edges=get.edgelist(human_graph)
+#edges=edges[rowSums(apply(edges,2,function(x) x=="NA"))==0,]#drop NAs
 if(nrow(edges)>0){
-	write_tsv(as.data.frame(edges),paste(mtrx,"pp",sep='.'))}
+	write_tsv(cbind(as.data.frame(edges),1),
+		paste(mtrx,"pp",sep='.'),col_names=F)}
 
 print(paste(nrow(reguEdges),"regulatory interactions",
 						nrow(edges),"ppi between TFs",sep=' '))
 
+writeLines(features[substr(features,1,1)!="E"],
+	paste(mtrx,"nonTF",sep='.'))
 #python run_puma.py -e expre -m moti -p pp -i nonTF.txt -o mipuma.txt
 ##############################
 #library(igraph)
