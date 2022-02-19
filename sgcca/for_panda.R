@@ -8,13 +8,13 @@ library(tidyverse)
 library(multiMiR)
 library(STRINGdb)
 library(igraph)
-###########FEATRURE MATRIX TO BUILD THE OBJECT NEEDED FOR PANDA
+###########FEATRURE MATRIX TO BUILD THE OBJECT NEEDED BY PUMA
 
 data=data.table::fread(mtrx)
 data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
 features=rownames(data)
 
-###########REGULATORY NET TO BUILD THE OBJECT NEEDED FOR PANDA
+###########REGULATORY NET TO BUILD THE OBJECT NEEDED BY PUMA
 #regulatory info for CpGs
 methy=read_tsv("/home/msoledad/param-rm/MapMethy.tsv")
 #keep only CpG regulators in feature set
@@ -34,19 +34,34 @@ methy=methy[which(methy$ensembl_gene_id%in%features|methy$mirbase_id%in%features
 methy=methy[,c("IlmnID","ensembl_gene_id","mirbase_id")]
 methy=methy%>%pivot_longer(-1,names_to="type",values_to="target")%>%
 	filter(!is.na(target))
+methy=methy[methy$target%in%features,]
 
 #regulatory info for TFs
 tfs=read_tsv("/home/msoledad/param-rm/TFtargets.tsv")
 #keep only TFs targeting elements of feature set
-tfs=tfs%>%separate_rows(target,sep=',',convert=T)
-tfs=tfs[tfs$target%in%features,]
-#keep only interactions between elements of feature set
 tfs=tfs%>%separate_rows(TF,sep=',',convert=T)
-tfs=tfs[tfs$TF%in%features,]#separated coz tfs is looong
+tfs=tfs[tfs$TF%in%features,]
+#keep only interactions between elements of feature set
+#separated coz tfs is looong
+tfs=tfs%>%separate_rows(target,sep=',',convert=T)
+#recover TFs targeting miRNAs too
+colnames(tfs)=gsub("target","ensembl_gene_id",colnames(tfs))
+tfs=merge(tfs,myannot,by="ensembl_gene_id",all.x=T)
+tfs=tfs[tfs$ensembl_gene_id%in%features|tfs$mirbase_id%in%features,
+				c("TF","ensembl_gene_id","mirbase_id")]
+tfs=tfs%>%mutate(across(where(is.logical), as.character))%>%
+					pivot_longer(-1,names_to="type",values_to="target")%>%
+					filter(!is.na(target))%>%unique
+tfs=tfs[tfs$target%in%features,]
 
 #regulatory info for miRNAs
 #only hsa-miR-375 has direct targets so u need mature IDs
 mirIDs=read_tsv("/home/msoledad/param-rm/miR.ids.map.tsv",skip=1)
+#add precursors as possible regulators
+temp=mirIDs[,c(1,1)]
+colnames(temp)[2]="mature"
+temp$mature=gsub("mir","miR",temp$mature)
+mirIDs=unique(rbind(mirIDs,temp))
 mirIDs=mirIDs[mirIDs$precursor%in%features,]
 #get regulatory interactions with miRNAs in feature set
 miRtargets=get_multimir(mirna=c(mirIDs$mature,features),
@@ -63,14 +78,20 @@ miRtargets=merge(miRtargets,mirIDs,by="mature",all.x=T)
 reguEdges=mapply(c, methy[,c("IlmnID","target")],
 				tfs[,c("TF","target")],
 				miRtargets[,c("precursor","target_ensembl")])
-colnames(reguEdges)=c("regulator","target")
 #reguEdges=reguEdges[rowSums(apply(reguEdges,2,function(x) x=="NA"))==0,]#drop NAs
-reguEdges=as.data.frame(reguEdges)
-if(nrow(reguEdges)>0){
+if(is.null(nrow(reguEdges))){
+	writeLines(features,paste(mtrx,"nonTF",sep='.'))
+	stop("No regulatory edges")
+	} else{
+	reguEdges=as.data.frame(reguEdges)
+	colnames(reguEdges)=c("regulator","target")
 	write_tsv(cbind(reguEdges,1),paste(mtrx,"moti",sep='.'),
-		col_names=F)}
+		col_names=F)
+	######################NON TF LIST NEEDED BY PUMA
+	writeLines(features[!features%in%tfs$TF],
+		paste(mtrx,"nonTF",sep='.'))}
 
-###########PPI TO BUILD THE OBJECT NEEDED FOR PANDA
+###########PPI TO BUILD THE OBJECT NEEDED BY PUMA
 #get human PPI
 #string_db <- STRINGdb$new(species=9606)
 #human_graph <- string_db$get_graph()#Timeout of 60 seconds was reached over & over
@@ -86,17 +107,19 @@ nodes=cbind(nodes,gsub("^[0-9]+.","",nodes,perl=T))
 colnames(nodes)=c("name","ensembl_peptide_id")
 #map ensembl_peptide_id to ensembl_gene_id (in feature set)
 #mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",version=105)
-myannot <- getBM(attributes = c("ensembl_gene_id","ensembl_peptide_id"),
-     filters = "ensembl_gene_id",values =reguEdges$regulator,
-     mart = mart)
+#myannot <- getBM(attributes = c("ensembl_gene_id","ensembl_peptide_id"),
+#     mart = mart)
+#write_tsv(myannot,"myannot.Protes")
+myannot=read_tsv("myannot.Protes")                                         
+myannot=myannot[myannot$ensembl_gene_id%in%tfs$TF,]
 #only interested in nodes from PPI that are also TFs in the regulatory net
 myannot=merge(myannot,nodes,by="ensembl_peptide_id",all.x=T)
 myannot=myannot[!is.na(myannot$name),]
 #keep only the interactions between feature set
-edges=get.edgelist(human_graph)
-edges=edges[edges[,1]%in%myannot$name&edges[,2]%in%myannot$name,]
+human_edges=human_edges[human_edges$V1%in%myannot$name&
+	human_edges$V2%in%myannot$name,]
 #update node names to IDs in feature set 
-human_graph=graph.edgelist(edges)
+human_graph=graph.data.frame(human_edges)
 temp=myannot[myannot$name%in%V(human_graph)$name,]
 temp=temp[order(match(temp$name,V(human_graph)$name)),]
 V(human_graph)$name=temp$ensembl_gene_id
@@ -109,8 +132,6 @@ if(nrow(edges)>0){
 print(paste(nrow(reguEdges),"regulatory interactions",
 						nrow(edges),"ppi between TFs",sep=' '))
 
-writeLines(features[substr(features,1,1)!="E"],
-	paste(mtrx,"nonTF",sep='.'))
 #python run_puma.py -e expre -m moti -p pp -i nonTF.txt -o mipuma.txt
 ##############################
 #library(igraph)
