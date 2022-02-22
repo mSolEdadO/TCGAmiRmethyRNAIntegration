@@ -20,13 +20,13 @@ methy=read_tsv("/home/msoledad/param-rm/MapMethy.tsv")
 #keep only CpG regulators in feature set
 methy=methy[methy$IlmnID%in%features,]
 #keep only interaction with feature set
-#mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
-#	version=105)
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
+	version=105)
 #https://dec2021.archive.ensembl.org
-#myannot=getBM(attributes = c("ensembl_gene_id","refseq_ncrna", 
-#	"refseq_mrna","mirbase_id"), mart=mart)
+myannot=getBM(attributes = c("ensembl_gene_id","refseq_ncrna", 
+	"refseq_mrna","mirbase_id"), mart=mart)
 #write_tsv(myannot,"myannot")
-myannot=read_tsv("myannot")
+#myannot=read_tsv("myannot")
 myannot=myannot%>%pivot_longer(-c(1,4),names_to="type",values_to="refseq")%>%
 		filter(refseq!="")
 methy=merge(methy,myannot,by="refseq",all.x=T)
@@ -107,10 +107,10 @@ nodes=cbind(nodes,gsub("^[0-9]+.","",nodes,perl=T))
 colnames(nodes)=c("name","ensembl_peptide_id")
 #map ensembl_peptide_id to ensembl_gene_id (in feature set)
 #mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",version=105)
-#myannot <- getBM(attributes = c("ensembl_gene_id","ensembl_peptide_id"),
-#     mart = mart)
+myannot <- getBM(attributes = c("ensembl_gene_id","ensembl_peptide_id"),
+     mart = mart)
 #write_tsv(myannot,"myannot.Protes")
-myannot=read_tsv("myannot.Protes")                                         
+#myannot=read_tsv("myannot.Protes")                                         
 myannot=myannot[myannot$ensembl_gene_id%in%tfs$TF,]
 #only interested in nodes from PPI that are also TFs in the regulatory net
 myannot=merge(myannot,nodes,by="ensembl_peptide_id",all.x=T)
