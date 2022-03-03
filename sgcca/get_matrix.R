@@ -2,7 +2,6 @@
 sets=do.call(rbind,lapply(1:5,function(x) 
 	cbind(subtype=names(sets)[x],
 		sets[[x]][,c("component","variable")])))
-colnames(sets)[1]="subtype"
 
 #get functions enriched in the 4 subtypes & the normal tissue
 shared=sapply(functions,function(x) 
