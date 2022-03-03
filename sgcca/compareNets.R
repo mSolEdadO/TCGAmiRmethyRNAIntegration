@@ -7,6 +7,8 @@ library(tidyverse)
 library(igraph)
 library(ape)
 library(ggplot2)
+library(biomaRt)
+
 #########################LOAD NETS
 files=list.files()
 files=files[grep(fun,files)]
@@ -76,6 +78,9 @@ if(ecount(shared)==0){
 	n=4
 }
 shared=induced_subgraph(shared,which(degree(shared)>0))#drop loose nodes
+plot(shared,vertex.color="gray",vertex.label.cex=1.5,
+	vertex.frame.color=NA,vertex.label.family="sans",
+	vertex.label.color="black",edge.width=3)
 
 #DO WEIGHTS CHANGE ACROSS SUBTYPES?
 ws=edge_attr(shared)
@@ -89,27 +94,40 @@ ws%>%pivot_longer(-edge,names_to="subtype",values_to="weight")%>%
 	theme(text=element_text(size=18),axis.ticks.y=element_blank(),
 		axis.text.y=element_blank())
 #dev.off()
-
-#########################ADD KNOWN REGULATORY EDGES
-files=list.files()
-files=files[grep(fun,files)]
-files=files[grep("moti",files)]
-known=lapply(files,read_tsv,col_names=F)
-known=do.call(rbind,known)
-known=graph.data.frame(known[,1:2])
-#focus only on the nodes with shared links 
-known=make_ego_graph(known,
-	nodes=which(V(known)$name%in%V(shared)$name))
-final=rbind(get.edgelist(shared),
-			unique(do.call(rbind,lapply(known,get.edgelist))))
-nrow(final)
-[1] 206
-#por gene names y agrupa targets por función?????????
-
-
-temp=graph.edgelist(final)
-plot(temp,vertex.color="gray",vertex.label.cex=1.5,
-	vertex.frame.color=NA,vertex.label.family="sans",
-	vertex.label.color="black")
 #WHAT MAKES SPECIAL THIS EDGES?????????
 
+
+
+#MAKES NETWORK TOO LARGE
+#↓
+#↓
+#↓
+#########################ADD KNOWN REGULATORY EDGES 
+#files=list.files()
+#files=files[grep(fun,files)]
+#files=files[grep("moti",files)]
+#known=lapply(files,read_tsv,col_names=F)
+#known=do.call(rbind,known)
+#known=graph.data.frame(known[,1:2])
+##focus only on the nodes with shared links 
+#known=make_ego_graph(known,
+#	nodes=which(V(known)$name%in%V(shared)$name))
+#known=as.data.frame(unique(do.call(rbind,lapply(known,get.edgelist))))
+#known$type="known"
+#final=rbind(cbind(get.edgelist(shared),type="found"),
+#			known)
+#g=graph.data.frame(final[,1:2])
+#
+#bps=c("GO:0048568","GO:0061326","GO:0072006","GO:0072073","GO:0098742")
+#mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
+#	version=105)
+##https://dec2021.archive.ensembl.org
+#myannot <- getBM(attributes=c('hgnc_symbol', 
+#			'ensembl_gene_id','go_id','name_1006'),
+#			filters="ensembl_gene_id",
+#			values=V(g)$name,
+##filters = 'go', 
+#			#values = bps,
+#			 mart = mart)
+#                   #por gene names y agrupa targets por función?????????
+#
