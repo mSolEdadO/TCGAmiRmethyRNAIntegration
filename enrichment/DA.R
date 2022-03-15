@@ -22,7 +22,7 @@ levels=design)
 #check if count&variance are indi
 #if counts are more variable at lower expression, voom makes the 
 #data “normal enough”, 
-#though it eats counts & wont work with ur normalized stuff
+#wont work with ur log2-normalized stuff
 #v=voom(expre,design,plot=T,save.plot=T)#no need if fitted curve is smooth 
 #https://ucdavis-bioinformatics-training.github.io/2018-June-RNA-Seq-Workshop/thursday/DE.html
 
@@ -57,19 +57,40 @@ dev.off()
 write.table(temp,"DE.genes.tsv",sep='\t',quote=F,row.names=F)
 #next:GSEA
 #################miRNA###########################################
-mir=fread("Downloads/miRNAseqNormi.tsv")
+mir=fread("../Downloads/miRNAseqNormi.tsv")
 mir=as.matrix(mir[,2:ncol(mir)],rownames=mir$V1)
 
-v=voom(mir,design,plot=T,save.plot=T)#no need if fitted curve is smooth
+v=voom(mir,design,plot=T,save.plot=T)#coz mir is normalized, but no log2 transformed
 fit=lmFit(v,design)
 fitSubtype = contrasts.fit(fit, contr.mtrx)
-tfitSubtype=treat(fitSubtype, lfc = log2(1.5))
+#treat doesn't work so eBayes
+#tfitSubtype=treat(fitSubtype, lfc = log2(1.2))
+#DE.miR=lapply(1:4,function(x) 
+#	topTreat(tfitSubtype,coef=x,n=nrow(mir)))
+temp=eBayes(fitSubtype)
 DE.miR=lapply(1:4,function(x) 
-	topTreat(tfitSubtype,coef=x,n=nrow(mir)))
-names(DE.miR)=c("Basal_Normal","Her2_Normal",
-	"LumA_Normal","LumB_Normal")
-sapply(1:4,function(x) sum(DE.miR[[x]]$adj.P.Val<0.01))
-#[1] 329 185 132 220
+	topTable(temp,coef=x,n=Inf))
+
+names(DE.miR)=colnames(contr.mtrx)
+sapply(DE.miR,function(x) sum(x$adj.P.Val<0.05))
+#Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
+#         174            0           39           75 
+temp=do.call(rbind,lapply(1:4,function(x) 
+	cbind(contrast=names(DE.miR)[x],
+		id=rownames(DE.miR[[x]]),
+		DE.miR[[x]])))
+write.table(temp,"DE.miR.tsv",sep='\t',quote=F,row.names=F)
+
+
+
+
+
+
+
+
+
+
+
 #################methylation###########################################
 ##por ARSYN no hace falta este modelo tan complejo salvo para methy
 design=model.matrix(~0+subtype$subtype+subtype$tumor_stage+
@@ -97,50 +118,6 @@ table(methyDesign[,c(4,10)])
 load("subtiTMMArsyn.RData")
 gender=sapply(as.character(design$patient),function(x) unique(subtipos$gender[as.character(subtipos$patient)==x]))
 design=cbind(design,gender)
-
-
-#mRNA DE
-rna=do.call(cbind,sapply(concatenadas,function(x) x[[3]]))
-v=voom(rna,DE.design,plot=T,save.plot=T)
-#rna variance~[0.1,0.3]
-
-
-#esta bien usar t-test? no sabes si la expresión tiene distro normal, pero seguro no
-#tampoco esperas homogeneity no?
-
-
-#miR DE
-mirna=do.call(cbind,sapply(concatenadas,function(x) x[[1]]))
-v.miR=voom(mirna,DE.design,plot=T,save.plot=T)#mirna variance~[0.3,1.6]
-fit=lmFit(v.miR,DE.design)
-fitSubtype.miR = contrasts.fit(fit, contr.mtrx)
-tfitSubtype.miR=treat(fitSubtype.miR, lfc = log2(1.1))
-DE.miR=lapply(1:4,function(x) topTreat(tfitSubtype.miR,coef=x,n=nrow(mirna)))
-names(DE.miR)=c("basal_normal","her2_normal","luma_normal","lumb_normal")
-sapply(1:4,function(x) sum(DE.miR[[x]]$adj.P.Val<0.01))
-#[1] 328 278 259 291
-#no voom gives
-#[1] 298 259 248 282
-fiTemp=lmFit(mirna,DE.design) 
-fiTemp=contrasts.fit(fiTemp, contr.mtrx)
-pdf("DEmiRs.pdf")
-par(mfrow=c(2,2))
-sapply(1:4,function(x) plotMA(fiTemp,coef=x))
-sapply(1:4,function(x) plotMA(fitSubtype.miR,coef=x))
-sapply(1:4,function(x) {
-	volcanoplot(tfitSubtype.miR,coef=x)
-	abline(h=-log2(0.01),col="red")
-})
-dev.off()
-save(DE.genes,DE.miR,file="DA.RData")
-
-svg("voom.svg")
-par(mfrow=c(2,1))
-plot(v$voom.xy,xlab="log2(count size + 0.5)",ylab="Sqrt(standard deviation)",main="RNA")
-lines(v$voom.line,col="red")
-plot(v.miR$voom.xy,xlab="log2(count size + 0.5)",ylab="Sqrt(standard deviation)",main="miRNA")
-lines(v.miR$voom.line,col="red")
-dev.off()
 
 #CpG DM reccomended method: RUV-inverse outperforms existing methods in DA of 450k data
 M=lapply(1:4,function(x) cbind(concatenadas[[x]][[2]],concatenadas$normal[[2]]))

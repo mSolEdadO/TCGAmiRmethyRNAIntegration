@@ -189,9 +189,7 @@ names(gsea)=gsub(".gsea","",files)
 #match gsea subtype to SGCCA result
 gsea=lapply(gsea,function(x) 
 	x%>%dplyr::select(subtype,Description,NES,p.adjust))
-gsea=lapply(gsea,function(x) 
-	cbind(subtype=gsub("Luma","LumA",gsub("Lumb","LumB",
-		str_to_title(gsub("_normal","",x$subtype)))),x[,2:4]))
+gsea$KEGG$subtype=gsub("_Normal","",gsea$KEGG$subtype)
 #count enriched components per function
 temp=lapply(enriched,function(x)
 	x%>%group_by(subtype,Description)%>%tally)
@@ -204,13 +202,13 @@ lapply(temp,function(x)
 	geom_point(size=3)+xlab("components")+theme_light(base_size=18)+
 	scale_color_manual(values=c("#0D0887","#7E03A8","#CC4678","#F89441"))+
 	scale_alpha(range = c(0.1,1),breaks=c(0,3,15))+
-	geom_text_repel(aes(label=ifelse((p.adjust<0.001)&(n>(max(n)/3)),
+	geom_text_repel(aes(label=ifelse((p.adjust<0.01)&(n>(max(n)/5)),
 	Description,'')),alpha=1))
 dev.off()
 j=lapply(temp,function(x)
 	unique(x$Description[x$n>1&x$p.adjust<0.05]))
 #  BP KEGG 
-# 233   28
+# 107   14
 
 #############CHECK SHARED FUNCTIONS
 heatmatrix=function(enrichment){
@@ -244,18 +242,20 @@ ggplot(shared$KEGG)+geom_point(aes(x=subtype,y=Description,
 		label="*",size=7,vjust=.8,hjust=4.5)+
 	coord_cartesian(clip="off")
 dev.off()
-#plot the 19 BPs found in the 5 datasets
+#plot the 8 BPs found in the 5 datasets
 temp=names(which(table(shared$BP$Description)==5))
-#[1] 19
+#[1] 8
 png("BPenrichment-allFeatures.png",width=850)
-ggplot(shared$BP[shared$BP$Description%in%temp,])+geom_point(aes(x=subtype,y=Description,
-	size=components,col=genes))+xlab("")+ylab("")+
+ggplot(shared$BP[shared$BP$Description%in%temp,])+
+	geom_point(aes(x=subtype,y=Description,size=components,col=genes))+
+	xlab("")+ylab("")+
 	scale_color_gradient(low="blue",high="red")+
 	theme_light(base_size=18)+scale_size(range=c(2,10))+
-	theme(axis.ticks=element_blank())
+	theme(axis.ticks=element_blank())+
+	annotate("text",y=j$BP[j$BP%in%temp],x="Basal",
+		label="*",size=7,vjust=.8,hjust=4.5)+
+	coord_cartesian(clip="off")
 dev.off()
-#sum(j$BP%in%temp)
-#[1] 19 all affected by differential expression
 #############COMPARE WITH TRANSCRIPTS ONLY ENRICHMENT
 files=list.files()
 files=files[grep(".enrichment",files,fixed=T)]
