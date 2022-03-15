@@ -8,9 +8,10 @@ expre=as.matrix(expre[,2:ncol(expre)],rownames=expre$V1)
 
 #set comparisons
 #~0 gives a model where each coefficient corresponds to a group mean
-design=model.matrix(~0+subtype$subtype)
+subtype$subtype=factor(subtype$subtype)
+design=model.matrix(~0+subtype$subtype,subtype)
 #fix names
-colnames(design)=gsub("subtype.subtype","",colnames(design))
+colnames(design)=gsub("subtype","",colnames(design))
 contr.mtrx=makeContrasts(
 	basal_normal=Basal-Normal,
 	her2_normal=Her2-Normal,

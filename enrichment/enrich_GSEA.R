@@ -13,6 +13,8 @@ DE.genes=lapply(DE.genes,function(x)
 	cbind(ensembl_gene_id=rownames(x),x))
 DE.genes=lapply(DE.genes,function(x) 
 	merge(x,myannot,by="ensembl_gene_id"))
+#choosen over bitr, which fails to map 0.14% of input gene IDs
+
 #ranked genelist
 get_ranks=function(x,ID){ 
 	r=as.numeric(x$t);
@@ -33,7 +35,8 @@ gseaGO <-lapply(ranks,function(x)
             pvalueCutoff = 1,#to recover all sgcca over-represented paths 
 			pAdjustMethod="fdr"))
 gseaGO=do.call(rbind,lapply(1:4,function(x) 
-	cbind(subtype=names(gseaK)[x],as.data.frame(gseaK[[x]]))))
+	cbind(subtype=names(gseaGO)[x],as.data.frame(gseaGO[[x]]))))
+write_tsv(gseaGO,"BP.gsea")
 
 #KEGG GSEA
 gseaK=lapply(ranks,function(x) 
