@@ -2,31 +2,32 @@ library(limma)
 library(data.table)
 
 #################RNA###########################################
-subtype=read.table("subtype.tsv",header=T,sep='\t')
-expre=fread("RNAseqnormalized.tsv")
+subtype=read.table("../Downloads/subtype.tsv",header=T,sep='\t')
+expre=fread("../Downloads/RNAseqnormalized.tsv")
 expre=as.matrix(expre[,2:ncol(expre)],rownames=expre$V1)
 
 #set comparisons
 #~0 gives a model where each coefficient corresponds to a group mean
 subtype$subtype=factor(subtype$subtype)
-design=model.matrix(~0+subtype$subtype,subtype)
+design=model.matrix(~0+subtype,subtype)
 #fix names
 colnames(design)=gsub("subtype","",colnames(design))
 contr.mtrx=makeContrasts(
-	basal_normal=Basal-Normal,
-	her2_normal=Her2-Normal,
-	luma_normal=LumA-Normal,
-	lumb_normal=LumB-Normal,
+	Basal_Normal=Basal-Normal,
+	Her2_Normal=Her2-Normal,
+	LumA_Normal=LumA-Normal,
+	LumB_Normal=LumB-Normal,
 levels=design)
 
 #check if count&variance are indi
 #if counts are more variable at lower expression, voom makes the 
-#data “normal enough”
-v=voom(expre,design,plot=T,save.plot=T)#no need if fitted curve is smooth
+#data “normal enough”, 
+#though it eats counts & wont work with ur normalized stuff
+#v=voom(expre,design,plot=T,save.plot=T)#no need if fitted curve is smooth 
 #https://ucdavis-bioinformatics-training.github.io/2018-June-RNA-Seq-Workshop/thursday/DE.html
 
 #fit a linear model using weighted least squares for each gene
-fit=lmFit(v,design)
+fit=lmFit(log2(expre),design)#lots of NA, if no log2 lfc is huge & u get lot of DE.genes
 fitSubtype = contrasts.fit(fit, contr.mtrx)
 #treat is better than fc+p.val thresholds, that increase FP
 tfitSubtype=treat(fitSubtype, lfc = log2(1.5))
@@ -34,11 +35,10 @@ tfitSubtype=treat(fitSubtype, lfc = log2(1.5))
 #depending on the sample size and precision of the experiment
 DE.genes=lapply(1:4,function(x) 
 	topTreat(tfitSubtype,coef=x,n=nrow(expre)))
-names(DE.genes)=c("Basal_Normal","Her2_Normal",
-	"LumA_Normal","LumB_Normal")
-sapply(1:4,function(x) sum(DE.genes[[x]]$adj.P.Val<0.01))
-#[1] 5279 4370 4051 4867
-#pdf("DEgenes.pdf")
+names(DE.genes)=colnames(contr.mtrx)
+sapply(DE.genes,function(x) sum(x$adj.P.Val<0.01))
+#        5334         4455         4075         4982 
+##pdf("DEgenes.pdf")
 #par(mfrow=c(2,2))
 #sapply(1:4,function(x) plotMA(fitSubtype,coef=x))
 #sapply(1:4,function(x) {
@@ -47,12 +47,14 @@ sapply(1:4,function(x) sum(DE.genes[[x]]$adj.P.Val<0.01))
 #})
 #dev.off()
 temp=do.call(rbind,lapply(1:4,function(x) 
-	cbind(names(DE.genes)[x],DE.genes[[x]])))
+	cbind(contrast=names(DE.genes)[x],
+		ensembl_gene_id=rownames(DE.genes[[x]]),
+		DE.genes[[x]])))
 png("logFC.png")
 ggplot(temp,aes(y=logFC,x=contrast,color=contrast))+
 	geom_boxplot()+theme(legend.position="none")
 dev.off()
-#write.table(temp,"DE.genes.tsv",sep='\t',quote=F)
+write.table(temp,"DE.genes.tsv",sep='\t',quote=F,row.names=F)
 #next:GSEA
 #################miRNA###########################################
 mir=fread("Downloads/miRNAseqNormi.tsv")
