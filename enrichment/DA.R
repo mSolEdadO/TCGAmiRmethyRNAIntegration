@@ -1,5 +1,7 @@
 library(limma)
 library(data.table)
+#https://ucdavis-bioinformatics-training.github.io/2018-June-RNA-Seq-Workshop/thursday/DE.html
+#https://f1000research.com/articles/5-1408/v1
 
 #################RNA###########################################
 subtype=read.table("../Downloads/subtype.tsv",header=T,sep='\t')
@@ -63,14 +65,13 @@ mir=as.matrix(mir[,2:ncol(mir)],rownames=mir$V1)
 v=voom(mir,design,plot=T,save.plot=T)#coz mir is normalized, but no log2 transformed
 fit=lmFit(v,design)
 fitSubtype = contrasts.fit(fit, contr.mtrx)
-#treat doesn't work so eBayes
+#treat doesn't find any DE miR
 #tfitSubtype=treat(fitSubtype, lfc = log2(1.2))
 #DE.miR=lapply(1:4,function(x) 
 #	topTreat(tfitSubtype,coef=x,n=nrow(mir)))
 temp=eBayes(fitSubtype)
 DE.miR=lapply(1:4,function(x) 
 	topTable(temp,coef=x,n=Inf))
-
 names(DE.miR)=colnames(contr.mtrx)
 sapply(DE.miR,function(x) sum(x$adj.P.Val<0.05))
 #Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
@@ -81,28 +82,118 @@ temp=do.call(rbind,lapply(1:4,function(x)
 		DE.miR[[x]])))
 write.table(temp,"DE.miR.tsv",sep='\t',quote=F,row.names=F)
 
-
-
-
-
-
-
-
-
-
-
 #################methylation###########################################
-##por ARSYN no hace falta este modelo tan complejo salvo para methy
-design=model.matrix(~0+subtype$subtype+subtype$tumor_stage+
-	subtype$treatment_or_therapy+subtype$race+
-	subtype$ajcc_pathologic_t+subtype$primary_diagnosis+
-	subtype$age_at_index+subtype$ajcc_pathologic_m)
+clin <- TCGAbiolinks::GDCquery_clinic("TCGA-BRCA","clinical")
+colnames(subtype)[3]="bcr_patient_barcode"
+subtype=merge(subtype,clin,by="bcr_patient_barcode",all.x=T)
+#apply(subtype,2,table) choose cols with various categories
+subtype=subtype[,c("bcr_patient_barcode",
+					"samples",
+					"tissue",
+					"subtype",
+					"age_at_diagnosis",
+					"treatments_pharmaceutical_treatment_or_therapy",
+					"treatments_radiation_treatment_or_therapy",
+					"race",
+					"ajcc_pathologic_m",
+					"ajcc_pathologic_n",
+					"morphology",
+					"ajcc_pathologic_t",
+					"prior_malignancy",
+					"primary_diagnosis",
+					"ajcc_pathologic_stage")]
+write.table(subtype,"../Downloads/subtype.tsv",sep='\t',quote=F,row.names=F)
+
+methy=data.table::fread("methyM.tsv")
+methy=as.matrix(methy[,2:ncol(methy)],rownames=methy$V1)
+subtype=subtype[order(match(subtype$samples,colnames(methy))),]
+#change category names for numbers or makeContrast wont work 
+subtype=cbind(subtype[,1:5],
+			  apply(subtype[,6:15],2,function(x)
+ 			     factor(as.numeric(factor(x)))))
+subtype[is.na(subtype)]=0#force NA to be another category or ur loose samples
+
+#given the large N(>>5) and cancer effect, all methods are expected to work similarly
+design=model.matrix(~0+subtype+age_at_diagnosis+morphology+
+	ajcc_pathologic_m+ajcc_pathologic_n+ajcc_pathologic_t+
+	primary_diagnosis+ajcc_pathologic_stage,subtype)
+#used this complex model coz methy didn't went through ARSYN 
+#no treatment covarites/prior_malignancy coz groups're mixed in PCA
+colnames(design)=gsub("subtype","",colnames(design))
+contr.mtrx=makeContrasts(
+	Basal_Normal=Basal-Normal,
+	Her2_Normal=Her2-Normal,
+	LumA_Normal=LumA-Normal,
+	LumB_Normal=LumB-Normal,
+levels=design)
+
+fit=lmFit(methy,design)
+#Coefficients not estimable: primary_diagnosis
+#Partial NA coefficients for 393132 probe(s) 
+fitSubtype = contrasts.fit(fit, contr.mtrx)
+#temp=eBayes(fitSubtype) #only with subtype
+#DMcpgs=lapply(1:4,function(x) topTable(temp,coef=x,n=Inf))
+#Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
+#      246810       228203       261208       256139 
+#use treat to get lower dm cpgs
+tfitSubtype=treat(fitSubtype, lfc = log2(1.5))
+DMcpgs=lapply(1:4,function(x) 
+	topTreat(tfitSubtype,coef=x,n=Inf))
+names(DMcpgs)=colnames(contr.mtrx)
+sapply(DMcpgs,function(x) sum(x$adj.P.Val<0.05))
+#Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
+#       61132        77776        89863       114345 
+#when desing only considers subtype, DMs don't change much
+#Maksimovic2015 says unadjusted limma has lots of FP
+#Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
+#       64687        79396        88830       115412 
+temp=do.call(rbind,lapply(1:4,function(x) 
+	cbind(contrast=names(DMcpgs)[x],
+		id=rownames(DMcpgs[[x]]),
+		DMcpgs[[x]])))
+write.table(temp,"DMcpgs.tsv",sep='\t',quote=F,row.names=F)
+
+
+
+#RUV-inverse outperforms existing methods in DA of 450k data
+design=model.matrix(~0+subtype,subtype)
+colnames(design)=gsub("subtype","",colnames(design))
+contr.mtrx=makeContrasts(
+	Basal_Normal=Basal-Normal,
+	Her2_Normal=Her2-Normal,
+	LumA_Normal=LumA-Normal,
+	LumB_Normal=LumB-Normal,
+levels=design)
+#stage 1: find empirical controls not associated with subtypes 
+fit=lmFit(methy,design)
+fitSubtype = contrasts.fit(fit, contr.mtrx)
+temp=eBayes(fitSubtype) #only with subtype
+DMcpgs=lapply(1:4,function(x) topTable(temp,coef=x,n=Inf))
+#Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
+#      246810       228203       261208       256139 
+ctlimma=lapply(DMcpgs,function(x) x$adj.P.Val > 0.5)
+sapply(ctlimma,table)
+#      Basal_Normal Her2_Normal LumA_Normal LumB_Normal
+#FALSE       339154      329948      345252      338195
+#TRUE         53978       63184       47880       54937
+
+# Stage 2 analysis
+library(missMethyl)
+rfit <- sapply(1:4,function(x) 
+	RUVfit(Y=methy[,subtype$subtype%in%unique(subtype$subtype)[c(x,5)]],
+		   X=factor(subtype$subtype[subtype$subtype%in%unique(subtype$subtype)[c(x,5)]]),
+		   ctl=ctlimma[[x]])) 
+rfit <- lapply(rfit,RUVadj)
+DMcpg=lapply(rfit,function(x) topRUV(x,num=Inf))
+names(DMcpgs)=colnames(contr.mtrx)
+sapply(DMcpg,function(x) sum(x[x$p.ebayes.BH<0.01,1]<0))
+
+methy=fread("methyM.tsv",select=which(subtype$subtype%in%c("Basal","Normal")))
+
+
 
 #library(sva)
-library(missMethyl)
 load("porSubti.RData")
-#https://ucdavis-bioinformatics-training.github.io/2018-June-RNA-Seq-Workshop/thursday/DE.html
-#https://f1000research.com/articles/5-1408/v1
 
 methy=do.call(cbind,sapply(concatenadas,function(x) x[[2]]))
 design=methyDesign[methyDesign$barcode%in%colnames(methy),]
@@ -126,7 +217,6 @@ DE.design=lapply(1:4,function(x)
 	model.matrix(~1+as.factor(c(rep(names(i)[x],i[x]),rep("normal",75)))))
 #stage 1: find empirical controls not associated with subtypes 
 fit = lapply(1:4,function(x) lmFit(M[[x]],DE.design[[x]]))
-#unadjusted limma is the worst method coz it has lots of false positive [Maksimovic2015]
 efit=lapply(fit,eBayes)
 topr=lapply(efit,function(x) topTable(x,num=Inf))## Removing intercept from test coefficients
 sapply(topr,function(x) sum(x$logFC[x$adj.P.Val<0.01]<0))#most DMs possible
