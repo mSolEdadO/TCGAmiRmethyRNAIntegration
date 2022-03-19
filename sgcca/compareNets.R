@@ -99,13 +99,12 @@ shared=intersection(nets$Basal,
 if(ecount(shared)==0){
 	stop("No shared edges")
 	}
-n=5
 shared=induced_subgraph(shared,which(degree(shared)>0))#drop loose nodes
 
 #DO WEIGHTS CHANGE ACROSS SUBTYPES?
 ws=edge_attr(shared)
-ws=as.data.frame(do.call(cbind,ws[1:n]))
-colnames(ws)=names(nets)[1:n]
+ws=as.data.frame(do.call(cbind,ws[1:5]))
+colnames(ws)=names(nets)[1:5]
 #ws$edge=1:nrow(ws)
 #png(paste(fun,"weights.png",sep='.'))
 #ws%>%pivot_longer(-edge,names_to="subtype",values_to="weight")%>%
@@ -116,23 +115,39 @@ colnames(ws)=names(nets)[1:n]
 #dev.off()
 
 #plot
-load("../../Downloads/DA.RData")
-DE.miR=lapply(DE.miR,function(x) x[rownames(x)%in%V(shared)$name,])
-DM.cpg1=lapply(DM.cpg1,function(x) x[rownames(x)%in%V(shared)$name,])
-DE.miR=do.call(rbind,lapply(1:4,function(x) cbind(contrast=names(DE.miR)[x],DE.miR[[x]],node=rownames(DE.miR[[x]]))))
-DM.cpg1=do.call(rbind,lapply(1:4,function(x) cbind(contrast=names(DM.cpg1)[x],DM.cpg1[[x]],node=rownames(DM.cpg1[[x]]))))
-cols=rbind(DE.miR,DM.cpg1)
-cols=cols[order(match(cols$node,V(shared)$name)),]
+demir=read_tsv("../DE.miR.tsv")
+de=read_tsv("../DE.genes.tsv")
+dm=read_tsv("../DMcpgs-RUV.tsv")
+da=list(cpgs=dm,genes=de,mir=demir)
+colnames(da$genes)[1]="id"
+
+da=lapply(da,function(x) x[which(x$id%in%V(shared)$name),])
+da=as.data.frame(unique(mapply(rbind,da$cpgs[,c(1,2,7)],
+	do.call(rbind,lapply(da[2:3],function(x) x[,c(1,2,5)])))))
+da=da[order(match(da$id,V(shared)$name)),]
+colnames(da)[3]="fc"
 lay=layout.auto(shared)
+#########
+
+
+
+
+
+
+
+#fix colors
+
+cols=rev(RColorBrewer::brewer.pal(name="RdBu",n=10))
 png(paste(fun,"shared_net.png",sep='_'))
 par(mfrow=c(2,2))
 sapply(1:4,function(x) {
 	plot(shared,
-	vertex.color=rev(RColorBrewer::brewer.pal(name="RdBu",n=10))[cols$t[cols$contrast==unique(cols$contrast)[x]]],
+	vertex.color=cols[factor(da$fc[da$contrast==unique(da$contrast)[x]])],
 	vertex.label.cex=1.5,layout=lay,vertex.size=30,
 	vertex.label.family="sans",main=names(nets)[x],
 	vertex.label.color="black",
-	edge.label=c("","-")[factor(as.numeric(ws[,x])<0,levels=c("FALSE","TRUE"))],
+	edge.label=c("","-")[factor(as.numeric(ws[,x])<0,
+		levels=c("FALSE","TRUE"))],
 	edge.label.cex=3,
 	edge.width=10*abs(as.numeric(ws[,x])))})
 dev.off()
