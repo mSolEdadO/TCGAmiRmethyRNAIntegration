@@ -82,7 +82,8 @@ temp=do.call(rbind,lapply(1:4,function(x)
 		DE.miR[[x]])))
 write.table(temp,"DE.miR.tsv",sep='\t',quote=F,row.names=F)
 
-#################methylation###########################################
+#################METHYLATION###########################################
+#get covariates
 clin <- TCGAbiolinks::GDCquery_clinic("TCGA-BRCA","clinical")
 colnames(subtype)[3]="bcr_patient_barcode"
 subtype=merge(subtype,clin,by="bcr_patient_barcode",all.x=T)
@@ -103,7 +104,6 @@ subtype=subtype[,c("bcr_patient_barcode",
 					"primary_diagnosis",
 					"ajcc_pathologic_stage")]
 write.table(subtype,"../Downloads/subtype.tsv",sep='\t',quote=F,row.names=F)
-
 methy=data.table::fread("methyM.tsv")
 methy=as.matrix(methy[,2:ncol(methy)],rownames=methy$V1)
 subtype=subtype[order(match(subtype$samples,colnames(methy))),]
@@ -113,7 +113,9 @@ subtype=cbind(subtype[,1:5],
  			     factor(as.numeric(factor(x)))))
 subtype[is.na(subtype)]=0#force NA to be another category or ur loose samples
 
-#given the large N(>>5) and cancer effect, all methods are expected to work similarly
+#GIVEN THE LARGE N(>>5) AND CANCER EFFECT, ALL METHODS ARE EXPECTED TO WORK SIMILARLY
+
+#1st approach: limma (control for covariates)
 design=model.matrix(~0+subtype+age_at_diagnosis+morphology+
 	ajcc_pathologic_m+ajcc_pathologic_n+ajcc_pathologic_t+
 	primary_diagnosis+ajcc_pathologic_stage,subtype)
@@ -126,16 +128,11 @@ contr.mtrx=makeContrasts(
 	LumA_Normal=LumA-Normal,
 	LumB_Normal=LumB-Normal,
 levels=design)
-
 fit=lmFit(methy,design)
 #Coefficients not estimable: primary_diagnosis
 #Partial NA coefficients for 393132 probe(s) 
 fitSubtype = contrasts.fit(fit, contr.mtrx)
-#temp=eBayes(fitSubtype) #only with subtype
-#DMcpgs=lapply(1:4,function(x) topTable(temp,coef=x,n=Inf))
-#Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
-#      246810       228203       261208       256139 
-#use treat to get lower dm cpgs
+#use treat to get lower dm cpgs than eBayes would
 tfitSubtype=treat(fitSubtype, lfc = log2(1.5))
 DMcpgs=lapply(1:4,function(x) 
 	topTreat(tfitSubtype,coef=x,n=Inf))
@@ -144,18 +141,18 @@ sapply(DMcpgs,function(x) sum(x$adj.P.Val<0.05))
 #Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
 #       61132        77776        89863       114345 
 #when desing only considers subtype, DMs don't change much
-#Maksimovic2015 says unadjusted limma has lots of FP
 #Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
 #       64687        79396        88830       115412 
+#but Maksimovic2015 says unadjusted limma has lots of FP
+#is this approach enriched on FP??????
 temp=do.call(rbind,lapply(1:4,function(x) 
 	cbind(contrast=names(DMcpgs)[x],
 		id=rownames(DMcpgs[[x]]),
 		DMcpgs[[x]])))
 write.table(temp,"DMcpgs.tsv",sep='\t',quote=F,row.names=F)
 
-
-
-#RUV-inverse outperforms existing methods in DA of 450k data
+#2nd apporach; RUV-inverse (outperforms existing methods in DA of 450k data)
+#stage 1: find empirical controls not associated with subtypes 
 design=model.matrix(~0+subtype,subtype)
 colnames(design)=gsub("subtype","",colnames(design))
 contr.mtrx=makeContrasts(
@@ -164,10 +161,9 @@ contr.mtrx=makeContrasts(
 	LumA_Normal=LumA-Normal,
 	LumB_Normal=LumB-Normal,
 levels=design)
-#stage 1: find empirical controls not associated with subtypes 
 fit=lmFit(methy,design)
 fitSubtype = contrasts.fit(fit, contr.mtrx)
-temp=eBayes(fitSubtype) #only with subtype
+temp=eBayes(fitSubtype) 
 DMcpgs=lapply(1:4,function(x) topTable(temp,coef=x,n=Inf))
 #Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
 #      246810       228203       261208       256139 
@@ -177,90 +173,23 @@ sapply(ctlimma,table)
 #FALSE       339154      329948      345252      338195
 #TRUE         53978       63184       47880       54937
 
-# Stage 2 analysis
+#stage 2: differential methylation
 library(missMethyl)
-rfit <- sapply(1:4,function(x) 
+rfit <- sapply(1:4,function(x)
+	#compare each subtype with the normal tissue (5th unique subtype) 
 	RUVfit(Y=methy[,subtype$subtype%in%unique(subtype$subtype)[c(x,5)]],
 		   X=factor(subtype$subtype[subtype$subtype%in%unique(subtype$subtype)[c(x,5)]]),
 		   ctl=ctlimma[[x]])) 
-rfit <- lapply(rfit,RUVadj)
+#adjust for unwanted variation
+rfit <- lapply(rfit,RUVadj,Y=methy)
+#get the statistics of each cpg
 DMcpg=lapply(rfit,function(x) topRUV(x,num=Inf))
 names(DMcpgs)=colnames(contr.mtrx)
-sapply(DMcpg,function(x) sum(x[x$p.ebayes.BH<0.01,1]<0))
-
-methy=fread("methyM.tsv",select=which(subtype$subtype%in%c("Basal","Normal")))
-
-
-
-#library(sva)
-load("porSubti.RData")
-
-methy=do.call(cbind,sapply(concatenadas,function(x) x[[2]]))
-design=methyDesign[methyDesign$barcode%in%colnames(methy),]
-#add gender factor, to control for it on DM, nor on DE coz ARSyN is expected to have wiped all unwanted signal
-table(methyDesign[,c(4,10)])
-#        gender
-#subtype  female male
-#  Basal     135    0
-#  Her2       74    1
-#  LumA      331    0
-#  LumB      170    7
-#  normal     96    0
-load("subtiTMMArsyn.RData")
-gender=sapply(as.character(design$patient),function(x) unique(subtipos$gender[as.character(subtipos$patient)==x]))
-design=cbind(design,gender)
-
-#CpG DM reccomended method: RUV-inverse outperforms existing methods in DA of 450k data
-M=lapply(1:4,function(x) cbind(concatenadas[[x]][[2]],concatenadas$normal[[2]]))
-i=sapply(M,ncol)-75
-DE.design=lapply(1:4,function(x) 
-	model.matrix(~1+as.factor(c(rep(names(i)[x],i[x]),rep("normal",75)))))
-#stage 1: find empirical controls not associated with subtypes 
-fit = lapply(1:4,function(x) lmFit(M[[x]],DE.design[[x]]))
-efit=lapply(fit,eBayes)
-topr=lapply(efit,function(x) topTable(x,num=Inf))## Removing intercept from test coefficients
-sapply(topr,function(x) sum(x$logFC[x$adj.P.Val<0.01]<0))#most DMs possible
-#[1] 118260  82020 113250 109812
-sapply(topr,function(x) sum(x$logFC[x$adj.P.Val<0.01]>0))
-#[1] 113345 131402 103097 102783
-ctl=lapply(topr,function(x) x$adj.P.Val>0.5) 
-# performance is consistent when controls are selected based on FDR cut-off
-sapply(ctl,table)#Maksimovic uses  2051 ‘true’ positives and 170 629 ‘true’ negatives
-#        [,1]   [,2]   [,3]   [,4]
-#FALSE 342764 336375 330017 332717
-#TRUE   41811  48200  54558  51858
-# Stage 2 analysis
-rfit <- sapply(1:4,function(x) RUVfit(data=M[[x]], design=DE.design[[x]], coef=2, ctl=ctl[[x]])) 
-rfit <- lapply(rfit,RUVadj)
-DM.cpg=lapply(rfit,function(x) topRUV(x,num=Inf))
-names(DM.cpg1)=c("luma_normal","basal_normal","lumb_normal","her2_normal")
-sapply(DM.cpg,function(x) sum(x[x$p.ebayes.BH<0.01,1]<0))
-#[1]    8 1146 1710 3620
-sapply(DM.cpg,function(x) sum(x[x$p.ebayes.BH<0.01,2]>0))
-#[1]   48 1312 1664 2877
-#lumA may have less DM coz it has more samples, so the same threshold doesn't work for all subtypes 
-
-#Alternative method
-#given the large N(>>5) and cancer effect (gives the 1st PC), all methods are expected to work similarly
-#though this only controls for KNOWN batches
-DE.design=model.matrix(~0+design$subtype+design$plate+design$sample+design$vial+design$portion,design$gender)
-colnames(DE.design)=gsub("design.","",colnames(DE.design))
-fit1 = lmFit(methy,DE.design)
-contr.mtrx=rbind(contr.mtrx,matrix(rep(0,(ncol(DE.design)-nrow(contr.mtrx))*ncol(contr.mtrx)),ncol=ncol(contr.mtrx)))
-#0 for covariates, we're only after subtype signal 
-fitSubtype.M1 = contrasts.fit(fit1, contr.mtrx)
-tfitSubtype.M1 = treat(fitSubtype.M1,lfc=log2(1.5))
-DM.cpg1=lapply(1:4,function(x) topTreat(tfitSubtype.M1,coef=x,n=nrow(methy)))
-names(DM.cpg1)=colnames(contr.mtrx)
-sapply(DM.cpg1,function(x) sum(x$logFC[x$adj.P.Val<0.01]<0))
-#[1] 11266 11289  6882 25298
-sapply(DM.cpg1,function(x) sum(x$logFC[x$adj.P.Val<0.01]>0))
-#[1] 18367 27116 10847 39200
-png("DM.png")
-par(mfrow=c(3,4))
-sapply(efit,limma::plotMA)
-sapply(DM.cpg,function(x) plot(x[,c(1,5)],log="y",ylim=c(1,1e-13),ylab="log(p.ebayes)",xlab="lfc",pch='.'))
-sapply(1:4,function(x) limma::volcanoplot(tfitSubtype.M1,coef=x,main=names(DM.cpg1)[x]))
-dev.off()
-
-save(DE.genes,DE.miR,DM.cpg,DM.cpg1,file="DA.RData")
+sapply(DMcpgs,function(x) sum(x$F.p.BH<0.01))
+#Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
+#        3654         8757           56         4442 
+temp=do.call(rbind,lapply(1:4,function(x) 
+	cbind(contrast=names(DMcpgs)[x],
+		id=rownames(DMcpgs[[x]]),
+		DMcpgs[[x]])))
+write.table(temp,"DMcpgs-RUV.tsv",sep='\t',quote=F,row.names=F)
