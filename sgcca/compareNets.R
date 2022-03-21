@@ -127,29 +127,21 @@ da=as.data.frame(unique(mapply(rbind,da$cpgs[,c(1,2,7)],
 da=da[order(match(da$id,V(shared)$name)),]
 colnames(da)[3]="fc"
 lay=layout.auto(shared)
-#########
-
-
-
-
-
-
-
-#fix colors
-
 cols=rev(RColorBrewer::brewer.pal(name="RdBu",n=10))
+da$cols=cols[factor(round(as.numeric(da$fc),digits=1))]
 png(paste(fun,"shared_net.png",sep='_'))
 par(mfrow=c(2,2))
 sapply(1:4,function(x) {
 	plot(shared,
-	vertex.color=cols[factor(da$fc[da$contrast==unique(da$contrast)[x]])],
+	vertex.color=da$cols[da$contrast==unique(da$contrast)[x]],
 	vertex.label.cex=1.5,layout=lay,vertex.size=30,
 	vertex.label.family="sans",main=names(nets)[x],
 	vertex.label.color="black",
 	edge.label=c("","-")[factor(as.numeric(ws[,x])<0,
 		levels=c("FALSE","TRUE"))],
 	edge.label.cex=3,
-	edge.width=10*abs(as.numeric(ws[,x])))})
+	edge.width=10*abs(as.numeric(ws[,x])),
+	edge.curved=autocurve.edges2(shared))})
 dev.off()
 #WHAT MAKES SPECIAL THIS EDGES?????????
 
@@ -159,7 +151,7 @@ dev.off()
 #↓
 #↓
 #↓
-#########################ADD KNOWN REGULATORY EDGES 
+#########################ADD KNOWN REGULATORY EDGES « net becomes huge
 #library(biomaRt)
 #files=list.files()
 #files=files[grep(fun,files)]
