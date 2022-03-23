@@ -54,9 +54,11 @@ ps=p.adjust(sapply(names(shared),function(z) {#per edge type
 	colnames(mat)=c("FALSE","TRUE")#correct NA
 	mat[is.na(mat)]=0#correct NA
 	fisher.test(mat,alternative='l')$p.val}))#test
+if(sum(ps<0.01)>0){
 print(paste(names(which(ps<0.01)),
 	"edges are more shared than expected, with p.values",
 	ps[ps<0.01],sep=' '))
+}
 #alternative
 #temp=chisq.test(do.call(rbind,shared))
 #print(temp$residuals)
@@ -65,10 +67,10 @@ print(paste(names(which(ps<0.01)),
 #########################EXCLUSIVE EDGES
 exclusive=edges[!edges$i%in%edges$i[duplicated(edges$i)],]
 #net with exclusive edges
-exclusive=exclusive%>%group_by(subtype)%>%
+g_exclusive=exclusive%>%group_by(subtype)%>%
 			group_map(~graph.data.frame(.x[,c("X1","X2")]))
-dg=sapply(exclusive,degree)
-names(dg)=sapply(strsplit(files,".",fixed=T),function(x) x[1])
+names(g_exclusive)=exclusive%>%group_by(subtype)%>%group_keys()%>%unlist()
+dg=sapply(g_exclusive,degree)
 #df to plot
 temp=as.data.frame(do.call(rbind,sapply(1:5,function(x) 
 	cbind(subtype=names(dg)[x],g=dg[[x]]))))
@@ -80,31 +82,43 @@ ggplot(temp,aes(x=as.numeric(g),col=subtype,fill=subtype))+
 dev.off()
 #check high degree nodes
 temp=sapply(dg,function(x) names(which(x>mean(x))))#1:present,0:absent
+temp=table(as.data.frame(do.call(rbind,sapply(1:5,function(x)
+ cbind(temp[[x]],names(temp)[x])))))
 temp=apply(temp,1,paste,collapse="")#0,1 chains ordered as the nets
 if(sum(temp=="11110")){
 	print(paste(names(which(temp=="11110")),
-	"is a high degree node, shared by the 4 subtype networks"))
+	"is a high degree node within exclusive edges of the 4 subtype networks"))
 }
 if(sum(temp=="11111")){
 	print(paste(names(which(temp=="11111")),
-	"is a high degree node, shared by the 5 networks"))
+	"is a high degree node within exclusive edges of the 5 networks"))
 }
 
+
 #########################INTERSECT NETS
+n=5
 shared=intersection(nets$Basal,
 					nets$Her2,
 					nets$LumA,
 					nets$LumB,
 					nets$Normal)
 if(ecount(shared)==0){
-	stop("No shared edges")
+shared=intersection(nets$Basal,
+					nets$Her2,
+					nets$LumA,
+					nets$LumB)
+	if(ecount(shared)==0){
+		stop("No shared edges")
 	}
+n=4
+print("Only the networks of the subtypes share any edges")
+}
 shared=induced_subgraph(shared,which(degree(shared)>0))#drop loose nodes
 
 #DO WEIGHTS CHANGE ACROSS SUBTYPES?
 ws=edge_attr(shared)
-ws=as.data.frame(do.call(cbind,ws[1:5]))
-colnames(ws)=names(nets)[1:5]
+ws=as.data.frame(do.call(cbind,ws[1:n]))
+colnames(ws)=names(nets)[1:n]
 #ws$edge=1:nrow(ws)
 #png(paste(fun,"weights.png",sep='.'))
 #ws%>%pivot_longer(-edge,names_to="subtype",values_to="weight")%>%
@@ -115,9 +129,9 @@ colnames(ws)=names(nets)[1:5]
 #dev.off()
 
 #plot
-demir=read_tsv("../DE.miR.tsv")
-de=read_tsv("../DE.genes.tsv")
-dm=read_tsv("../DMcpgs-RUV.tsv")
+demir=read_tsv("DE.miR.tsv")
+de=read_tsv("DE.genes.tsv")
+dm=read_tsv("DMcpgs-RUV.tsv")
 da=list(cpgs=dm,genes=de,mir=demir)
 colnames(da$genes)[1]="id"
 
@@ -129,6 +143,33 @@ colnames(da)[3]="fc"
 lay=layout.auto(shared)
 cols=rev(RColorBrewer::brewer.pal(name="RdBu",n=10))
 da$cols=cols[factor(round(as.numeric(da$fc),digits=1))]
+
+#copied from https://stackoverflow.com/questions/16875547/using-igraph-how-to-force-curvature-when-arrows-point-in-opposite-directions
+autocurve.edges2 <-function (graph, start = 0.5)
+{
+    cm <- count.multiple(graph)
+    mut <-is.mutual(graph)  #are connections mutual?
+    el <- apply(get.edgelist(graph, names = FALSE), 1, paste,
+        collapse = ":")
+    ord <- order(el)
+    res <- numeric(length(ord))
+    p <- 1
+    while (p <= length(res)) {
+        m <- cm[ord[p]]
+        mut.obs <-mut[ord[p]] #are the connections mutual for this point?
+        idx <- p:(p + m - 1)
+        if (m == 1 & mut.obs==FALSE) { #no mutual conn = no curve
+            r <- 0
+        }
+        else {
+            r <- seq(-start, start, length = m)
+        }
+        res[ord[idx]] <- r
+        p <- p + m
+    }
+    res
+}
+
 png(paste(fun,"shared_net.png",sep='_'))
 par(mfrow=c(2,2))
 sapply(1:4,function(x) {
