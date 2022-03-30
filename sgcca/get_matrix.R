@@ -19,11 +19,10 @@ comp=enrich%>%filter(ID==fun&subtype==subty)%>%
 selected=read_tsv(paste(subty,"selected",sep='.'))
 features=selected%>%filter(component==unlist(comp))%>%
 		 distinct(variable)%>%unlist
-print(paste("Function has",nrow(features),"features associated",sep=' '))
+#print(paste("Function has",length(features),"features associated",sep=' '))
 
 #get the data
 data=data.table::fread(paste(subty,"eigeNormi",sep='.'))
 data=data[data$V1%in%features,]
-data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
-write.table(data,paste(fun,subty,"mtrx",sep='.'),sep='\t',quote=F)
+write_tsv(data,paste(fun,subty,"mtrx",sep='.'),col_names=F)#needed for puma
 

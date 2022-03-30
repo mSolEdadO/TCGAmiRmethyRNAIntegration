@@ -23,10 +23,10 @@ methy=methy[methy$IlmnID%in%features,]
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
 	version=105)
 #https://dec2021.archive.ensembl.org
-myannot=getBM(attributes = c("ensembl_gene_id","refseq_ncrna", 
-	"refseq_mrna","mirbase_id"), mart=mart)
+#myannot=getBM(attributes = c("ensembl_gene_id","refseq_ncrna", 
+#	"refseq_mrna","mirbase_id"), mart=mart)
 #write_tsv(myannot,"myannot")
-#myannot=read_tsv("myannot")
+myannot=read_tsv("myannot")
 myannot=myannot%>%pivot_longer(-c(1,4),names_to="type",values_to="refseq")%>%
 		filter(refseq!="")
 methy=merge(methy,myannot,by="refseq",all.x=T)
@@ -93,7 +93,7 @@ if(is.null(nrow(reguEdges))){
 
 ###########PPI TO BUILD THE OBJECT NEEDED BY PUMA
 #get human PPI
-#string_db <- STRINGdb$new(species=9606)
+#string_db <- STRINGdb$new(species=9606,score_threshold=999)
 #human_graph <- string_db$get_graph()#Timeout of 60 seconds was reached over & over
 #human_edges=get.edgelist(human_graph)
 #write_tsv(as.data.frame(human_edges),"human_graph")
