@@ -179,7 +179,17 @@ annotate("text",x=1.05,y=sort(unique(BP.classes$name)),
 annotate("text",y=i,x=-.05,label="*",size=8,vjust=.8)
 dev.off()
 
-#############ADD GSEA INFO
+#to check exclusive categories
+#temp=sapply(i,function(y) 
+#	p.adjust(sapply(unique(BP.classes$subtype),function(x) fisher.test(
+#		matrix(c(sum(BP.classes$name==y&BP.classes$subtype==x),
+#				sum(BP.classes$name==y&BP.classes$subtype!=x),
+#				sum(BP.classes$name!=y&BP.classes$subtype==x),
+#				sum(BP.classes$name!=y&BP.classes$subtype!=x)),
+#		ncol=2),alternative="g")$p.val)))
+#Term(BP.classes$child[BP.classes$name=="immune system process"&BP.classes$subtype=="Basal"])
+
+############ADD GSEA INFO
 #library(ggrepel)
 
 files=list.files()
