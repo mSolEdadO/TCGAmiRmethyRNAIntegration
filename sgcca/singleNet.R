@@ -62,6 +62,7 @@ nodes=nodes%>%unite("name",c(hgnc_symbol.x,hgnc_symbol.y),na.rm=T)%>%
 	  #paste all the names linked to the same feature
 	  group_by(feature)%>%summarise(name=paste(name,collapse=','))
 nodes$name[nodes$name==""]=nodes$feature[nodes$name==""]
+nodes$name=gsub("hsa-mir","miR",nodes$name)
 #order all
 if(vcount(g)!=sum(V(g)$name%in%nodes$feature)){
 	stop("names didn't match")
@@ -69,18 +70,18 @@ if(vcount(g)!=sum(V(g)$name%in%nodes$feature)){
 nodes=nodes[order(match(nodes$feature,V(g)$name)),]
 V(g)$label=nodes$name
 
-#start ctyoscape 1st
-system("Cytoscape",wait=F,ignore.stdout=T,ignore.stderr=T)
+#start ctyoscape manually 1st, by system it fails randomly 
+#system("Cytoscape",wait=F,ignore.stdout=T,ignore.stderr=T)
 #plot the network
-gc=createNetworkFromIgraph(g,"myIgraph")
+gc=createNetworkFromIgraph(g,subtype)
 setNodeLabelMapping(table.column="label")
-layoutNetwork("hierarchical")
+#layoutNetwork("hierarchical")
 setNodeFontSizeDefault(18)
 setEdgeLineWidthMapping(table.column="width",
 	widths=c(1,20))#pass widths or it'll make huge edges
 setNodeShapeMapping(table.column="type",
     table.column.values=list('c','E','h'),
-    shapes=list("ELLIPSE","RECTANGLE","TRIANGLE"))#automatic mapping fails, so pass this 
+    shapes=list("ELLIPSE","RECTANGLE","HEXAGON"))#automatic mapping fails, so pass this 
 #sets colors manually coz it fails with object 'res' not found
 #setNodeColorMapping(table.column="color",
 #	mapping.type="c",
@@ -96,6 +97,8 @@ setEdgeColorMapping(table.column="color",
     mapping.type="discrete",
 	table.column.values = c(TRUE,FALSE),
 	colors=c('#6600CC','#737373'))
+setEdgeTargetArrowShapeDefault('DELTA')
+setEdgeTargetArrowColorDefault('#737373')
 clearEdgeBends()
 saveSession(filename=gsub("tsv","cys",net))
 #closeSession(FALSE)
