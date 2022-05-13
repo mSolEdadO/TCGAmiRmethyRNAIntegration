@@ -219,7 +219,7 @@ j=lapply(temp,function(x)
 	unique(x$Description[x$n>1&x$p.adjust<0.05]))
 #  BP KEGG 
 # 107   14
-
+#names(j)=names(enriched) check j is named
 #############CHECK SHARED FUNCTIONS
 heatmatrix=function(enrichment){
 	#only functions enriched in more than one dataset
@@ -242,8 +242,44 @@ shared=lapply(enriched,heatmatrix)
 # 403   58 
 #BP is too large to plot
 
+#################################################################
+#jaccard distance matrix with the number of 					#
+#components where each pair of functions are enriched together	#
+subtypes=unique(enriched$KEGG$subtype)
+coenriched=lapply(enriched,function(x) lapply(subtypes,
+	function(y) x[x$subtype==y,]))
+coenriched=lapply(coenriched,function(z) lapply(z,function(w) 
+	1-sapply(unique(w$Description),function(x) 
+		sapply(unique(w$Description),function(y) 
+			length(intersect(w$component[w$Description==x],
+				w$component[w$Description==y]))/
+			length(union(w$component[w$Description==x],
+				w$component[w$Description==y]))))))
+#u coul also just show the trees
+trees=lapply(coenriched,function(x) lapply(x,function(y) 
+	hclust(as.dist(y))))
+#get the groups that are enriched exactly in the same components
+groups=lapply(groups,function(x) lapply(x,function(y) 			
+	cutree(y,h=0)))	
+#paste with heatmatrix output
+groups=lapply(groups,function(x) lapply(1:5,function(y) 
+	data.frame(cbind("subtype"=subtypes[y],
+					 "Description"=names(x[[y]]),
+					 "group"=x[[y]]))))
+groups=lapply(groups,function(x) do.call(rbind,x))
+temp=merge(groups$KEGG,shared$KEGG,
+	by=c("subtype","Description"),all.y=T)
+#fix groups so shapes can be repeated between columns
+temp=temp%>%group_by(subtype)%>%add_count(group)
+temp$group[temp$n==1]=0
+temp$group=temp%>%group_by(subtype)%>%
+	group_map(~as.numeric(as.factor(.x$group)))%>%unlist
+#alternative plot
+ggplot(temp)+geom_point(aes(x=subtype,y=Description,size=components,col=genes,shape=groupf))+scale_color_gradient(low="blue",high="red")+theme_light(base_size=18)+scale_size(range=c(3,10))+theme(axis.ticks=element_blank())++scale_shape_manual(values=c(19:17,15,2:0),guide="none")
+
+#################################################################
 png("KEGGenrichment-allFeatures.png",width=800,height=700)
-ggplot(shared$KEGG)+geom_point(aes(x=subtype,y=Description,
+p=ggplot(shared$KEGG)+geom_point(aes(x=subtype,y=Description,
 	size=components,col=genes))+xlab("")+ylab("")+
 	scale_color_gradient(low="blue",high="red")+
 	theme_light(base_size=18)+scale_size(range=c(2,10))+
@@ -286,3 +322,7 @@ geom_density(aes(y=..scaled..),alpha=0.3)+
 facet_wrap(~DB)+theme(text=element_text(size=18))+
 scale_x_continuous(breaks=c(0,0.005,0.01))
 dev.off()
+
+##########################
+
+
