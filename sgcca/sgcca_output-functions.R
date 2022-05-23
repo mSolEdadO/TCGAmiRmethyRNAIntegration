@@ -258,8 +258,14 @@ coenriched=lapply(coenriched,function(z) lapply(z,function(w)
 #u coul also just show the trees
 trees=lapply(coenriched,function(x) lapply(x,function(y) 
 	hclust(as.dist(y))))
+#plots I'm not sure I want
+names(tree$KEGG)=subtypes
+pdf("KEGG.trees.pdf")
+lapply(subtypes,function(x) plot(trees$KEGG[[x]],main=x))
+dev.off()
+
 #get the groups that are enriched exactly in the same components
-groups=lapply(groups,function(x) lapply(x,function(y) 			
+groups=lapply(trees,function(x) lapply(x,function(y) 			
 	cutree(y,h=0)))	
 #paste with heatmatrix output
 groups=lapply(groups,function(x) lapply(1:5,function(y) 
