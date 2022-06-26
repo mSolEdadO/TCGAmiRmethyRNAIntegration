@@ -1,5 +1,6 @@
 library(tidyverse)
 library(biomaRt)
+library(rentrez)
 
 ####################PER SUBTYPE ANALYSIS################### 
 files=list.files()
@@ -38,7 +39,7 @@ topg=merge(top,myannot,by="variable")%>%
 #get literature on the gene[4] & subtype[2]
 known=apply(topg,1,function(x) 
 	entrez_search(db="pubmed",
-				  term=paste(x[2],x[4],"cancer",sep=' ')))
+				  term=paste(x[2],x[4],"cancer",sep=' AND ')))
 #repeated features
 top=top%>%pivot_wider(names_from="subtype",values_from=n)
 
@@ -85,39 +86,19 @@ intersect_functions=function(data,fun){
 				"index"=jacc(set$geneID[set$subtype==subtys[x]],
 						   set$geneID[set$subtype==subtys[y]]))))))
 return(mat)}
-temp=lapply(features,function(x) 
+jindx=lapply(features,function(x) 
 	data.frame(do.call(rbind,lapply(unique(x$Description),function(y)
 		intersect_functions(x,y)))))
-temp=lapply(temp,function(x) cbind(x,"pair"=paste(x$pair1,pair2)))
+jindx=lapply(jindx,function(x) cbind(x,"pair"=paste(x$pair1,pair2)))
 #plot distributions of Jaccard Index
 pdf("enrichJacc.pdf",width=15)
- lapply(temp,function(z) ggplot(z,aes(x=pair,y=as.numeric(index)))+
+ lapply(jindx,function(z) ggplot(z,aes(x=pair,y=as.numeric(index)))+
  	geom_boxplot()+ylab("jaccard index")+
  	theme(text=element_text(size=18)))
 dev.off()
 #save it for puma nets
 write_tsv(do.call(rbind,lapply(1:2,function(x) 
-	cbind("class"=c("BP","KEGG")[x],temp[[x]][,1:4]))),
+	cbind("class"=c("BP","KEGG")[x],jindx[[x]][,1:4]))),
 "funcJaccI.tsv")
 
 
-#################### CHECK ENRICHED SETS################### 
-bp=read_tsv("BP-allFeatures.enrichment")
-k=read_tsv("KEGG-allFeatures.enrichment")
-enriched=list(bp,k)
-names(enriched)=c("BP","KEGG")
-
-#list genes linked to functions per subtype
-features=lapply(enriched,function(x) 
-	x%>%select(subtype,geneID)%>%
-	separate_rows(geneID,sep='/',convert=T)%>%distinct%>%
-	group_by(subtype)%>%group_map(~.x$geneID))
-names(features$BP)=unique(k$subtype)
-names(features$KEGG)=unique(k$subtype)
-pdf("funct_feats_intrsctn.pdf")
- lapply(features,function(x) upset(fromList(x),order.by="freq"))
-dev.off()
-
-> features=lapply(enriched,function(x) 
-	x%>%separate_rows(geneID,sep="/",convert=T)%>%
-	distinct(subtype,ID,geneID)%>%count(subtype,geneID))
