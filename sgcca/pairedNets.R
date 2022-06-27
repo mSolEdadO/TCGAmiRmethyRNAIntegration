@@ -52,6 +52,7 @@ gc=createNetworkFromIgraph(subn[[1]],
 	title=paste(names(nets)[1],paste(fun,collapse=',')))
 gd=createNetworkFromIgraph(subn[[2]],
 	title=paste(names(nets)[2],paste(fun,collapse=',')))
+
 #merge them manually in cytoscape coz igraph duplicates attributes
 #importVisualStyles("mystyle.xml")
 #[1] "default_0" apply this style 
@@ -73,6 +74,7 @@ myannot=getBM(attributes = c("hgnc_symbol","wikigene_description"),
 library(rentrez)
 #search only the nodes that aren't responsible for the enrichment
 query=names$label[!names$label%in%unlist(features)]
+query=unique(unlist(strsplit(query,",")))
 query1=funData%>%filter(funData$ID%in%fun)%>%
  dplyr::select(Description)%>%unique%>%list
 knownfun=lapply(query,function(x) lapply(query1,function(y) 
