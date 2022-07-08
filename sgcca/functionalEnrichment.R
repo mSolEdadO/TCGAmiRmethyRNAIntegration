@@ -3,13 +3,13 @@ library(biomaRt)
 
 #get data
 files=list.files()
-files=files[grep("selected",files)]
+files=files[grep("stable",files)]
 sets=lapply(files,read_tsv)
-names(sets)=gsub(".selected","",files)
+names(sets)=gsub(".stable","",files)
 
 #map every omic id to entrez
-methy=read_tsv("../Downloads/MapMethy.tsv")
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")
+methy=read_tsv("../MapMethy.tsv")
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",version=105)
 myannot=getBM(attributes = c("ensembl_gene_id","entrezgene_id",
 	"mirbase_id"), mart=mart)
 #prepare to merge with sets
@@ -28,7 +28,7 @@ sets=lapply(sets,function(x) merge(x,myannot,all.x=T,by="variable"))
 #CpGs   14123 4038 41035 13250  10200
 #miRNAs     6    1    25     7      3
 
-#########################ACTUAL ENRICHMENT
+#########################ACTUAL ENRICHMENT#########################
 library(clusterProfiler)
 library(org.Hs.eg.db)
 
@@ -46,7 +46,7 @@ BPenrich=compareCluster(entrezgene_id~subtype+component,
 	readable=T,
 	pAdjustMethod = "fdr",
     pvalueCutoff  = 0.01)#slooow
-write_tsv(as.data.frame(BPenrich),"BP-allFeatures.enrichment")
+write_tsv(as.data.frame(BPenrich),"BP.enrichment")
 
 KEGGenrich=compareCluster(entrezgene_id~subtype+component,
 	data=complexset,
@@ -55,12 +55,13 @@ KEGGenrich=compareCluster(entrezgene_id~subtype+component,
 	organism = 'hsa',
 	pvalueCutoff = 0.01)
 #get a nice table
-write_tsv(as.data.frame(KEGGenrich),"KEGG-allFeatures.enrichment")                  
+write_tsv(as.data.frame(KEGGenrich),"KEGG.enrichment")                  
 
 ##################PLOT INTERSECTIONS
 library(UpSetR)
 
-enriched=list(BP=BPenrich,KEGG=KEGGenrich)
+enriched=list(BP=as.data.frame(BPenrich),
+			  KEGG=as.data.frame(KEGGenrich))
 get_sets=function(enriched_table,exclusive){
 #matrix subtypes vs function
  g=table(unique(enriched_table[,c("ID","subtype")]))
@@ -74,17 +75,16 @@ return(sets)}
 functions=lapply(enriched,get_sets,exclusive=F)
 #sapply(functions,function(x) sapply(x,length))
 #        BP KEGG
-#Basal  226   26
-#Her2   127   31
-#LumA   820   72
-#LumB   448   35
-#Normal  48   26
-pdf("enrichment-allFeatures.pdf")
- lapply(functions,function(x) upset(fromList(x),order.by="freq",
- 	text.scale=rep(1.5,6)))
+#Basal  105   12
+#Her2    91    4
+#LumA   553   54
+#LumB   248   15
+#Normal  44    2
+pdf("enrichment.pdf",height=5)
+ lapply(functions,function(x) upset(fromList(x),text.scale=1.5,order.by="degree"))
 dev.off()
 
-#############GROUP EXCLUSIVE FUNCTIONS
+###################EXCLUSIVE FUNCTIONS###########3#################
 exclusive=lapply(enriched,get_sets,exclusive=T)
 #write_tsv(unique(KEGGenrich[KEGGenrich$ID%in%unlist(exclusive$KEGG),c("ID","Description")]),"KEGG.exclusive")
 #class comes from https://www.genome.jp/kegg-bin/download_htext?htext=br08901.keg&format=htext&filedir=
@@ -102,7 +102,7 @@ exclusive=lapply(enriched,get_sets,exclusive=T)
 #also simplified classes with ':' to the first term
 ids=read_tsv("KEGG.exclusive")
 #data frame it
-KEGG.classes=as.data.frame(do.call(rbind,lapply(1:5,function(x) 
+KEGG.classes=as.data.frame(do.call(rbind,lapply(1:4,function(x) 
 	cbind(names(exclusive$KEGG)[x],exclusive$KEGG[[x]]))))
 colnames(KEGG.classes)=c("subtype","ID")
 KEGG.classes=merge(KEGG.classes,ids,by="ID")
@@ -152,28 +152,31 @@ bias=function(classes,subtype,class){
 bias(KEGG.classes,2,4)
 #character(0)
 i=bias(BP.classes,3,4)
-#[1] "DNA metabolic process"   "immune system process"  
-#[3] "lipid metabolic process"
+#[1] "cellular component organization" "DNA metabolic process"          
+#[3] "establishment of localization"  
 
-png("KEGGexclusive-allFeatures.png",width=600)
-KEGG.classes%>%count(subtype,class)%>%
- ggplot(aes(x=n,y=class,fill=subtype))+
- geom_bar(stat="identity",position="fill")+
- annotate("text",x=1.05,y=sort(unique(KEGG.classes$class)),
- 	label=KEGG.classes%>%count(class)%>%dplyr::select(n)%>%unlist)+
- scale_x_continuous(labels=scales::percent)+
- theme(text=element_text(size=18),axis.ticks=element_blank(),
- 	panel.background=element_blank())+xlab("")+ylab("")+
-scale_fill_viridis_d(option = "plasma")
-dev.off()
-png("BPexclusive-allFeatures.png",width=600)
+#ni vale la pena dibujarlo
+#png("KEGGexclusive.png")
+#KEGG.classes%>%count(subtype,class)%>%
+# ggplot(aes(x=n,y=class,fill=subtype))+
+# geom_bar(stat="identity",position="fill")+
+# annotate("text",x=1.05,y=sort(unique(KEGG.classes$class)),
+# 	label=KEGG.classes%>%count(class)%>%dplyr::select(n)%>%unlist)+
+# scale_x_continuous(labels=scales::percent)+
+# theme(text=element_text(size=18),axis.ticks=element_blank(),
+# 	panel.background=element_blank(),legend.title=element_blank())+
+# xlab("")+ylab("")+scale_fill_viridis_d(option = "plasma")
+#dev.off()
+
+png("BPexclusive.png")
 BP.classes%>%count(subtype,name)%>%
 ggplot(aes(x=n,y=name,fill=subtype))+
 geom_bar(stat="identity",position="fill")+
 scale_x_continuous(labels=scales::percent)+
  theme(text=element_text(size=18),axis.ticks=element_blank(),
- 	panel.background=element_blank())+xlab("")+ylab("")+
-scale_fill_viridis_d(option = "plasma")+
+ 	panel.background=element_blank(),legend.title=element_blank(),
+ 	legend.position="bottom",legend.margin=margin(-20,0,0,0))+
+ xlab("")+ylab("")+scale_fill_viridis_d(option = "plasma")+
 annotate("text",x=1.05,y=sort(unique(BP.classes$name)),
  	label=BP.classes%>%count(name)%>%dplyr::select(n)%>%unlist)+
 annotate("text",y=i,x=-.05,label="*",size=8,vjust=.8)
@@ -187,11 +190,22 @@ dev.off()
 #				sum(BP.classes$name!=y&BP.classes$subtype==x),
 #				sum(BP.classes$name!=y&BP.classes$subtype!=x)),
 #		ncol=2),alternative="g")$p.val)))
-#Term(BP.classes$child[BP.classes$name=="immune system process"&BP.classes$subtype=="Basal"])
+#       cellular component organization DNA metabolic process
+#LumA                        1.00000000          1.0000000000
+#Her2                        1.00000000          1.0000000000
+#Basal                       0.04023048          1.0000000000
+#LumB                        1.00000000          1.0000000000
+#Normal                      0.04124813          0.0005866016
+#       establishment of localization
+#LumA                    8.607994e-06
+#Her2                    1.000000e+00
+#Basal                   1.000000e+00
+#LumB                    1.000000e+00
+#Normal                  1.000000e+00
 
-############ADD GSEA INFO
-#library(ggrepel)
+#####################CHECK SHARED FUNCTIONS###################3
 
+#ADD GSEA INFO
 files=list.files()
 files=files[grep("gsea",files)]
 gsea=lapply(files,read_tsv)
@@ -200,27 +214,14 @@ names(gsea)=gsub(".gsea","",files)
 gsea=lapply(gsea,function(x) 
 	x%>%dplyr::select(subtype,Description,NES,p.adjust))
 gsea$KEGG$subtype=gsub("_Normal","",gsea$KEGG$subtype)
-#count enriched components per function
-temp=lapply(enriched,function(x)
-	x%>%group_by(subtype,Description)%>%tally)
-temp=lapply(1:2,function(x) merge(temp[[x]],gsea[[x]],
-	by=c("subtype","Description")))
 
-pdf("NES-ncomp-allFeatures.pdf")
-lapply(temp,function(x)
-	ggplot(x,aes(y=NES,x=n,alpha=-log(p.adjust),color=subtype))+
-	geom_point(size=3)+xlab("components")+theme_light(base_size=18)+
-	scale_color_manual(values=c("#0D0887","#7E03A8","#CC4678","#F89441"))+
-	scale_alpha(range = c(0.1,1),breaks=c(0,3,15))+
-	geom_text_repel(aes(label=ifelse((p.adjust<0.01)&(n>(max(n)/5)),
-	Description,'')),alpha=1))
-dev.off()
-j=lapply(temp,function(x)
-	unique(x$Description[x$n>1&x$p.adjust<0.05]))
-#  BP KEGG 
-# 107   14
+j=lapply(gsea,function(x)
+	unique(x$Description[x$p.adjust<0.05]))
 #names(j)=names(enriched) check j is named
-#############CHECK SHARED FUNCTIONS
+#  BP KEGG 
+# 130   11 
+
+#get shared function
 heatmatrix=function(enrichment){
 	#only functions enriched in more than one dataset
 	i=enrichment%>%distinct(subtype,Description)%>%count(Description)%>%
@@ -239,12 +240,12 @@ return(edges)}
 shared=lapply(enriched,heatmatrix)
 #sapply(shared,function(x) length(unique(x$Description)))
 #  BP KEGG 
-# 403   58 
+# 233   16 
 #BP is too large to plot
 
-#################################################################
-#jaccard distance matrix with the number of 					#
-#components where each pair of functions are enriched together	#
+############JACCARD MATRIX
+#matrix with the number of components where each pair of
+# functions are enriched together	#
 subtypes=unique(enriched$KEGG$subtype)
 coenriched=lapply(enriched,function(x) lapply(subtypes,
 	function(y) x[x$subtype==y,]))
@@ -258,11 +259,6 @@ coenriched=lapply(coenriched,function(z) lapply(z,function(w)
 #u coul also just show the trees
 trees=lapply(coenriched,function(x) lapply(x,function(y) 
 	hclust(as.dist(y))))
-#plots I'm not sure I want
-names(tree$KEGG)=subtypes
-pdf("KEGG.trees.pdf")
-lapply(subtypes,function(x) plot(trees$KEGG[[x]],main=x))
-dev.off()
 
 #get the groups that are enriched exactly in the same components
 groups=lapply(trees,function(x) lapply(x,function(y) 			
@@ -273,62 +269,41 @@ groups=lapply(groups,function(x) lapply(1:5,function(y)
 					 "Description"=names(x[[y]]),
 					 "group"=x[[y]]))))
 groups=lapply(groups,function(x) do.call(rbind,x))
-temp=merge(groups$KEGG,shared$KEGG,
-	by=c("subtype","Description"),all.y=T)
-#fix groups so shapes can be repeated between columns
-temp=temp%>%group_by(subtype)%>%add_count(group)
-temp$group[temp$n==1]=0
-temp$group=temp%>%group_by(subtype)%>%
-	group_map(~as.numeric(as.factor(.x$group)))%>%unlist
-#alternative plot
-ggplot(temp)+geom_point(aes(x=subtype,y=Description,size=components,col=genes,shape=groupf))+scale_color_gradient(low="blue",high="red")+theme_light(base_size=18)+scale_size(range=c(3,10))+theme(axis.ticks=element_blank())++scale_shape_manual(values=c(19:17,15,2:0),guide="none")
 
-#################################################################
-png("KEGGenrichment-allFeatures.png",width=800,height=700)
-p=ggplot(shared$KEGG)+geom_point(aes(x=subtype,y=Description,
-	size=components,col=genes))+xlab("")+ylab("")+
-	scale_color_gradient(low="blue",high="red")+
-	theme_light(base_size=18)+scale_size(range=c(2,10))+
-	theme(axis.ticks=element_blank())+
-	annotate("text",y=j$KEGG[j$KEGG%in%shared$KEGG$Description],x="Basal",
-		label="*",size=7,vjust=.8,hjust=4.5)+
-	coord_cartesian(clip="off")
-dev.off()
-#plot the 8 BPs found in the 5 datasets
-temp=names(which(table(shared$BP$Description)==5))
-#[1] 8
-png("BPenrichment-allFeatures.png",width=850)
-ggplot(shared$BP[shared$BP$Description%in%temp,])+
-	geom_point(aes(x=subtype,y=Description,size=components,col=genes))+
-	xlab("")+ylab("")+
-	scale_color_gradient(low="blue",high="red")+
-	theme_light(base_size=18)+scale_size(range=c(2,10))+
-	theme(axis.ticks=element_blank())+
-	annotate("text",y=j$BP[j$BP%in%temp],x="Basal",
-		label="*",size=7,vjust=.8,hjust=4.5)+
-	coord_cartesian(clip="off")
-dev.off()
-#############COMPARE WITH TRANSCRIPTS ONLY ENRICHMENT
-files=list.files()
-files=files[grep(".enrichment",files,fixed=T)]
-files=files[grep("all",files,invert=T)]
-ori=lapply(files,read_tsv)
-names(ori)=gsub(".enrichment","",files)
-temp=as.data.frame(cbind(set="transcripts only",
-	p.adjust=unlist(sapply(ori,function(x) 
-		x%>%dplyr::select(p.adjust)))))
-temp=rbind(temp,as.data.frame(cbind(set="all Features",
-	p.adjust=unlist(sapply(enriched,function(x) 
-		x%>%dplyr::select(p.adjust))))))
-temp$p.adjust=as.numeric(temp$p.adjust)
-temp$DB=sapply(strsplit(rownames(temp),".",fixed=T),function(x) x[1])
-png("p.values.png")
-ggplot(temp,aes(x=p.adjust,col=set,fill=set))+
-geom_density(aes(y=..scaled..),alpha=0.3)+
-facet_wrap(~DB)+theme(text=element_text(size=18))+
-scale_x_continuous(breaks=c(0,0.005,0.01))
+#for the plot
+temp=lapply(names(shared),function(x) 
+			merge(groups[[x]],shared[[x]],
+				by=c("subtype","Description"),
+				all.y=T))
+#ungrouped functions should be the same figure
+temp=lapply(temp,function(x) x%>%group_by(subtype)%>%
+									add_count(group))
+names(temp)=names(shared)
+temp$BP$group[temp$BP$n==1]=0
+temp$KEGG$group[temp$KEGG$n==1]=0
+
+png("KEGGshared.png",width=600)
+ ggplot(temp$KEGG)+geom_point(aes(x=subtype,y=Description,
+ 	size=components,col=genes,shape=group))+
+ scale_color_gradient(low="blue",high="red")+
+ theme_light(base_size=16)+scale_size(range=c(3,10))+
+ theme(axis.ticks=element_blank())+annotate("text",
+ 	y=j$KEGG[j$KEGG%in%shared$KEGG$Description],x="Basal",label="*",
+ 	size=7,vjust=.8,hjust=4.3)+coord_cartesian(clip="off")+
+ scale_shape_manual(values=c(16:18,15),guide="none")+xlab("")+ylab("")
 dev.off()
 
-##########################
-
-
+#just draw bps found >= 3 datasets or it'll be too large 
+temp$BP=temp$BP%>%filter(Description%in%names(which(rowSums(table(temp[[1]][,2:1]))>3)))
+#trick to repeat figures between datasets
+temp$BP$group=temp$BP%>%group_map(~(0:8)[as.factor(.x$group)])%>%unlist
+png("BPeshared.png",width=850,height=700)
+ ggplot(temp$BP)+geom_point(aes(x=subtype,y=Description,
+ 	size=components,col=genes,shape=as.character(group)))+
+ scale_color_gradient(low="blue",high="red")+
+ theme_light(base_size=16)+scale_size(range=c(3,10),trans="log10")+
+ theme(axis.ticks=element_blank())+xlab("")+ylab("")+
+ scale_shape_manual(values=c(16:18,15,0:2,5,6),guide="none")+
+ annotate("text",y=j$BP[j$BP%in%temp$BP$Description],x="Basal",
+ 	label="*",size=7,vjust=.8,hjust=5.3)+coord_cartesian(clip="off")
+dev.off()
