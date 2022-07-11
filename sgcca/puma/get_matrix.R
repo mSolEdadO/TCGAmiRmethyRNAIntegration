@@ -7,7 +7,7 @@ fun=args[1]
 subty=args[2]
 
 #get the components linked to the function
-if(grep("GO",fun)){
+if(length(grep("GO",fun))>0){
  enrich=read_tsv("BP-allFeatures.enrichment")
 }else{
  enrich=read_tsv("KEGG-allFeatures.enrichment")	

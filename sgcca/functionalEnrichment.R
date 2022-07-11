@@ -243,7 +243,7 @@ shared=lapply(enriched,heatmatrix)
 # 233   16 
 #BP is too large to plot
 
-############JACCARD MATRIX
+############
 #matrix with the number of components where each pair of
 # functions are enriched together	#
 subtypes=unique(enriched$KEGG$subtype)
@@ -293,17 +293,4 @@ png("KEGGshared.png",width=600)
  scale_shape_manual(values=c(16:18,15),guide="none")+xlab("")+ylab("")
 dev.off()
 
-#just draw bps found >= 3 datasets or it'll be too large 
-temp$BP=temp$BP%>%filter(Description%in%names(which(rowSums(table(temp[[1]][,2:1]))>3)))
-#trick to repeat figures between datasets
-temp$BP$group=temp$BP%>%group_map(~(0:8)[as.factor(.x$group)])%>%unlist
-png("BPeshared.png",width=850,height=700)
- ggplot(temp$BP)+geom_point(aes(x=subtype,y=Description,
- 	size=components,col=genes,shape=as.character(group)))+
- scale_color_gradient(low="blue",high="red")+
- theme_light(base_size=16)+scale_size(range=c(3,10),trans="log10")+
- theme(axis.ticks=element_blank())+xlab("")+ylab("")+
- scale_shape_manual(values=c(16:18,15,0:2,5,6),guide="none")+
- annotate("text",y=j$BP[j$BP%in%temp$BP$Description],x="Basal",
- 	label="*",size=7,vjust=.8,hjust=5.3)+coord_cartesian(clip="off")
-dev.off()
+#BP table is toooo long to plot

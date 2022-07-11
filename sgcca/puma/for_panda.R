@@ -20,8 +20,8 @@ methy=read_tsv("/home/msoledad/param-rm/MapMethy.tsv")
 #keep only CpG regulators in feature set
 methy=methy[methy$IlmnID%in%features,]
 #keep only interaction with feature set
-mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
-	version=105)
+#mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
+#	version=105)
 #https://dec2021.archive.ensembl.org
 #myannot=getBM(attributes = c("ensembl_gene_id","refseq_ncrna", 
 #	"refseq_mrna","mirbase_id"), mart=mart)
@@ -35,6 +35,7 @@ methy=methy[,c("IlmnID","ensembl_gene_id","mirbase_id")]
 methy=methy%>%pivot_longer(-1,names_to="type",values_to="target")%>%
 	filter(!is.na(target))
 methy=methy[methy$target%in%features,]
+fm=nrow(methy)
 
 #regulatory info for TFs
 tfs=read_tsv("/home/msoledad/param-rm/TFtargets.tsv")
@@ -53,6 +54,7 @@ tfs=tfs%>%mutate(across(where(is.logical), as.character))%>%
 					pivot_longer(-1,names_to="type",values_to="target")%>%
 					filter(!is.na(target))%>%unique
 tfs=tfs[tfs$target%in%features,]
+ft=nrow(tfs)
 
 #regulatory info for miRNAs
 #only hsa-miR-375 has direct targets so u need mature IDs
@@ -70,28 +72,27 @@ miRtargets=multiMiR::select(miRtargets,keys="validated",
 	columns=columns(miRtargets),keytype="type")
 #keep only interactions with feature set
 miRtargets=miRtargets[miRtargets$target_ensembl%in%features,]
-colnames(miRtargets)=gsub("mature_mirna_id","mature",
-	colnames(miRtargets))
-miRtargets=merge(miRtargets,mirIDs,by="mature",all.x=T)
+fmi=nrow(miRtargets)
+miRtargets=if(fmi>0){
+	colnames(miRtargets)[3]="mature"
+	merge(miRtargets,mirIDs,by="mature",all.x=T)}
 
 #bring all together
+if(fmi==0 & fm==0 & ft==0){stop("No prior")}
+
 reguEdges=mapply(c, methy[,c("IlmnID","target")],
 				tfs[,c("TF","target")],
 				miRtargets[,c("precursor","target_ensembl")])
 #reguEdges=reguEdges[rowSums(apply(reguEdges,2,function(x) x=="NA"))==0,]#drop NAs
-if(is.null(nrow(reguEdges))){
-	writeLines(features,paste(mtrx,"nonTF",sep='.'))
-	stop("No regulatory edges")
-	} else{
-	reguEdges=as.data.frame(reguEdges)
-	colnames(reguEdges)=c("regulator","target")
-	write_tsv(cbind(reguEdges,1),paste(mtrx,"moti",sep='.'),
-		col_names=F)
-	######################NON TF LIST NEEDED BY PUMA
-	writeLines(features[!features%in%tfs$TF],
-		paste(mtrx,"nonTF",sep='.'))}
+if(class(reguEdges)=="character"){reguEdges=t(data.frame(reguEdges))}
+write_tsv(as.data.frame(cbind(reguEdges,1)),
+	gsub("mtrx","moti",mtrx),col_names=F)
+######################NON TF LIST NEEDED BY PUMA
+writeLines(features[!features%in%tfs$TF],
+	gsub("mtrx","nonTF",mtrx))
 
 ###########PPI TO BUILD THE OBJECT NEEDED BY PUMA
+if(ft<1){stop("No PPI")}
 #get human PPI
 #string_db <- STRINGdb$new(species=9606,score_threshold=999)
 #human_graph <- string_db$get_graph()#Timeout of 60 seconds was reached over & over
@@ -127,7 +128,7 @@ edges=get.edgelist(human_graph)
 #edges=edges[rowSums(apply(edges,2,function(x) x=="NA"))==0,]#drop NAs
 if(nrow(edges)>0){
 	write_tsv(cbind(as.data.frame(edges),1),
-		paste(mtrx,"pp",sep='.'),col_names=F)}
+		gsub("mtrx","pp",mtrx),col_names=F)}
 
 print(paste(nrow(reguEdges),"regulatory interactions",
 						nrow(edges),"ppi between TFs",sep=' '))
