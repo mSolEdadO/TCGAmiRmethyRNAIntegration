@@ -243,34 +243,42 @@ shared=lapply(enriched,heatmatrix)
 # 233   16 
 #BP is too large to plot
 
-############
-#matrix with the number of components where each pair of
-# functions are enriched together	#
-subtypes=unique(enriched$KEGG$subtype)
-coenriched=lapply(enriched,function(x) lapply(subtypes,
-	function(y) x[x$subtype==y,]))
-coenriched=lapply(coenriched,function(z) lapply(z,function(w) 
-	1-sapply(unique(w$Description),function(x) 
-		sapply(unique(w$Description),function(y) 
-			length(intersect(w$component[w$Description==x],
-				w$component[w$Description==y]))/
-			length(union(w$component[w$Description==x],
-				w$component[w$Description==y]))))))
+##############FIND "CROSSLINKED" FUNCTIONS
+coenriched=do.call(rbind,enriched)%>%group_by(subtype)%>%
+	group_map(~table(.x[,c("Description","component")]))
+#matrix with the component intersections
+intersection=lapply(coenriched,function(x) crossprod(t(x)))
+#matrix with the component unions
+union=lapply(coenriched,function(z) sapply(1:nrow(z),function(x) 
+	sapply(1:nrow(z),function(y) sum(colSums(z[c(x,y),])>0))))
+#Jaccard index for the components
+coenriched=lapply(1:5,function(x) intersection[[x]]/union[[x]])
+
 #u coul also just show the trees
-trees=lapply(coenriched,function(x) lapply(x,function(y) 
-	hclust(as.dist(y))))
+trees=lapply(coenriched,function(x) hclust(as.dist(1-x)))
 
 #get the groups that are enriched exactly in the same components
-groups=lapply(trees,function(x) lapply(x,function(y) 			
-	cutree(y,h=0)))	
-#paste with heatmatrix output
-groups=lapply(groups,function(x) lapply(1:5,function(y) 
-	data.frame(cbind("subtype"=subtypes[y],
-					 "Description"=names(x[[y]]),
-					 "group"=x[[y]]))))
-groups=lapply(groups,function(x) do.call(rbind,x))
+groups=lapply(trees,function(x) cutree(x,h=0))
+groups=do.call(rbind,lapply(1:5,function(y) 
+	data.frame(cbind("subtype"=unique(enriched$BP$subtype)[y],
+					 "Description"=names(groups[[y]]),
+					 "group"=groups[[y]]))))
+write_tsv(groups,"Groups_per_component.tsv")
+
+exclusive=lapply(1:2,function(x) lapply(exclusive[[x]],function(y) 
+		enriched[[x]]$Description[enriched[[x]]$ID%in%y]))
+exclusive=lapply(names(exclusive[[1]]),function(x) 
+		c(exclusive[[1]][[x]],exclusive[[2]][[x]]))
+
+
+
+
+
+
+
 
 #for the plot
+#paste with heatmatrix output
 temp=lapply(names(shared),function(x) 
 			merge(groups[[x]],shared[[x]],
 				by=c("subtype","Description"),
