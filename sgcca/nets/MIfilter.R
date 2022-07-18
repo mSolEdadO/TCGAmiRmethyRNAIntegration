@@ -5,17 +5,16 @@ library(tidyverse)
 library(igraph)
 
 mi=commandArgs(trailingOnly=TRUE)
-edges=read_tsv(mi,col_names=F)
+edges=read_tsv(mi,col_names=F,show_col_types=F)
 
 g=graph.data.frame(edges[,1:2],directed=F)
 E(g)$MI=edges$X3
-g=simplify(g,edge.attr.comb="first")#since MI(a,b)=MI(b,a)
+g=simplify(g,edge.attr.comb="first")#coz MI(a,b)=MI(b,a)
 features=V(g)$name
-#just gonna ignore CpG-CpG pair?????????????????
 
 #################################real CpG-transcript edges
 #library(biomaRt)
-methy=read_tsv("../MapMethy.tsv")
+methy=read_tsv("/home/msoledad/param-rm//MapMethy.tsv",show_col_types=F)
 methy=methy%>%filter(IlmnID%in%features)
 #mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
 #	version=105)
@@ -23,7 +22,7 @@ methy=methy%>%filter(IlmnID%in%features)
 #myannot=getBM(attributes = c("ensembl_gene_id","refseq_ncrna", 
 #	"refseq_mrna","mirbase_id"), mart=mart)
 #write_tsv(myannot,"myannot")
-myannot=read_tsv("myannot")
+myannot=read_tsv("myannot",show_col_types=F)
 methy=myannot%>%pivot_longer(-c(1,4),names_to="type",
 	values_to="refseq")%>%merge(methy,by="refseq",all.y=T)
 methy=methy%>%select(IlmnID,ensembl_gene_id,mirbase_id)%>%
@@ -33,13 +32,13 @@ methy=methy%>%select(IlmnID,ensembl_gene_id,mirbase_id)%>%
 #how does it compare with obtained CpG-transcript edges?
 
 #################################real TF-transcript edges
-tfs=read_tsv("/home/msoledad/param-rm/TFtargets.tsv")
+tfs=read_tsv("/home/msoledad/param-rm/TFtargets.tsv",show_col_types=F)
 tfs=tfs%>%separate_rows(target,sep=',',convert=T)%>%
 	separate_rows(TF,sep=',',convert=T)%>%filter(target%in%features)
 
 #################################real miR-transcript edges
 library(multiMiR)
-mirIDs=read_tsv("/home/msoledad/param-rm/miR.ids.map.tsv",skip=1)
+mirIDs=read_tsv("/home/msoledad/param-rm/miR.ids.map.tsv",skip=1,show_col_types=F)
 #add precursors as possible regulators
 temp=mirIDs[,c(1,1)]
 colnames(temp)[2]="mature"
@@ -54,12 +53,66 @@ miRtargets=multiMiR::select(miRtargets,keys="validated",
 	colnames(miRtargets)[3]="mature"
 miRtargets=merge(miRtargets,mirIDs,by="mature")
 #join all pairs
-reguEdges=mapply(c, methy[,c("IlmnID","ensembl_gene_id")],
+reguEdges=mapply(c, methy[,c("IlmnID","target")],
 				tfs[,c("TF","target")],
 				miRtargets[,c("precursor","target_ensembl")])
 gr=graph.data.frame(reguEdges)
 
 ###########################################get real MI values
+library(infotheo)
+
 subtype=unlist(strsplit(mi,".",fixed=T))[2]
+#expression/methylation data
 data=data.table::fread(paste(subtype,"eigeNormi",sep='.'))
 data=data[data$V1%in%V(gr)$name,]
+data=as.matrix(data[,2:ncol(data)],rownames=data$V1)
+
+#keep just the interactions involving nodes in the data
+gr=igraph_induced_subgraph(gr,which(V(gr)$name%in%rownames(data)))
+reguEdges=get.edgelist(gr)
+
+#methods used neeed discrete data
+discrData=discretize(t(data))
+#can chage it for parLapply if reguEdges is too large
+reguEdges=data.frame(cbind(reguEdges,apply(reguEdges,1,function(x) 
+	condinformation(discrData[,x[1]],discrData[,x[2]]))))
+colnames(reguEdges)=c("regulator","target","MI")
+reguEdges$type=apply(cbind(substr(reguEdges$V1,1,1),
+						substr(reguEdges$V2,1,1)),1,
+#so CpG-transcript & transcript-CpG are together
+				function(x) paste(sort(x),collapse=''))
+#####################################compare with MI in g
+#recover non-duplicated edges
+edges=as.data.frame(get.edgelist(g))
+edges$MI=E(g)$MI
+edges$type=apply(cbind(substr(edges$V1,1,1),substr(edges$V2,1,1)),1,
+#so CpG-transcript & transcript-CpG are together
+	function(x) paste(sort(x),collapse=''))
+#just gonna ignore CpG-CpG pair?????????????????YEP
+edges1=edges%>%filter(type!="cc")
+
+#keep only MI values>median(MI for real regulatory interactions)
+thres=sapply(unique(reguEdges$type),function(x) 
+	median(as.numeric(reguEdges$MI[reguEdges$type==x])))
+filtered=do.call(rbind,lapply(names(thres),function(x) 
+				edges1%>%filter(type==x&MI>=thres[x])))
+write_tsv(filtered,file=gsub("sort","filtered",mi))
+
+#is the MI distri the same across omics?
+#ggplot(edges1,aes(x=MI,col=type))+geom_density(aes(y=..scaled..))+scale_x_continuous(trans="log10")
+pvalMat=sapply(unique(edges1$type),function(x) 
+	sapply(unique(edges1$type),function(y) 
+		ks.test(edges1$MI[edges1$type==x],
+			edges1$MI[edges1$type==y])$p.val))
+diffTypes=which(pvalMat<0.05,arr.ind=T)
+if(length(diffTypes)>0){
+	print(rownames(pvalMat)[diffTypes[1]],"is different than"
+		colnames(pvalMat)[diffTypes[2]])
+#if MI distributions were the same, u could use DPI
+#or choose the threshold from any type
+}else{
+	filtered=edges1%>%filter(MI>=min(thres))
+	write_tsv(filtered,file=gsub("sort","filtered.alt",mi))
+}
+temp=as.data.frame(mapply(c,cbind("predi",edges1),cbind("known",reguEdges)))
+table(temp[,c(1,5)])
