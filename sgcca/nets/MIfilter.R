@@ -115,8 +115,9 @@ pvalMat=sapply(unique(edges1$type),function(x)
 			edges1$MI[edges1$type==y]))$p.val))
 diffTypes=which(pvalMat<0.05,arr.ind=T)
 if(length(diffTypes)>0){
-	print(rownames(pvalMat)[diffTypes[,1]],"is different than",
-		colnames(pvalMat)[diffTypes[,2]])
+	i=nrow(diffTypes)/2
+	sapply(i,function(x) paste(colnames(pvalMat)[diffTypes[x,1]],
+		"is different than",colnames(pvalMat)[diffTypes[x,2]]))
 }else{
 #if MI distributions were the same, u could use DPI
 #or choose the threshold from any type
