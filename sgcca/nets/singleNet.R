@@ -7,7 +7,7 @@ library(tidyverse)
 library(biomaRt)
 library(RCy3)
 
-edges=read_tsv(net,col_names=F)
+edges=read_tsv(net)
 #known=read_tsv(gsub("tsv","mtrx.moti",net),col_names=F)
 
 #pimp graph
@@ -17,10 +17,10 @@ V(g)$type=substr(V(g)$name,1,1)
 #node size maps degree
 V(g)$size=degree(g)
 #edge size maps corr
-E(g)$width=abs(edges$X4)
+E(g)$width=abs(as.numeric(edges$MI))
 #edge color maps if the interaction is known
 #known=graph.data.frame(known[,1:2])
-E(g)$color=edges$X3==1
+#E(g)$color=edges$X3==1
 #node color maps lfc
 subtype=unlist(strsplit(net,".",fixed=T))[2]
 de=read_tsv("../DE.genes.tsv")
@@ -32,7 +32,7 @@ da=lapply(da,function(x)
 	x[grep(subtype,x$contrast),]%>%filter(id%in%V(g)$name))
 da=data.frame(unique(mapply(rbind,do.call(rbind,lapply(da[2:3],
 	function(x) x[,c("id","logFC","adj.P.Val")])),
-				da$cpgs[,c(2,4,7)])))#cpgs have different colnames
+				da$cpgs[,c(2,7,4)])))#cpgs have different colnames
 da=da[order(match(da$id,V(g)$name)),]
 V(g)$color=as.numeric(da$logFC)
 
@@ -93,14 +93,14 @@ setNodeSizeMapping(table.column="size",
 #pass values & sizes or it'll fail    
     table.column.values=range(V(g)$size),
     sizes=c(30,100))
-setEdgeColorMapping(table.column="color",
-    mapping.type="discrete",
-	table.column.values = c(TRUE,FALSE),
-	colors=c('#6600CC','#737373'))
-setEdgeTargetArrowShapeDefault('DELTA')
-setEdgeTargetArrowColorDefault('#737373')
+#setEdgeColorMapping(table.column="color",
+#    mapping.type="discrete",
+#	table.column.values = c(TRUE,FALSE),
+#	colors=c('#6600CC','#737373'))
+#setEdgeTargetArrowShapeDefault('DELTA')
+#setEdgeTargetArrowColorDefault('#737373')
 clearEdgeBends()
-saveSession(filename=gsub("tsv","cys",net))
+saveSession(filename=paste(paste(unlist(strsplit(net,'.',fixed=T))[1:2],collapse='.'),"cys",sep='.'))
 #closeSession(FALSE)
 
 #a manita
