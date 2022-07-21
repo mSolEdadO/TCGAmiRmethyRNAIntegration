@@ -1,69 +1,73 @@
 #!/usr/bin/env Rscript
 
 ########################PARAMETERS & PACKAGES
-args=commandArgs(trailingOnly=TRUE)
-net=args[1]
-fun=args[2]
+net=commandArgs(trailingOnly=TRUE)
+id=unlist(strsplit(net,'.',fixed=T))[1]
+subty=unlist(strsplit(net,'.',fixed=T))[2]
 
 library(tidyverse)
 library(igraph)
 library(RCy3)
 
 #########################LOAD NETS
-files=list.files()
-files=files[grep(net,files)]
-files=files[grep("cys",files)]
-nets=lapply(files,function(x) {openSession(x);
-							   createIgraphFromNetwork()})
-#exportVisualStyles("mystyle.xml")
-names(nets)=sapply(strsplit(files,".",fixed=T),function(x) x[2])
-################GET NODES OF INTEREST
-if(length(grep("hsa",fun))>0){
- funData=read_tsv("../KEGG-allFeatures.enrichment")
+openSession(net)
+g=createIgraphFromNetwork()
+
+#################################################HIGHLIGHT TFS
+tfs=read_tsv("/home/msoledad/param-rm/TFtargets.tsv",show_col_types=F)
+tfs=tfs%>%separate_rows(TF,sep=',',convert=T)%>%
+	filter(TF%in%V(g)$name)%>%distinct(TF)%>%unlist
+sapply(tfs,function(x) {
+	setNodeBorderColorBypass(x, '#FF0000');
+	setNodeBorderWidthBypass(x, 8)})
+
+#######################################3HIGHLIGHT FUNCTIONAL NODES
+#get the cluster that contains the function
+chosen=read_tsv("../subsamples/chosen.tsv")
+chosen=chosen%>%filter(ID==id&subtype==subty)
+cl=chosen$group
+funs=chosen$Description
+
+#get related functions
+groups=read_tsv("../subsamples/Groups_per_component.tsv")
+groups=groups%>%filter(subtype==subty,group==cl)
+if(nrow(groups)>1){
+	funs=groups%>%select(Description)%>%unlist}
+
+#get "functional" nodes
+enriched=list(BP=read_tsv("../subsamples/BP.enrichment"),
+	KEGG=read_tsv("../subsamples/KEGG.enrichment"))
+known_genes=lapply(enriched,function(x) 
+	x%>%filter(Description%in%funs&subtype==subty)%>%
+	dplyr::select(Description,geneID)%>%separate_rows(geneID,sep='/'))
+#get symbols for KEGG
+if(nrow(known_genes$KEGG)>0){
  library(biomaRt)
  mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
 	version=105)
  myannot <- getBM(attributes=c('hgnc_symbol','ensembl_gene_id',
 							  'entrezgene_id'),mart=mart)
- funData=funData%>%separate_rows(geneID,sep='/')
  colnames(myannot)[3]="geneID"
- funData=merge(funData,myannot,by="geneID")
- features=funData%>%filter(ID%in%fun)%>%group_by(subtype)%>%
- 			group_map(~unique(.x$hgnc_symbol))
+ known_genes$KEGG=merge(known_genes$KEGG,myannot,by="geneID",all.x=T)%>%
+ 	dplyr::select(Description,hgnc_symbol)
+ colnames(known_genes$KEGG)[2]="geneID"
+ known_genes=do.call(rbind,known_genes)
 }else{
- funData=read_tsv("../BP-allFeatures.enrichment")
- features=funData%>%filter(ID%in%fun)%>%group_by(subtype)%>%
-	group_map(~unique(unlist(strsplit(unlist(.x$geneID),"/"))))
+ known_genes=known_genes$BP	
 }
-names(features)=funData%>%filter(ID%in%fun)%>%group_by(subtype)%>%
-				group_keys%>%unlist
-#ego_graph for eniched features
-featID=lapply(names(nets),function(y) 
-	unique(unlist(lapply(features[[y]],function(x) 
-		#get vid with grep coz CpGs labels are comma separated
-		grep(x,V(nets[[y]])$label)))))
-names(featID)=names(nets)
-subn=lapply(names(nets),function(x) 
-	subgraph.edges(nets[[x]],
-		E(nets[[x]])[from(featID[[x]])|to(featID[[x]])]))
 
-#paired comparissons
-gc=createNetworkFromIgraph(subn[[1]],
-	title=paste(names(nets)[1],paste(fun,collapse=',')))
-gd=createNetworkFromIgraph(subn[[2]],
-	title=paste(names(nets)[2],paste(fun,collapse=',')))
-
-#merge them manually in cytoscape coz igraph duplicates attributes
-#importVisualStyles("mystyle.xml")
-#[1] "default_0" apply this style 
-#take care of intersection nodes
+known_genes=known_genes%>%filter(geneID%in%unique(unlist(strsplit(V(g)$label,","))))
+gk=createNetworkFromIgraph(graph.data.frame(known_genes),"known")
+mergeNetworks(c(subty,"known"),"merged",nodeKeys=c("label","name"))
+#fix names
 saveSession()
+
+
 
 ####################check edges on dbs
 #get gene description from biomaRt for all nodes
 library(biomaRt)
-names=data.frame(unique(do.call(rbind,sapply(subn,function(x)
- cbind("name"=V(x)$name,"label"=V(x)$label)))))
+names=data.frame(cbind("name"=V(g)$name,"label"=V(g)$label))
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
 	version=105)
 #https://dec2021.archive.ensembl.org
@@ -72,23 +76,24 @@ myannot=getBM(attributes = c("hgnc_symbol","wikigene_description"),
 
 #rentrez per node and function
 library(rentrez)
+
+#m=subgraph.edges(g,E(g)[from(names$name[names$label%in%known_genes$geneID])|to(names$name[names$label%in%known_genes$geneID])])
+#query=names%>%filter(name%in%V(m)$name&!label%in%known_genes$geneID)%>%dplyr::select(label)%>%unlist
 #search only the nodes that aren't responsible for the enrichment
-query=names$label[!names$label%in%unlist(features)]
+query=names$label[!names$label%in%known_genes$geneID]
 query=unique(unlist(strsplit(query,",")))
-query1=funData%>%filter(funData$ID%in%fun)%>%
- dplyr::select(Description)%>%unique%>%list
-knownfun=lapply(query,function(x) lapply(query1,function(y) 
+knownfun=lapply(funs,function(x) lapply(query,function(y) 
 	entrez_search(db="pubmed",term=paste(x,y,sep=' AND '))))
 lapply(knownfun,function(x) lapply(x,function(y) y$ids[y$count>0]))
 
-edges=data.frame(unique(do.call(rbind,lapply(subn,function(x) 
-	get.edgelist(x)))))
-colnames(edges)[1]="name"
+edges=data.frame(get.edgelist(g))
+colnames(edges)[2]="name"
 edges=merge(edges,names,by="name")[,2:3]
 colnames(edges)[2]="pair1"
 colnames(edges)[1]="name"
 edges=unique(merge(edges,names,by="name")[,2:3])
 colnames(edges)[2]="pair2"
+edges=edges%>%separate_rows(pair2,sep=',',convert=T)%>%separate_rows(pair2,sep=',',convert=T)
 known=apply(edges,1,function(x) 
 	entrez_search(db="pubmed",
 				  term=paste(x[1],x[2],sep=' AND ')))
@@ -98,6 +103,7 @@ sapply(known,function(x) x$ids)
 #multimiR miRNA-target prediction
 library(multiMiR)
 query=query[grep("mir",query,ignore.case=T)]
+if(length(query)>0){
 query=paste("hsa",gsub("miR","mir",query),sep='-')
 mirIDs=read_tsv("/home/msoledad/param-rm/miR.ids.map.tsv",skip=1)
 mirIDs=mirIDs[mirIDs$precursor%in%query,]
@@ -106,13 +112,12 @@ miRtargets=get_multimir(mirna=c(query,mirIDs$mature),
 miRtargets=multiMiR::select(miRtargets,keys="predicted",
 	columns=columns(miRtargets),keytype="type")
 miRtargets[miRtargets$target_symbol%in%names$label,]
+}
 #what about TFs????
 
-#########################WHICH SUBTYPES ARE MORE ALIKE?
-#########################WHICH TYPE OF EDGES ARE MORE SHARED
+########################WHICH TYPE OF EDGES ARE MORE SHARED
 #########################EXCLUSIVE EDGES
 
-#WHAT MAKES SPECIAL THIS EDGES?????????
-
-
+#down 1D91C0
+#up E31A1C
 
