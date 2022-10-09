@@ -1,44 +1,30 @@
 library(rentrez)
 library(tidyverse)
 
-#get associated genes
-get_features=function(term,db){
-	features=entrez_search(db=db,
-					term=paste(term,"Homo sapiens[porgn]",sep=" AND "))
-	features=entrez_search(db=db,
-					term=paste(term,"Homo sapiens[porgn]",sep=" AND "),
-					retmax=features$count)
+#searching directly on gene db has unspecific results
+get_features=function(term){
+	#get related papers
+	papers=entrez_search(db="pubmed",
+	term=term)
+	papers=entrez_search(db="pubmed",
+	term=term,
+	retmax=papers$count)
+	#get the genes from those papers
+	ids <- entrez_link(dbfrom='pubmed', 
+		id=papers$ids,
+		db='gene')
 	results=cbind(term=term,
-				id=features$ids)	
+				entrezgene_id=ids$links$pubmed_gene)	
 return(results)}
-genes=get_features("'secondary leukemia'",#search the exact phrase
-				db="gene")#0 genes
-genes=get_features("leukemia",db="gene")
-genes=data.frame(rbind(genes,get_features("myelodysplasia",
-										db="gene")))
+genes=get_features('"secondary leukemia" AND MDS')
+genes=data.frame(rbind(genes,
+					get_features('"secondary leukemia" AND myelodysplasia')))
+
+genes=genes%>%filter(!duplicated(entrezgene_id))
 genes%>%count(term)
-#            term    n
-#1       leukemia 3058
-#2 myelodysplasia   39
-#get gene names
-library(biomaRt)
-mart=useEnsembl("ensembl",
-				dataset="hsapiens_gene_ensembl",
-				version=106)#Ensembl Apr 2022
-myannot=getBM(attributes = c("entrezgene_id","hgnc_symbol"),
-			filters="entrezgene_id",
-			values=genes$id,
-			mart=mart)
-colnames(genes)[2]="entrezgene_id"
-genes=merge(genes,myannot,by="entrezgene_id",all.x=T)
-genes%>%filter(!is.na(hgnc_symbol))%>%count(term)
-#            term   n
-#1       leukemia 2728
-#2 myelodysplasia  34
-genes%>%filter(!is.na(hgnc_symbol))%>%distinct(hgnc_symbol)%>%count
-#     n
-#1 2720
-###ya son muchos, busca papers con los 2 terminos?????
+#                          term n
+#1 "secondary leukemia" AND MDS 8
+#"secondary leukemia" AND myelodysplasia outputs redundant genes
 
 ########################################################
 #returned ids link to https://www.ncbi.nlm.nih.gov/protein/ID
@@ -54,17 +40,58 @@ genes%>%filter(!is.na(hgnc_symbol))%>%distinct(hgnc_symbol)%>%count
 #2 myelodysplasia   98
 ########################################################
 library(clusterProfiler)
+library(org.Hs.eg.db)
 
-complexset=genes%>%filter(entrezgene_id!="NA")
-complexset$entrezgene_id=as.character(complexset$entrezgene_id)
+#complexset=genes%>%filter(entrezgene_id!="NA")
+genes$entrezgene_id=as.character(complexset$entrezgene_id)
 
+#simultaneous enrichment of several sets
 KEGGenrich=compareCluster(entrezgene_id~term,
-	data=complexset,
+	data=genes,
 	fun="enrichKEGG",
 	pAdjustMethod = "fdr",
 	organism = 'hsa',
 	pvalueCutoff = 0.01)
+#No enrichment found in any of gene cluster, please check your input...
+BPenrich=compareCluster(entrezgene_id~term,
+	data=genes,
+	fun="enrichGO",
+	OrgDb=org.Hs.eg.db,
+	ont="BP",
+	pAdjustMethod = "fdr",
+    pvalueCutoff  = 0.01)#slooow
 #get a nice table
-KEGGenrich=as.data.frame(KEGGenrich)
+BPenrich=as.data.frame(BPenrich)
+# dim(BPenrich)
+#[1] 29 11
 
-#get the list of pathways
+map=as.data.frame(org.Hs.egGO)
+colnames(BPenrich)=gsub("ID","go_id",colnames(BPenrich))
+#somehow not all bps are recoverable
+BPenrich$Description[!BPenrich$ID%in%map$go_id]
+#[1] "response to acid chemical"                    
+#[2] "formation of extrachromosomal circular DNA"   
+#[3] "negative regulation of organelle organization"
+#[4] "cellular response to chemical stress"         
+added_genes=BPenrich%>%merge(map,by="go_id",all.x=T)%>%
+			dplyr::select(gene_id)
+
+genes=rbind(genes,cbind(entrezgene_id=unlist(added_genes),
+						term="enrichment"))
+
+#get gene symbols
+library(biomaRt)
+mart=useEnsembl("ensembl",
+				dataset="hsapiens_gene_ensembl",
+				version=106)#Ensembl Apr 2022
+myannot=getBM(attributes = c("entrezgene_id","hgnc_symbol"),
+			filters="entrezgene_id",
+			values=genes$entrezgene_id,
+			mart=mart)
+genes=genes%>%filter(!is.na(entrezgene_id))%>%
+			merge(myannot,by="entrezgene_id")%>%
+			distinct
+genes%>%filter(!is.na(hgnc_symbol))%>%count(term)
+#                          term   n
+#1 "secondary leukemia" AND MDS   8
+#2                   enrichment 734
