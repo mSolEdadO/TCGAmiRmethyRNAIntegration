@@ -146,7 +146,7 @@ bias=function(classes,subtype,class){
 	totals=table(classes[,c(class,subtype)])
 	s=colSums(totals)
 	ps=p.adjust(apply(totals,1,function(x) 
-	fisher.test(rbind(x,s-x),simulate.p.value=T)$p.val))
+	fisher.test(rbind(x,s-x),simulate.p.value=T)$p.val),"bonferroni")
 	#TRUE needed coz > 2 categories
 	return(rownames(totals)[ps<0.05])}
 bias(KEGG.classes,2,4)
@@ -175,9 +175,9 @@ geom_bar(stat="identity",position="fill")+
 scale_x_continuous(labels=scales::percent)+
  theme(text=element_text(size=18),axis.ticks=element_blank(),
  	panel.background=element_blank(),legend.title=element_blank(),
- 	legend.position="bottom",legend.margin=margin(-20,0,0,0))+
+ 	legend.position="bottom",legend.margin=margin(-25,0,0,-150))+
  xlab("")+ylab("")+scale_fill_viridis_d(option = "plasma")+
-annotate("text",x=1.05,y=sort(unique(BP.classes$name)),
+annotate("text",x=1.08,y=sort(unique(BP.classes$name)),
  	label=BP.classes%>%count(name)%>%dplyr::select(n)%>%unlist)+
 annotate("text",y=i,x=-.05,label="*",size=8,vjust=.8)
 dev.off()
