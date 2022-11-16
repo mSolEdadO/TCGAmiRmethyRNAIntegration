@@ -1,5 +1,5 @@
 library(SummarizedExperiment)
-library(TCGAbiolinks)
+library(TCGAbiolinks)#Version:2.20.1
 library(VennDiagram)
 
 ##########SAMPLE IDs PER DATA TYPE#####################
@@ -11,7 +11,8 @@ i=substr(mthyltn$cases,1,19)
 xprssn <- GDCquery(project = "TCGA-BRCA",
   data.category = "Transcriptome Profiling",
   data.type = "Gene Expression Quantification",
-  workflow.type = "HTSeq - Counts")
+  workflow.type="STAR - Counts")#11/2022 option
+#  workflow.type = "HTSeq - Counts")
 xprssn=getResults(xprssn)
 j=substr(xprssn$cases,1,19)
 mirnas <- GDCquery(project = "TCGA-BRCA",
@@ -23,6 +24,7 @@ k=substr(mirnas$cases,1,19)
 ##############CONCOURRENT MEASURES########################
 sapply(list(i,j,k),function(x) length(unique(x)))
 #[1]  890 1217 1202
+#[1]  893 1221 1202 #11/2022 
 #only samples with concurrent measurements are useful
 samples=intersect(intersect(i,j),k)
 length(samples)
@@ -37,9 +39,10 @@ colnames(samples)[2]="tissue"
 samples$patient=substr(samples$samples,1,12)
 
 #download subtypes
-patients=TCGAquery_subtype(tumor="brca")#subtype per patient
+subtypes=TCGAquery_subtype(tumor="brca")#subtype per patient
 sum(!substr(samples,1,12)%in%patients$patient)
 #[1] 9
+#[1] 3 #11/2022
 #only classified samples  are useful
 samples=samples[samples$patient%in%subtypes$patient,]
 table(subtypes$BRCA_Subtype_PAM50[subtypes$patient%in%samples$patient])

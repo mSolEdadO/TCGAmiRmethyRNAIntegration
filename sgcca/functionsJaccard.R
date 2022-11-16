@@ -1,3 +1,6 @@
+library(tidyverse)
+library(ggplot2)
+
 #which features are most enriched?????????????????????
 bp=read_tsv("BP.enrichment")
 k=read_tsv("KEGG.enrichment")
@@ -46,12 +49,13 @@ jindx$pair=paste(jindx$pair1,jindx$pair2)
 #       KEGG pathway  20
 #KEGG has to few (and low) points to plot
 #plot distributions of Jaccard Index
-png("enrichJacc.png")
+temp=jindx[jindx$index>0.5,]
+png("enrichJacc1.png")
 ggplot(jindx,aes(x=as.numeric(index),y=pair))+
-geom_violin()+geom_jitter(height=0.25)+
-ggrepel::geom_text_repel(data=jindx[jindx$index>0.5,],
- aes(y=pair,x=index,label=func),hjust=1,nudge_x=1.5,xlim=c(0,1.2),
- direction='y')+theme(text=element_text(size=16),
+geom_violin()+geom_jitter(height=0.1)+
+ggrepel::geom_text_repel(data=temp,
+ aes(y=pair,x=index,label=func),hjust=1,nudge_x=1.33,xlim=c(0,1.26),
+ force=33,force_pull=.05)+theme(text=element_text(size=16),
  axis.ticks.y=element_blank(),panel.background=element_blank(),
  plot.margin=unit(c(.1,5,.1,.1),"cm"))+coord_cartesian(clip="off")+
 ylab("")+xlab("jaccard index")+geom_vline(xintercept=0.5,
