@@ -24,5 +24,5 @@ features=selected%>%filter(component==unlist(comp))%>%
 #get the data
 data=data.table::fread(paste(subty,"eigeNormi",sep='.'))
 data=data[data$V1%in%features,]
-write_tsv(data,paste(fun,subty,"mtrx",sep='.'),col_names=F)#needed for puma
+write_tsv(data,paste(fun,subty,"mtrx",sep='.'))
 
