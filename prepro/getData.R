@@ -1,6 +1,6 @@
-library(SummarizedExperiment)
-library(TCGAbiolinks)#Version:2.20.1
-library(VennDiagram)
+library(SummarizedExperiment)#1.22.0
+library(TCGAbiolinks)#2.20.1
+library(VennDiagram)#1.6.20
 
 ##########SAMPLE IDs PER DATA TYPE#####################
 mthyltn <-  GDCquery(project = "TCGA-BRCA",

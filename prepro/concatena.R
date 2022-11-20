@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-library(data.table)
+library(data.table)#1.14.2
 
 subtype=read.table("subtype.tsv",header=T,sep='\t')
 #revert comments for unnormalized data

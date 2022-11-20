@@ -5,7 +5,7 @@ library(data.table)
 library(biomaRt)
 
 BP=commandArgs(trailingOnly=TRUE)#GO:XXX of interest
-transcripts=fread("Her2.transcripts")
+transcripts=fread("Her2.transcripts")#update per subtype
 
 #get transcripts linked to BP
 mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl")

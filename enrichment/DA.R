@@ -185,11 +185,15 @@ rfit <- lapply(rfit,RUVadj,Y=methy)
 #get the statistics of each cpg
 DMcpg=lapply(rfit,function(x) topRUV(x,num=Inf))
 names(DMcpgs)=colnames(contr.mtrx)
-sapply(DMcpgs,function(x) sum(x$F.p.BH<0.01))
+sapply(DMcpgs,function(x) sum(x$F.p.BH<0.05))
 #Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
-#        3654         8757           56         4442 
+#       12598        20968          217        11629 
 temp=do.call(rbind,lapply(1:4,function(x) 
 	cbind(contrast=names(DMcpgs)[x],
 		id=rownames(DMcpgs[[x]]),
 		DMcpgs[[x]])))
 write.table(temp,"DMcpgs-RUV.tsv",sep='\t',quote=F,row.names=F)
+
+#around half of RUV DMcpgs(p.adjust<0.05) are found with limma too
+#Basal_Normal  Her2_Normal  LumA_Normal  LumB_Normal 
+#   0.4915066    0.5801221    0.6728111    0.6629977 

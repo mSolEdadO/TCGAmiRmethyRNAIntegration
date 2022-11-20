@@ -8,9 +8,9 @@
 ##      -Quality Control & bias removal
 ## By Cristobal Fresno - cristobalfresno@gmail.com
 
-library(SummarizedExperiment)
-library(TCGAbiolinks)
-library(biomaRt)  
+library(SummarizedExperiment)#1.22.0
+library(TCGAbiolinks)#2.20.1
+library(biomaRt)#2.48.3  
 subtype=read.table("subtype.tsv",header=T)
 
 #get the data
@@ -68,8 +68,8 @@ dim(exprots_hgnc)
 #myannot=myannot[myannot$ensembl_gene_id%in%rownames(exprots_hgnc),]
 
 ##################CHECK BIASES########################################################
-library(NOISeq)
-library(edgeR)
+library(NOISeq)#2.36.0
+library(edgeR)#3.34.1
 
 #format data for noiseq
 noiseqData = readData(data = exprots_hgnc, gc = myannot[,1:2],
@@ -134,7 +134,7 @@ explo.plot(myPCA, samples = c(1,2), plottype = "scores",
 dev.off()
 
 #################SOLVE BIASES######################################################
-library(EDASeq)
+library(EDASeq)#2.26.1
 
 #1) filter low count genes.
 #CPM=(counts/fragments sequenced)*one million.

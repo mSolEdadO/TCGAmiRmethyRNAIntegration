@@ -26,8 +26,9 @@ echo "Waiting for aracne to end"
 aim=$(condor_q|grep 'jobs'|cut -d' ' -f1)
 while [ $aim -gt 0 ]; do 
 	echo "$aim";
+	condor_release -a
 	aim=$(condor_q|grep 'jobs'|cut -d' ' -f1);
-	sleep 5;
+	sleep 15;
 done
 echo "Building sif file"	
 line=$(echo "bin/adj2sif data/$BP*.adj>$BP.sif")
@@ -35,4 +36,4 @@ eval $line
 echo "Removing intemediate files"
 rm *output *log *error $sub bp.txt temp
 rm data/GO\:*
-####does not come back after ending
+

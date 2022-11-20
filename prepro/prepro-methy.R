@@ -1,5 +1,5 @@
-library(TCGAbiolinks)
-library(data.table)
+library(TCGAbiolinks)#2.20.1
+library(data.table)#1.14.2
 
 subtype=read.table("subtype.tsv",header=T,sep='\t')
 #get the data
@@ -75,8 +75,8 @@ nrow(methy)
 #[1] 393132
 
 #######impute missing data########################################
-library(doParallel)
-library(impute)
+library(doParallel)#1.0.17
+library(impute)#1.66.0
 
 #separate per subtype
 methy=lapply(names(total),function(x) 
@@ -106,7 +106,7 @@ write.table(do.call(cbind,methy),"methyNormi.tsv",sep='\t',quote=F)
 #unmethylated CpG sites. M-values provide much better performance in
 #terms of detection rate and true positive rate for both highly 
 #methylated and unmethylated CpG sites
-library(ggplot2)
+library(ggplot2)#3.3.5
 
 #check beta distributions
 temp=lapply(methy,function(x) sample(x,10000))
@@ -153,7 +153,7 @@ final=cbind(prefi,temp)
 write.table(final,"methyM.tsv",sep='\t',quote=F)
 #2511M when tar.gz
 ###########check final data#################################
-library(NOISeq)
+library(NOISeq)#2.36.0
 
 #u're dragging batch effects, use them as covariates when DM
 noiseqData = readData(data = final, factor=subtype)

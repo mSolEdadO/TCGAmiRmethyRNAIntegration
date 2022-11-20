@@ -3,10 +3,10 @@
 #var distributions should be similar if the planned 
 #approach relies on correlation networks [Tarazona2020]
 
-library(data.table)
-library(FactoMineR)
-library(factoextra)
-library(ggplot2)
+library(data.table)#1.14.2
+library(FactoMineR)#2.4
+library(factoextra)#1.0.7
+library(ggplot2)#3.3.5
 
 omic = commandArgs(trailingOnly=TRUE)
 

@@ -1,5 +1,5 @@
-library(TCGAbiolinks)
-library(biomaRt)
+library(TCGAbiolinks)#2.20.1
+library(biomaRt)#2.48.3  
 
 subtype=read.table("subtype.tsv",header=T,sep='\t')
 #get the data
@@ -50,7 +50,7 @@ myannotAlt=myannot[duplicated(myannot$mirbase_id),]
 myannot=myannot[!duplicated(myannot$mirbase_id),]
 #if the GC bias aint fixed you CAN NOT compare among miRNAs
 ##################CHECK BIASES########################################################
-library(NOISeq)
+library(NOISeq)#2.36.0
 
 noiseqData = readData(data = mir, factor=designExp,
 	gc=myannot[,c(3,2)],length=myannot[,c(3,6)])
@@ -138,7 +138,7 @@ table(mycdUQ@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #   696    112 
 
-library(EDASeq)
+library(EDASeq)#2.26.1
 mydataEDA <- newSeqExpressionSet(
   counts=as.matrix(FilteredMatrix),
   phenoData=data.frame(designExp,row.names=designExp$barcode))
@@ -151,7 +151,7 @@ table(mycdMedian@dat$DiagnosticTest[,  "Diagnostic Test"])
 #FAILED PASSED 
 #   124    684 
 
-library(DESeq)
+library(DESeq2)#1.38.1
 deseqFactors=estimateSizeFactors(newCountDataSet(FilteredMatrix,
  conditions=designExp))
 myDESEQ=counts(deseqFactors,normalized=T)
