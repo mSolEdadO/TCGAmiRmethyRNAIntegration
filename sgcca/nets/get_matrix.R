@@ -17,7 +17,7 @@ comp=enrich%>%filter(ID==fun&subtype==subty)%>%
 
 #get the features selected in those components
 selected=read_tsv(paste(subty,"stable",sep='.'))
-features=selected%>%filter(component==unlist(comp))%>%
+features=selected%>%filter(component%in%comp)%>%
 		 distinct(variable)%>%unlist
 #print(paste("Function has",length(features),"features associated",sep=' '))
 

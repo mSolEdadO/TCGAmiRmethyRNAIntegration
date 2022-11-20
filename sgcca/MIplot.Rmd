@@ -1,0 +1,167 @@
+---
+title: "Plot a MI network"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an extract of the scripts in step 4. The idea is to illustrate graph construction from one of the functions over-represented in the SGCCA
+
+## 1. Get a matrix with all the features in the SGCCA components where the function is over-represented
+
+Run in the same folder than subtype.eigeNormi & the enrichment results
+
+Rscript get_matrix <GO:0007156> Basal
+
+```{r}
+suppressPackageStartupMessages({library(tidyverse)})
+
+fun="GO:0007156"#args[1]
+subty="Basal"#args[2]
+
+#get the components linked to the function
+if(length(grep("GO",fun))>0){
+ enrich=read_tsv("BP.enrichment",show_col_types = FALSE)
+}else{
+ enrich=read_tsv("KEGG.enrichment",show_col_types = FALSE)	
+}
+comp=enrich%>%filter(ID==fun&subtype==subty)%>%
+			  dplyr::select(component)%>%unlist
+head(comp)
+```
+
+```{r}
+#get the features selected in those components
+selected=read_tsv(paste(subty,"stable",sep='.'),,show_col_types = FALSE)
+features=selected%>%filter(component%in%comp)%>%
+		 distinct(variable)%>%unlist
+#print(paste("Function has",length(features),"features associated",sep=' '))
+head(features)
+```
+
+```{r}
+#get the data
+data=data.table::fread(paste(subty,"eigeNormi",sep='.'))
+data=data[data$V1%in%features,]
+#write_tsv(data,paste(fun,subty,"mtrx",sep='.'))#needed for puma
+data[1:3,1:3]
+```
+
+## 2. Run ARACNE with obtained matrix
+
+```{bash}
+mv GO\:0007156.Basal.mtrx ARACNE-multicore-master/launch/
+cd ARACNE-multicore-master/launch/
+bash run.sh GO\:0007156.Basal.mtrx
+head GO\:0007156.Basal.sort
+mv GO\:0007156.Basal.sort ../../
+cd ../../
+```
+
+If something fails probably is due to an incorrect parsing of the parameters to join, they must be: matrix name, ARACNE kernel width & column index name
+
+## 3. Keep just the edges with MI above a threshold that is specific for the edge type
+
+Rscript MIfilter.R <GO:0007156.Basal.sort> → <GO:0007156.Basal.filtered.alt>
+
+If ARACNE MI distributions are not significantly different MIfilter.R outuputs file.filtered & file.filtered.alt.
+
+file.filtered.alt uses a single threshold no matter the edge type
+
+```{r}
+edges=read_tsv("GO:0007156.Basal.filtered.alt",show_col_types=F)
+head(edges)
+```
+
+## 4. Plot the interactions returned by MIfilter.R
+
+Run in the same folder than the results of differential expression/methylation & the file mapping CpG probes to genes
+
+Also Cytoscape has to be already open
+
+Rscript plotGraph.R <GO:0007156.Basal.filtered.alt>
+
+## 5. Get info about the nodes and edges ploted
+
+Cytoscape has to be already open
+
+Rscript annotateGraph.R <GO:0007156.Basal.cys>
+
+```{r}
+suppressPackageStartupMessages(library(igraph))
+library(RCy3)
+
+net="GO:0007156.Basal.cys"#commandArgs(trailingOnly=TRUE)
+id=unlist(strsplit(net,'.',fixed=T))[1]
+subty=unlist(strsplit(net,'.',fixed=T))[2]
+
+openSession(net)
+g=createIgraphFromNetwork(subty)
+chosen=read_tsv("chosen.tsv",show_col_types=F)
+head(chosen)
+```
+
+```{r}
+#get the cluster that contains the function
+chosen=chosen%>%filter(ID==id&subtype==subty)
+cl=chosen$group
+funs=chosen$Description
+
+#get related functions
+groups=read_tsv("Groups_per_component.tsv",show_col_types=F)
+groups=groups%>%filter(subtype==subty,group==cl)
+if(nrow(groups)>1){
+	funs=groups%>%select(Description)%>%unlist}
+funs
+```
+
+```{r}
+names=data.frame(cbind("name"=V(g)$name,"label"=V(g)$label))
+
+library(biomaRt)
+mart=useEnsembl("ensembl",dataset="hsapiens_gene_ensembl",
+	version=105)
+#https://dec2021.archive.ensembl.org
+myannot=getBM(attributes = c("hgnc_symbol","wikigene_description"),
+	filter="hgnc_symbol",values=names$label,mart=mart)
+head(myannot)
+```
+
+```{r}
+enriched=list(BP=read_tsv("subsamples/BP.enrichment",show_col_types=F),
+	KEGG=read_tsv("subsamples/KEGG.enrichment",show_col_types=F))
+known_genes=lapply(enriched,function(x) 
+	x%>%filter(Description%in%funs&subtype==subty)%>%
+	dplyr::select(Description,geneID)%>%separate_rows(geneID,sep='/'))
+head(known_genes$BP)
+```
+
+```{r}
+#Checking functions in pubmed
+library(rentrez)
+
+#search only the nodes that aren't responsible for the enrichment
+query=names$label[!names$label%in%known_genes$label]
+query=unique(unlist(strsplit(query,",")))
+knownfun=lapply(funs,function(x) #for every function in the net
+			lapply(query,function(y) #and every non-functional feature
+			#search papers connecting them
+			entrez_search(db="pubmed",term=paste(x,y,sep=' AND '))))
+as.data.frame(do.call(rbind,lapply(knownfun,function(x) do.call(rbind,lapply(x,function(y) cbind(paste(y$ids,collapse=','),y$QueryTranslation))))))[1:2,]
+```
+
+```{r}
+#Checking edges on pubmed
+edges=data.frame(get.edgelist(g))
+colnames(edges)[2]="name"
+edges=merge(edges,names,by="name")[,2:3]
+colnames(edges)[2]="pair1"
+colnames(edges)[1]="name"
+edges=unique(merge(edges,names,by="name")[,2:3])
+colnames(edges)[2]="pair2"
+edges=edges%>%separate_rows(pair2,sep=',',convert=T)%>%separate_rows(pair2,sep=',',convert=T)
+known=apply(edges,1,function(x) 
+	entrez_search(db="pubmed",
+				  term=paste(x[1],x[2],sep=' AND ')))
+head(known,2)
+```
